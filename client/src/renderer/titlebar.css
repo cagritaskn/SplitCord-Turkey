@@ -1,0 +1,99 @@
+.sc-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  background: var(--sc-bg-secondary);
+  -webkit-app-region: drag;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.sc-titlebar-drag {
+  display: flex;
+  align-items: center;
+  padding-left: 12px;
+  gap: 8px;
+}
+
+.sc-titlebar-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: block;
+}
+
+.sc-titlebar-title {
+  color: var(--sc-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sc-titlebar-controls {
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.sc-titlebar-btn {
+  width: 44px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--sc-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sc-titlebar-btn:hover {
+  background: var(--sc-bg-hover);
+  color: var(--sc-text-normal);
+}
+
+/* .sc-titlebar-btn'in display:flex'i, aynı özgüllükteki tarayıcı varsayılanı
+   [hidden]{display:none}'ı ezip hidden butonların (Eylem Gerekli / Güncelleme
+   Mevcut) hep görünür kalmasına yol açıyordu — daha önce discord-status-overlay ve
+   unsaved-bar'da bulunanla birebir aynı hata sınıfı. */
+.sc-titlebar-btn[hidden] {
+  display: none;
+}
+
+.sc-titlebar-btn--close:hover {
+  background: var(--sc-danger);
+  color: #fff;
+}
+
+.sc-titlebar-btn svg {
+  display: block;
+}
+
+.sc-titlebar-btn--pill {
+  width: auto;
+  padding: 0 12px;
+  height: 26px;
+  border-radius: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 6px;
+  color: #fff;
+}
+
+.sc-titlebar-btn--warn {
+  background: var(--sc-danger);
+}
+
+.sc-titlebar-btn--warn:hover {
+  background: #b8292d;
+}
+
+.sc-titlebar-btn--accent {
+  background: var(--sc-success);
+}
+
+.sc-titlebar-btn--accent:hover {
+  background: #1a8245;
+}

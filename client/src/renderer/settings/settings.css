@@ -1,0 +1,741 @@
+.sc-titlebar {
+  border-bottom: 1px solid var(--sc-bg-tertiary);
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--sc-bg-primary);
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  /* Discord'un kendi masaüstü uygulaması gibi: arayüz metinleri normal bir web
+     sayfası gibi tıkla-sürükle ile seçilebilir olmamalı. Gerçek metin GİRİŞİ
+     yapılan alanlar (input/textarea) bundan hariç tutuluyor ki DoH listesi/gelişmiş
+     argümanlar gibi alanlarda yazma/seçme/kopyalama normal şekilde çalışmaya devam etsin.
+  */
+  user-select: none;
+}
+
+input,
+textarea,
+pre,
+code {
+  user-select: text;
+}
+
+.sc-settings-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sc-settings-nav {
+  width: 200px;
+  background: var(--sc-bg-secondary);
+  padding: 16px 8px;
+  flex-shrink: 0;
+}
+
+.sc-settings-nav-item {
+  padding: 8px 10px;
+  border-radius: 4px;
+  color: var(--sc-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  margin-bottom: 2px;
+}
+
+.sc-settings-nav-item:hover {
+  background: var(--sc-bg-hover);
+  color: var(--sc-text-normal);
+}
+
+.sc-settings-nav-item.active {
+  background: var(--sc-bg-hover);
+  color: var(--sc-text-normal);
+  font-weight: 600;
+}
+
+.sc-settings-content {
+  flex: 1;
+  padding: 24px 32px;
+  overflow-y: auto;
+}
+
+.sc-panel h1 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.sc-panel h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--sc-text-muted);
+  margin: 24px 0 8px;
+}
+
+.sc-hint {
+  color: var(--sc-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 560px;
+}
+
+.sc-engine-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.sc-engine-card {
+  position: relative;
+  background: var(--sc-bg-secondary);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.sc-engine-card.selected {
+  border-color: var(--sc-brand);
+}
+
+.sc-engine-card:hover {
+  background: var(--sc-bg-hover);
+}
+
+.sc-engine-card-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Bir motor/strateji taraması sürerken (ya da bir geçiş henüz onaylanıp servise
+   iletilmişken) TÜM kartlar bu duruma girer: kart içeriği bulanıklaşır, üzerinde bir
+   yükleniyor çemberi döner ve tıklamalar engellenir — kullanıcı geçiş TAMAMEN bitmeden
+   başka bir değişiklik tetikleyemesin diye (bkz. settings.js renderEngineList). */
+.sc-engine-card--locked {
+  cursor: default;
+}
+
+.sc-engine-card--locked .sc-engine-card-content {
+  filter: blur(2.5px);
+  opacity: 0.55;
+}
+
+/* Performans modunda filter:blur yerine düz bir karartma (bkz. settings.js'teki
+   applyPerformanceModeAttr, [data-performance-mode] <html>'e konuyor). */
+:root[data-performance-mode] .sc-engine-card--locked .sc-engine-card-content {
+  filter: none;
+}
+
+:root[data-performance-mode] .sc-engine-card--locked::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1;
+}
+
+.sc-engine-card-spinner {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.sc-engine-card--locked .sc-engine-card-spinner {
+  display: flex;
+}
+
+.sc-engine-card-spinner::after {
+  content: '';
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid var(--sc-bg-tertiary);
+  border-top-color: var(--sc-brand);
+  animation: sc-engine-card-spin 0.8s linear infinite;
+}
+
+@keyframes sc-engine-card-spin {
+  to { transform: rotate(360deg); }
+}
+
+.sc-engine-name {
+  font-weight: 600;
+}
+
+.sc-engine-desc {
+  color: var(--sc-text-muted);
+  font-size: 12px;
+  margin-top: 2px;
+  max-width: 380px;
+}
+
+.sc-engine-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sc-engine-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--sc-bg-tertiary);
+  color: var(--sc-text-muted);
+  white-space: nowrap;
+}
+
+.sc-engine-badge--running {
+  background: var(--sc-success);
+  color: #fff;
+}
+
+.sc-engine-badge--system {
+  background: var(--sc-danger);
+  color: #fff;
+}
+
+.sc-field-label {
+  display: block;
+  font-size: 12px;
+  color: var(--sc-text-muted);
+  margin-top: 12px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.sc-textarea,
+.sc-log-box {
+  width: 100%;
+  background: var(--sc-bg-tertiary);
+  color: var(--sc-text-normal);
+  border: none;
+  border-radius: 4px;
+  padding: 10px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  resize: none;
+}
+
+.sc-log-box {
+  height: 140px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.sc-btn {
+  margin-top: 12px;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.sc-btn--primary {
+  background: var(--sc-brand);
+  color: #fff;
+}
+
+.sc-btn--primary:hover {
+  background: var(--sc-brand-hover);
+}
+
+.sc-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 16px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+/* Discord webview'indeki "SplitCord-Turkey ayarlarında bu uyarıyı devre dışı bırak"
+   gibi butonlarla belirli bir ayara yönlendirildiğinde (bkz. settings.js
+   highlightControl) kısa süreliğine dikkat çekmek için. */
+.sc-highlight-flash {
+  animation: sc-highlight-flash-pulse 2.2s ease-out;
+}
+
+@keyframes sc-highlight-flash-pulse {
+  0%,
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
+  15%,
+  55% {
+    background: rgba(88, 101, 242, 0.18);
+    box-shadow: 0 0 0 2px var(--sc-brand);
+  }
+}
+
+/* Discord'un ayarlar ekranındaki yeşil slider anahtarlarının aynısı — düz OS onay
+   kutusu yerine appearance:none + ::after ile çizilen bir track+thumb. Renkler
+   theme.css'in --sc-* değişkenlerini kullandığı için aktif temaya (Otomatik/sabit
+   temalar) otomatik uyum sağlıyor. */
+.sc-toggle-row input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  margin-top: 2px;
+  width: 36px;
+  height: 20px;
+  min-width: 36px;
+  border-radius: 10px;
+  background: var(--sc-bg-tertiary);
+  position: relative;
+  cursor: pointer;
+  outline: none;
+  transition: background-color 200ms ease;
+}
+
+.sc-toggle-row input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: left 200ms ease;
+}
+
+.sc-toggle-row input[type='checkbox']:checked {
+  background: var(--sc-success);
+}
+
+.sc-toggle-row input[type='checkbox']:checked::after {
+  left: 18px;
+}
+
+.sc-toggle-row input[type='checkbox']:focus-visible {
+  box-shadow: 0 0 0 2px var(--sc-bg-primary), 0 0 0 4px var(--sc-brand);
+}
+
+.sc-toggle-row--indent {
+  margin-left: 28px;
+  margin-top: 10px;
+}
+
+/* .sc-toggle-row'un display:flex'i [hidden]{display:none} varsayılanını eziyordu
+   (bkz. discord-status-overlay/unsaved-bar/titlebar-btn'de bulunan aynı hata). */
+.sc-toggle-row[hidden] {
+  display: none;
+}
+
+.sc-unsaved-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--sc-bg-secondary);
+  border-top: 1px solid var(--sc-bg-tertiary);
+  color: var(--sc-text-normal);
+  font-size: 13px;
+}
+
+/* .sc-unsaved-bar (sınıf seçici) ile tarayıcının [hidden]{display:none} varsayılanı
+   aynı özgüllükte (0,1,0) olduğundan, sonradan yüklenen bu kural kazanıyor ve JS'in
+   hidden özniteliğini true yapması görsel olarak hiçbir işe yaramıyordu — bar hep
+   görünür kalıyordu. #discord-status-overlay'de bulunanla aynı hata, aynı çözüm. */
+.sc-unsaved-bar[hidden] {
+  display: none;
+}
+
+.sc-unsaved-bar .sc-btn {
+  margin-top: 0;
+}
+
+.sc-unsaved-bar-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sc-divider {
+  height: 1px;
+  background: var(--sc-bg-tertiary);
+  margin: 20px 0;
+}
+
+.sc-btn--danger {
+  background: var(--sc-danger);
+  color: #fff;
+}
+
+.sc-btn--danger:hover {
+  background: #b8292d;
+}
+
+.sc-mode-switch {
+  position: relative;
+  display: inline-flex;
+  background: var(--sc-bg-tertiary);
+  border-radius: 8px;
+  padding: 3px;
+  margin: 12px 0 16px;
+}
+
+.sc-mode-btn {
+  border: none;
+  background: transparent;
+  color: var(--sc-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.sc-mode-btn.active {
+  background: var(--sc-brand);
+  color: #fff;
+}
+
+/* Otomatik<->Manuel geçişi (onay + tarama iptali + tüm motorları durdurma + mod değişimi)
+   TAMAMLANMADAN kullanıcı tekrar bir geçiş tetikleyemesin diye — bkz. settings.js'teki
+   modeSwitchInFlight. */
+.sc-mode-switch--locked .sc-mode-btn {
+  filter: blur(2.5px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+:root[data-performance-mode] .sc-mode-switch--locked .sc-mode-btn {
+  filter: none;
+}
+
+.sc-mode-switch--locked::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  z-index: 1;
+}
+
+:root[data-performance-mode] .sc-mode-switch--locked::before {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.sc-mode-switch-spinner {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.sc-mode-switch--locked .sc-mode-switch-spinner {
+  display: flex;
+}
+
+.sc-mode-switch-spinner::after {
+  content: '';
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid var(--sc-bg-secondary);
+  border-top-color: var(--sc-brand);
+  animation: sc-engine-card-spin 0.8s linear infinite;
+}
+
+/* "Tekrar Arama Başlat" — halihazırda herhangi bir motor/strateji taraması sürerken
+   (currentStatus.switching, bkz. settings.js renderAutomaticStatus) bu buton da diğer
+   kilitli öğelerle (motor kartları, Otomatik/Manuel switch) aynı blur+spinner kombosuna
+   giriyor ki kullanıcı sürmekte olan bir taramanın üzerine ikinci bir tarama tetiklemesin. */
+.sc-restart-search {
+  position: relative;
+  display: inline-block;
+}
+
+.sc-restart-search--locked .sc-btn {
+  filter: blur(2.5px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+:root[data-performance-mode] .sc-restart-search--locked .sc-btn {
+  filter: none;
+}
+
+.sc-restart-search--locked::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  z-index: 1;
+}
+
+:root[data-performance-mode] .sc-restart-search--locked::before {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.sc-restart-search-spinner {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.sc-restart-search--locked .sc-restart-search-spinner {
+  display: flex;
+}
+
+.sc-restart-search-spinner::after {
+  content: '';
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid var(--sc-bg-tertiary);
+  border-top-color: var(--sc-brand);
+  animation: sc-engine-card-spin 0.8s linear infinite;
+}
+
+.sc-status-box {
+  background: var(--sc-bg-secondary);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--sc-text-normal);
+  margin-bottom: 12px;
+  white-space: pre-line;
+}
+
+.sc-rejected-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.sc-rejected-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--sc-bg-secondary);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+
+.sc-rejected-item span {
+  overflow-wrap: anywhere;
+}
+
+.sc-rejected-item button {
+  flex-shrink: 0;
+  border: none;
+  background: var(--sc-bg-tertiary);
+  color: var(--sc-text-normal);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.sc-rejected-item button:hover {
+  background: var(--sc-bg-hover);
+}
+
+.sc-permissions-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sc-permission-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--sc-bg-secondary);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.sc-permission-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.sc-permission-icon {
+  font-size: 15px;
+  width: 20px;
+  text-align: center;
+}
+
+.sc-permission-icon--ok {
+  color: var(--sc-success);
+}
+
+.sc-permission-icon--missing {
+  color: var(--sc-danger);
+}
+
+.sc-permission-icon--neutral {
+  color: var(--sc-text-muted);
+}
+
+.sc-shortcuts-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sc-shortcuts-list.sc-shortcuts-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.sc-shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--sc-bg-secondary);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.sc-shortcut-label {
+  font-size: 14px;
+}
+
+.sc-shortcut-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sc-shortcut-input {
+  min-width: 160px;
+  text-align: center;
+  background: var(--sc-bg-tertiary);
+  color: var(--sc-text-normal);
+  border: 1px solid var(--sc-bg-hover);
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: Consolas, monospace;
+  cursor: pointer;
+}
+
+.sc-shortcut-input:hover {
+  background: var(--sc-bg-hover);
+}
+
+.sc-shortcut-input.sc-shortcut-recording {
+  border-color: var(--sc-brand);
+  color: var(--sc-brand);
+}
+
+.sc-shortcut-clear {
+  background: transparent;
+  border: none;
+  color: var(--sc-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.sc-shortcut-clear:hover {
+  color: var(--sc-danger);
+  background: var(--sc-bg-tertiary);
+}
+
+.sc-theme-picker {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.sc-theme-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 8px;
+  cursor: pointer;
+  color: var(--sc-text-muted);
+  font-size: 12px;
+}
+
+.sc-theme-swatch:hover {
+  background: var(--sc-bg-hover);
+}
+
+.sc-theme-swatch.active {
+  border-color: var(--sc-brand);
+  color: var(--sc-text-normal);
+}
+
+.sc-theme-swatch-color {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: block;
+}
+
+.sc-theme-swatch-color--auto {
+  background: conic-gradient(from 180deg, #5865f2, #23a55a, #f0b232, #da373c, #5865f2);
+}
+
+.sc-hint a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.sc-about-logo {
+  display: block;
+  width: 120px;
+  height: 120px;
+  margin: 8px auto 20px;
+  border-radius: 50%;
+}
+
+#panel-about .sc-hint {
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+#panel-about .sc-btn {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#panel-about .sc-btn[hidden] {
+  display: none;
+}

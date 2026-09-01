@@ -1,0 +1,192 @@
+:root {
+  --sc-bg-primary: #313338;
+  --sc-bg-secondary: #2b2d31;
+  --sc-bg-tertiary: #1e1f22;
+  --sc-bg-hover: #3f4147;
+  --sc-text-normal: #f2f3f5;
+  --sc-text-muted: #949ba4;
+  --sc-brand: #5865f2;
+  --sc-brand-hover: #4752c4;
+  --sc-danger: #da373c;
+  --sc-success: #23a55a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'gg sans', 'Segoe UI', 'Noto Sans', sans-serif;
+  color: var(--sc-text-normal);
+}
+
+/* Dinamik renk (Discord temasından örneklenen) --sc-* değişkenleri değiştiğinde
+   arkaplan/metin renklerinin bir anda değil, yumuşak bir geçişle değişmesi için.
+   Not: transition CSS custom property'nin kendisine değil, onu kullanan asıl
+   background-color/color hesaplanmış değerine uygulanıyor — bu, tarayıcının
+   @property kaydı gerektirmeden de değişimi animasyonlamasını sağlıyor. */
+body,
+.sc-titlebar,
+.sc-titlebar-title,
+.sc-settings-nav,
+.sc-settings-nav-item,
+.sc-panel,
+.sc-status-box,
+.sc-engine-card,
+.sc-textarea,
+.sc-log-box,
+.sc-permission-row,
+.sc-rejected-item,
+.sc-unsaved-bar {
+  transition: background-color 450ms ease, color 450ms ease, border-color 450ms ease;
+}
+
+/* Performans modu: yorucu olabilecek fade geçişlerini tamamen kapatır. */
+[data-performance-mode] *,
+[data-performance-mode] *::before,
+[data-performance-mode] *::after {
+  transition: none !important;
+  animation-duration: 0.001ms !important;
+}
+
+/* Discord tarzı scrollbar — --sc-bg-hover/--sc-text-muted zaten dinamik/sabit
+   temaya göre canlı güncellendiği için (bkz. titlebar.js applyPalette) bu kurallar
+   ekstra bir işlem gerekmeden aktif temayı otomatik takip eder. Not: bu dosya
+   yalnızca uygulamanın kendi pencerelerine (settings, ekran seçici, ana pencere
+   kabuğu) yüklü — Discord'un kendi <webview> içeriği ayrı bir doküman olduğu için
+   kendi scrollbar'ını korur, bu kurallardan etkilenmez. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sc-bg-hover) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--sc-bg-hover);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--sc-text-muted);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Temaya uygun onay/uyarı modalı (bkz. modal.js) — Windows'un yerleşik
+   dialog.showMessageBoxSync/confirm()/alert() kutularının yerini alır. */
+.sc-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.sc-modal-overlay.sc-modal-visible {
+  opacity: 1;
+}
+
+.sc-modal-overlay.sc-modal-closing {
+  opacity: 0;
+}
+
+.sc-modal {
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  padding: 24px;
+  border-radius: 8px;
+  background: var(--sc-bg-primary);
+  color: var(--sc-text-normal);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transform: scale(0.96);
+  transition: transform 120ms ease;
+}
+
+.sc-modal-overlay.sc-modal-visible .sc-modal {
+  transform: scale(1);
+}
+
+.sc-modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.sc-modal-message {
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.sc-modal-detail {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--sc-text-muted);
+}
+
+.sc-modal-link {
+  display: block;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--sc-brand);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.sc-modal-link:hover {
+  color: var(--sc-brand-hover);
+}
+
+.sc-modal-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sc-modal-btn {
+  border: none;
+  border-radius: 4px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #ffffff;
+  background: var(--sc-bg-hover);
+}
+
+.sc-modal-btn-primary {
+  background: var(--sc-brand);
+}
+
+.sc-modal-btn-primary:hover {
+  background: var(--sc-brand-hover);
+}
+
+.sc-modal-btn-secondary {
+  background: transparent;
+  color: var(--sc-text-normal);
+}
+
+.sc-modal-btn-secondary:hover {
+  background: var(--sc-bg-hover);
+}
+
+.sc-modal-btn:focus-visible {
+  outline: 2px solid var(--sc-brand);
+  outline-offset: 2px;
+}

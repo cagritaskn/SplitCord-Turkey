@@ -1,0 +1,53 @@
+{
+  "name": "splitcord-client",
+  "private": true,
+  "author": "SplitCord-Turkey",
+  "version": "0.5.7",
+  "description": "SplitCord-Turkey 0.5.6 Installer",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "predist": "dotnet publish ../service/SplitCordService/SplitCordService.csproj -c Release -o ../service/SplitCordService/bin/Release/net8.0-windows/publish",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "arrpc": "^3.6.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.splitcord.turkey",
+    "productName": "SplitCord-Turkey",
+    "files": [
+      "src/**/*",
+      "resources/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../service/SplitCordService/bin/Release/net8.0-windows/publish",
+        "to": "service-installer"
+      },
+      {
+        "from": "../service/installer",
+        "to": "service-installer",
+        "filter": ["*.ps1"]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "perMachine": true,
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    }
+  },
+  "allowScripts": {
+    "electron@31.7.7": true
+  }
+}

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>SplitCord-Turkey</title>
+  <link rel="stylesheet" href="theme/theme.css" />
+  <link rel="stylesheet" href="titlebar.css" />
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: var(--sc-bg-primary);
+    }
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    #content-area {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+    }
+    #discord-webview {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: flex;
+    }
+    #discord-status-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 20px;
+      padding: 32px;
+      background: var(--sc-bg-primary);
+      color: var(--sc-text-muted);
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-line;
+      overflow: hidden;
+      user-select: none;
+    }
+    /* Otomatik tarama sürerken (ByeDPI/GoodbyeDPI/Zapret aday testleri) o an hangi
+       hizmetin/ayarın denendiğini gösteren, arka planda bulanıklaştırılmış bir günlük
+       akışı — kullanıcı "Bağlantı hazırlanıyor…" yazısının arkasında bir şeylerin
+       gerçekten sürdüğünü görsün diye. Yalnızca tarama sırasında (data-scanning) görünür. */
+    #discord-status-log-backdrop {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      gap: 4px;
+      padding: 40px;
+      margin: 0;
+      font-family: 'Consolas', monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      text-align: left;
+      color: var(--sc-text-muted);
+      opacity: 0.45;
+      filter: blur(2.5px);
+      pointer-events: none;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    #discord-status-overlay:not([data-scanning]) #discord-status-log-backdrop {
+      display: none;
+    }
+    /* Göz butonuyla blur geçici olarak kaldırıldığında (data-log-visible) günlük
+       akışı okunur hâle geliyor. */
+    #discord-status-overlay[data-log-visible] #discord-status-log-backdrop {
+      filter: none;
+      opacity: 0.85;
+    }
+    /* Performans modunda filter:blur (sürekli GPU/CPU maliyeti) yerine düz bir karartma —
+       bkz. titlebar.js'teki applyPerformanceModeAttr, [data-performance-mode] <html>'e
+       konuyor. */
+    :root[data-performance-mode] #discord-status-log-backdrop {
+      filter: none;
+    }
+    :root[data-performance-mode] #discord-status-log-backdrop::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+    }
+    #discord-status-overlay[data-log-visible] #discord-status-log-backdrop::before {
+      display: none;
+    }
+    #discord-status-content {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+    #btn-status-toggle-log {
+      border: none;
+      background: transparent;
+      color: var(--sc-text-muted);
+      cursor: pointer;
+      padding: 6px;
+      margin-top: -8px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #btn-status-toggle-log:hover {
+      background: var(--sc-bg-hover);
+      color: var(--sc-text-normal);
+    }
+    #btn-status-toggle-log svg {
+      width: 18px;
+      height: 18px;
+    }
+    #discord-status-overlay:not([data-scanning]) #btn-status-toggle-log,
+    #discord-status-overlay[data-error] #btn-status-toggle-log {
+      display: none;
+    }
+    #btn-status-toggle-log #status-eye-icon-off {
+      display: none;
+    }
+    #discord-status-overlay[data-log-visible] #btn-status-toggle-log #status-eye-icon-on {
+      display: none;
+    }
+    #discord-status-overlay[data-log-visible] #btn-status-toggle-log #status-eye-icon-off {
+      display: block;
+    }
+    #discord-status-spinner {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 3px solid var(--sc-bg-tertiary);
+      border-top-color: var(--sc-brand);
+      animation: sc-spin 0.8s linear infinite;
+    }
+    /* Yalnızca "hazırlanıyor" durumunda (henüz kesin bir hata mesajı yokken) dönüyor —
+       bir hata metni gösterildiğinde spinner'ın dönmeye devam etmesi "hâlâ deneniyor"
+       izlenimi verip kullanıcıyı yanıltabilir. */
+    #discord-status-overlay:not([data-error]) #discord-status-spinner {
+      display: block;
+    }
+    #discord-status-overlay[data-error] #discord-status-spinner {
+      display: none;
+    }
+    @keyframes sc-spin {
+      to { transform: rotate(360deg); }
+    }
+    /* ID seçicisindeki "display: flex" özgüllük olarak tarayıcının varsayılan
+       [hidden]{display:none} kuralını eziyordu: statusOverlay.hidden=true JS'de
+       doğru ayarlansa bile katman görsel olarak asla kaybolmuyordu — bu yüzden
+       "Bağlantı hazırlanıyor…" son yazılan metin olarak sonsuza kadar ekranda
+       kalıyordu, altındaki webview aslında düzgün çalışıyor olsa bile. */
+    #discord-status-overlay[hidden] {
+      display: none;
+    }
+    .sc-status-actions {
+      display: flex;
+      gap: 12px;
+    }
+    .sc-status-actions[hidden] {
+      display: none;
+    }
+    .sc-status-btn {
+      border: none;
+      border-radius: 4px;
+      padding: 10px 18px;
+      font-size: 14px;
+      cursor: pointer;
+      background: var(--sc-bg-tertiary);
+      color: var(--sc-text-normal);
+    }
+    .sc-status-btn[hidden] {
+      display: none;
+    }
+    .sc-status-btn:hover {
+      background: var(--sc-bg-hover);
+    }
+    .sc-status-btn--primary {
+      background: var(--sc-brand);
+      color: #fff;
+    }
+    .sc-status-btn--primary:hover {
+      background: var(--sc-brand-hover);
+    }
+
+    .sc-link-opener {
+      position: relative;
+    }
+    .sc-link-opener-popover {
+      position: absolute;
+      top: 40px;
+      right: 0;
+      width: 320px;
+      background: var(--sc-bg-secondary);
+      border: 1px solid var(--sc-bg-hover);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      padding: 14px;
+      z-index: 50;
+      -webkit-app-region: no-drag;
+    }
+    .sc-link-opener-popover[hidden] {
+      display: none;
+    }
+    .sc-link-opener-popover label {
+      display: block;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--sc-text-muted);
+      margin-bottom: 6px;
+    }
+    .sc-link-opener-popover input {
+      width: 100%;
+      background: var(--sc-bg-tertiary);
+      border: none;
+      border-radius: 4px;
+      padding: 8px 10px;
+      color: var(--sc-text-normal);
+      font-size: 13px;
+      box-sizing: border-box;
+    }
+    .sc-link-opener-error {
+      color: var(--sc-danger);
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    .sc-link-opener-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .sc-link-opener-actions button {
+      border: none;
+      border-radius: 4px;
+      padding: 6px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      background: var(--sc-bg-tertiary);
+      color: var(--sc-text-normal);
+    }
+    .sc-link-opener-actions button.sc-btn--primary {
+      background: var(--sc-brand);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="sc-titlebar">
+      <div class="sc-titlebar-drag">
+        <img src="../../resources/icon.png" alt="" class="sc-titlebar-logo" />
+        <span class="sc-titlebar-title">SplitCord-Turkey</span>
+      </div>
+      <div class="sc-titlebar-controls">
+        <button class="sc-titlebar-btn sc-titlebar-btn--pill sc-titlebar-btn--warn" id="btn-action-required" title="İzinler ve Kontroller'de dikkat gerektiren bir durum var" hidden>Eylem Gerekli</button>
+        <button class="sc-titlebar-btn sc-titlebar-btn--pill sc-titlebar-btn--accent" id="btn-update-available" title="Yeni bir sürüm mevcut" hidden>Güncelleme Mevcut</button>
+        <div class="sc-link-opener">
+          <button class="sc-titlebar-btn" id="btn-open-link" title="Discord Daveti Aç">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+          <div id="link-opener-popover" class="sc-link-opener-popover" hidden>
+            <label class="sc-field-label" for="link-opener-input">Davet Bağlantısı/Kodu</label>
+            <input type="text" id="link-opener-input" class="sc-textarea" placeholder="https://discord.gg/... veya davet kodu" />
+            <div id="link-opener-error" class="sc-link-opener-error" hidden></div>
+            <div class="sc-link-opener-actions">
+              <button id="btn-link-opener-cancel" class="sc-btn">İptal</button>
+              <button id="btn-link-opener-open" class="sc-btn sc-btn--primary">Aç</button>
+            </div>
+          </div>
+        </div>
+        <button class="sc-titlebar-btn" id="btn-refresh" title="Yenile">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 11a8 8 0 0 0-14.9-3.5M4 13a8 8 0 0 0 14.9 3.5" />
+            <path d="M4 4v5h5M20 20v-5h-5" />
+          </svg>
+        </button>
+        <button class="sc-titlebar-btn" id="btn-settings" title="Ayarlar">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" />
+            <line x1="4" y1="18" x2="20" y2="18" />
+            <circle cx="7" cy="18" r="2" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+        <button class="sc-titlebar-btn" id="btn-minimize" title="Küçült">&#8211;</button>
+        <button class="sc-titlebar-btn" id="btn-maximize" title="Büyüt / Geri Yükle">&#9633;</button>
+        <button class="sc-titlebar-btn sc-titlebar-btn--close" id="btn-close" title="Kapat">&#10005;</button>
+      </div>
+    </div>
+    <div id="content-area">
+      <!--
+        webview varsayılan olarak (embedder contextIsolation=true olduğu için)
+        contextIsolation=true ile açılıyor ve webpreferences="contextIsolation=no" denemesi
+        Electron tarafından yok sayılıyor (process.contextIsolated ile doğrulandı) — bu
+        yüzden discordWebviewPreload.js kendi izole dünyasından webFrame.executeJavaScript()
+        ile Discord'un ANA dünyasına kod enjekte ediyor (bkz. o dosyadaki ayrıntılı not).
+      -->
+      <webview id="discord-webview" partition="persist:discord" allowpopups></webview>
+      <div id="discord-status-overlay" hidden>
+        <pre id="discord-status-log-backdrop"></pre>
+        <div id="discord-status-content">
+          <div id="discord-status-spinner"></div>
+          <div id="discord-status-text"></div>
+          <button id="btn-status-toggle-log" type="button" title="Ayrıntıları göster/gizle">
+            <svg id="status-eye-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <svg id="status-eye-icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a13.16 13.16 0 0 1-1.67 2.68"/>
+              <path d="M6.61 6.61A13.526 13.526 0 0 0 1 11s4 7 11 7a9.26 9.26 0 0 0 5.39-1.61"/>
+              <path d="M9.9 9.9a3 3 0 1 0 4.2 4.2"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          </button>
+          <div id="discord-status-actions" class="sc-status-actions" hidden>
+            <button id="btn-status-retry-auto" class="sc-status-btn sc-status-btn--primary" hidden>Otomatik Taramayı Tekrarla</button>
+            <button id="btn-status-manual-setup" class="sc-status-btn" hidden>Manuel Olarak Ayarla</button>
+            <button id="btn-status-open-permissions" class="sc-status-btn" hidden>İzinler ve Kontroller</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="modal.js"></script>
+  <script src="antivirusInfo.js"></script>
+  <script src="titlebar.js"></script>
+</body>
+</html>
