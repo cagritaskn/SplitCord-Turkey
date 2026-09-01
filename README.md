@@ -8,17 +8,33 @@
 
 ---
 
+## Kurulum ve Çalıştırma
+
+Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'i kurup kullanmaya başlayabilirsiniz.
+
+1. [SplitCord-Turkey-Setup-0.5.7.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.5.7/SplitCord-Turkey-Setup-0.5.7.exe) dosyasını indirin. Yeni sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
+2. İndirilen dosyayı çalıştırın. Set-up, arka planda çalışacak DPI aşım hizmetini (SplitCordDpiService) kaydedebilmek için yönetici (UAC) izni isteyebilir; kurulum tamamlandıktan sonra uygulama hiçbir zaman yükseltilmiş yetkiyle çalışmaz.
+3. Kurulum bitince SplitCord-Turkey'i çalıştırın.
+4. İlk açılışta uygulama sizin için en uygun DPI aşım motorunu ve ayarını bulmak amacıyla ByeDPI, GoodbyeDPI ve Zapret'i dener; bu tarama birkaç dakika sürebilir. Bu süre boyunca "Bağlantı hazırlanıyor…" ekranını görmeniz normaldir, taramanın bitmesini bekleyin.
+5. Eğer programın başlık çubuğunda "Eylem Gerekiyor" ifadesini görürseniz bu uyarıya tıklayarak gerekli eylemleri uygulamanız gerekir, aksi halde SplitCord-Turkey beklendiği gibi çalışmayabilir.
+
+> [!NOTE]
+> Kaspersky veya ESET isimli antivirüs yazılımları sisteminizde kuruluysa doğru ve çalışan bir ayar bulmakta, sesli sohbet kanallarına bağlanmakta ve çeşitli farklı işlevlerde sorunlar yaşarsınız. Kaspersky ve ESET hakkında daha fazla bilgi için [bu sayfayı](https://github.com/cagritaskn/SplitCord-Turkey/blob/main/resources/ANTIVIRUS.md) ziyaret edebilirsiniz.
+
+---
+
 ## Özellikler
 
 - **Discord'a görsel ve işlevsel olarak birebir yakın bir arayüz.** Kendi özel başlık çubuğu, bildirimleri, tepsi simgesi ve ekran paylaşımı seçicisiyle resmi masaüstü istemcisinin yerini alabilecek şekilde tasarlanmıştır.
-- **Üç DPI aşım motoru, tek uygulama:** ByeDPI (yalnızca bu uygulamanın trafiğini kapsayan yerel proxy, admin gerektirmez), GoodbyeDPI ve Zapret (sistem geneli, WinDivert tabanlı). Otomatik modda motorlar sırayla denenir, çalışan ilk ayar kaydedilip kullanılır.
+- **Üç DPI aşım motoru, tek uygulama:** ByeDPI (yalnızca bu uygulamanın trafiğini kapsayan yerel proxy), GoodbyeDPI ve Zapret (sistem geneli, WinDivert tabanlı). Otomatik modda motorlar sırayla denenir, çalışan ilk ayar kaydedilip kullanılır.
 - **Otomatik ve Manuel mod.** Otomatik modda uygulama sizin için en uygun motoru ve stratejiyi bulur; Manuel modda hangi motorun, hangi parametrelerle çalışacağını kendiniz seçebilirsiniz.
 - **Sesli kanal desteği.** ByeDPI'nin kapsayamadığı WebRTC/UDP trafiği için, ByeDPI aktifken arka planda otomatik olarak devreye giren bir Zapret UDP eşlik süreci bulunur.
 - **Discord Rich Presence desteği.** Resmi olmayan istemcilerde normalde çalışmayan bu özellik, [arRPC](https://github.com/OpenAsar/arrpc) tabanlı yerel bir RPC sunucusu ile desteklenir.
 - **İzinler ve Kontroller ekranı.** Güvenlik duvarı izinlerini, çakışabilecek güvenlik yazılımlarını (Kaspersky, ESET) ve elle kurulmuş harici DPI süreçlerini/hizmetlerini tespit edip yönetmenizi sağlar.
-- **Kalıcı arka plan hizmeti.** DPI aşımı, SYSTEM yetkisiyle çalışan ayrı bir Windows Service üzerinden yürütülür; Discord penceresini kapatsanız da bağlantı kesilmez, sistem açılışında otomatik başlar.
+- **Kalıcı arka plan hizmeti.** DPI aşımı, SYSTEM yetkisiyle çalışan ayrı bir Windows hizmeti üzerinden yürütülür; Discord penceresini kapatsanız da bağlantı kesilmez, sistem açılışında otomatik başlar.
 - **Ekran paylaşımı seçicisi.** Kalite, FPS ve sistem sesi paylaşımını tek pencereden ayarlayabileceğiniz özel bir ekran/pencere paylaşım aracı içerir.
 - **Tema desteği.** Discord'un o anki temasından otomatik renk örnekleme veya sabit tema ön ayarları arasında seçim yapabilirsiniz.
+- **Kolay kaldırma.** Windows'un dahili program ekleme ve kaldırma menülerinden SplitCord-Turkey'i kolaylıkla kaldırabilirsiniz.
 
 ---
 
@@ -33,16 +49,27 @@ ByeDPI aktifken yalnızca bu uygulamanın trafiği, kendi başlattığı bir SOC
 
 ---
 
-## Kurulum ve Çalıştırma
+## Ayarlar Ekranları
 
-En kolay kurulum yöntemi, hazır kurulum dosyasını indirip çalıştırmaktır.
+- **DPI Aşımı:** Otomatik/Manuel mod seçimi, motor kartları, gelişmiş argüman düzenleme, yeniden arama başlatma ve reddedilen ayar listeleri.
+- **İzinler ve Kontroller:** Güvenlik duvarı izinleri, resmi Discord uygulamasıyla çakışma kontrolü, Kaspersky/ESET tespiti, çakışabilecek hizmetlerin ve harici DPI süreçlerinin listesi ile ses bağlantısı kontrolleri.
+- **Genel:** Otomatik başlatma, bildirim rozeti, performans modu, bağlantıları sistem tarayıcısında açma ve benzeri genel tercihler.
+- **Görünüm:** Discord temasından otomatik renk örnekleme veya sabit tema ön ayarları.
+- **Tuş Atamaları:** Sesi kapatma/açma, sağırlaştırma ve pencereyi öne getirme için genel (uygulama arka plandayken de çalışan) kısayollar.
+- **Hakkında:** Sürüm bilgisi, güncelleme kontrolü ve tüm ayarları sıfırlama.
 
-1. [SplitCord-Turkey-Setup-0.5.7.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.5.7/SplitCord-Turkey-Setup-0.5.7.exe) dosyasını indirin. Yeni sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
-2. İndirilen dosyayı çalıştırın. Kurulum sihirbazı, arka planda çalışacak DPI aşım hizmetini (SplitCordDpiService) kaydedebilmek için yalnızca **bir kez** yönetici (UAC) izni ister; kurulum tamamlandıktan sonra uygulama hiçbir zaman yükseltilmiş yetkiyle çalışmaz.
-3. Kurulum bitince SplitCord-Turkey otomatik olarak açılır.
+---
+
+## Önemli Notlar
 
 > [!NOTE]
-> İlk açılışta uygulama sizin için en uygun DPI aşım motorunu ve ayarını bulmak amacıyla ByeDPI, GoodbyeDPI ve Zapret'i sırayla dener; bu tarama birkaç on saniye sürebilir. Bu süre boyunca "Bağlantı hazırlanıyor…" ekranını görmeniz normaldir, taramanın bitmesini bekleyin.
+> **WinDivert** dosyalarının kullanımı Kaspersky ve ESET gibi bazı antivirüs yazılımları tarafından engellenebiliyor. Bu durumda GoodbyeDPI ve Zapret motorları hiç denenmeden otomatik olarak atlanıp doğrudan ByeDPI'ye yönlendirilir; İzinler ve Kontroller ekranından bu tespiti görebilirsiniz. ESET ve Kaspersky isimli antivirüs yazılımları sisteminizde kurulu ise sesli kanallara bağlanmada ve arama yapmada sorunlar yaşayabilirsiniz. Kaspersky ve ESET hakkında daha fazla bilgi için [bu sayfayı](https://github.com/cagritaskn/SplitCord-Turkey/blob/main/resources/ANTIVIRUS.md) ziyaret edebilirsiniz.
+
+> [!NOTE]
+> ByeDPI tek başına yalnızca metin/HTTPS trafiğini kapsar; WebRTC üzerinden yürüyen sesli kanal trafiğini kapsayamaz. Bu yüzden ByeDPI devrede olduğunda, sese destek olması için arka planda ayrıca yalnızca UDP portlarını hedefleyen bağımsız bir Zapret süreci de otomatik olarak devreye alınır. Yukarıda da belirtildiği üzere Kaspersky ve ESET'in varlığı halinde Zapret devreye alınamayacağından ses bağlantılarında sorun yaşayabilirsiniz hatta hiç katılamayabilirsiniz. Bunu engellemek için Kaspersky veya ESET'i sisteminizden kaldırabilir ya da bu antivirüs yazılımları içerisinde SplitCord-Turkey klasörünü bir istisna/dışlama olarak ekleyip SplitCord-Turkey'i tekrar kurarak sorunun çözülüp çözülmediğini test edebilirsiniz.
+
+> [!IMPORTANT]
+> Discord Rich Presence desteği, Discord'un web JS paketindeki dahili modülleri sabit imzalara göre bulan bir köprü script'ine dayanır. Discord kendi web paketini güncellediğinde bu köprü geçici olarak bozulabilir; böyle bir durumda yalnızca Rich Presence etkilenir, uygulamanın geri kalanı sorunsuz çalışmaya devam eder.
 
 ---
 
@@ -81,32 +108,9 @@ SplitCord-Turkey, kaynak koddan da derlenerek çalıştırılabilir.
 
 ---
 
-## Ayarlar Ekranları
-
-- **DPI Aşımı:** Otomatik/Manuel mod seçimi, motor kartları, gelişmiş argüman düzenleme, yeniden arama başlatma ve reddedilen ayar listeleri.
-- **İzinler ve Kontroller:** Güvenlik duvarı izinleri, resmi Discord uygulamasıyla çakışma kontrolü, Kaspersky/ESET tespiti, çakışabilecek hizmetlerin ve harici DPI süreçlerinin listesi ile ses bağlantısı kontrolleri.
-- **Genel:** Otomatik başlatma, bildirim rozeti, performans modu, bağlantıları sistem tarayıcısında açma ve benzeri genel tercihler.
-- **Görünüm:** Discord temasından otomatik renk örnekleme veya sabit tema ön ayarları.
-- **Tuş Atamaları:** Sesi kapatma/açma, sağırlaştırma ve pencereyi öne getirme için genel (uygulama arka plandayken de çalışan) kısayollar.
-- **Hakkında:** Sürüm bilgisi, güncelleme kontrolü ve tüm ayarları sıfırlama.
-
----
-
-## Önemli Notlar
-
-> [!NOTE]
-> **WinDivert** dosyalarının kullanımı Kaspersky ve ESET gibi bazı antivirüs yazılımları tarafından engellenebiliyor. Bu durumda GoodbyeDPI ve Zapret motorları hiç denenmeden otomatik olarak atlanıp doğrudan ByeDPI'ye yönlendirilir; İzinler ve Kontroller ekranından bu tespiti görebilirsiniz. ESET ve Kaspersky isimli antivirüs yazılımları sisteminizde kurulu ise sesli kanallara bağlanmada ve arama yapmada sorunlar yaşayabilirsiniz. Kaspersky ve ESET hakkında daha fazla bilgi için [bu sayfayı](https://github.com/cagritaskn/SplitCord-Turkey/blob/main/resources/ANTIVIRUS.md) ziyaret edebilirsiniz.
-
-> [!NOTE]
-> ByeDPI tek başına yalnızca metin/HTTPS trafiğini kapsar; WebRTC üzerinden yürüyen sesli kanal trafiğini kapsayamaz. Bu yüzden ByeDPI devrede olduğunda, sese destek olması için arka planda ayrıca yalnızca UDP portlarını hedefleyen bağımsız bir Zapret süreci de otomatik olarak devreye alınır. Yukarıda da belirtildiği üzere Kaspersky ve ESET'in varlığı halinde Zapret devreye alınamayacağından ses bağlantılarında sorun yaşayabilirsiniz hatta hiç katılamayabilirsiniz. Bunu engellemek için Kaspersky veya ESET'i sisteminizden kaldırabilir ya da bu antivirüs yazılımları içerisinde SplitCord-Turkey klasörünü bir istisna/dışlama olarak ekleyip SplitCord-Turkey'i tekrar kurarak sorunun çözülüp çözülmediğini test edebilirsiniz.
-
-> [!IMPORTANT]
-> Discord Rich Presence desteği, Discord'un web JS paketindeki dahili modülleri sabit imzalara göre bulan bir köprü script'ine dayanır. Discord kendi web paketini güncellediğinde bu köprü geçici olarak bozulabilir; böyle bir durumda yalnızca Rich Presence etkilenir, uygulamanın geri kalanı sorunsuz çalışmaya devam eder.
-
----
-
 ## Kullanılan Açık Kaynak Projeler
 
+- **[DPIscord](https://github.com/alimali54/DPIscord)** by **[alimali54](https://github.com/alimali54)**
 - **[ByeDPI](https://github.com/hufrea/byedpi)** by **[hufrea](https://github.com/hufrea)**
 - **[GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI)** by **[ValdikSS](https://github.com/ValdikSS)**
 - **[zapret](https://github.com/bol-van/zapret)** ve **[zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube)** by **[bol-van](https://github.com/bol-van)** / **[Flowseal](https://github.com/Flowseal)**
@@ -115,6 +119,15 @@ SplitCord-Turkey, kaynak koddan da derlenerek çalıştırılabilir.
 - **[Electron](https://github.com/electron/electron)**
 
 ---
+## Özel Teşekkürler
+
+### Test Edenler:
+- [alperenkrpnr](https://github.com/alperenkrpnr) - Debugging
+- nexos - Vodafone
+- dominos41 - Kablonet
+- Deranged, amevoid, [alperenkrpnr](https://github.com/alperenkrpnr), Ekincanbey, [yigitacarli](https://github.com/yigitacarli) - SuperOnline
+- [hus58](https://github.com/hus58) - Millenicom
+
 
 ## Telif Hakkı
 
