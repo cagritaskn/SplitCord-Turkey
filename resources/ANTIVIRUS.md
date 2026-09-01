@@ -39,7 +39,7 @@ SplitCord-Turkey tamamen açık kaynak kodludur; tüm kaynak kod [GitHub deposun
 > **SmartScreen "Windows kişisel bilgisayarınızı korudu"** uyarısı, imzalanmamış yazılımların tamamında çalıştırmadan önce görünür. Bunun sebebi, yazılımların uluslararası kod imzalama sertifikasına tabi olma zorunluluğudur. Ancak bu imzalama işlemi döviz kuru üzerinden düzenli ödeme gerektirdiğinden ve bağımsız, gelir elde etmeyen bir geliştirici tarafından hazırlandığından dolayı yazılım imzalanamıyor.
 
 > [!IMPORTANT]
-> İndirme yapacağınız her zaman önce adres çubuğuna bakıp URL'ye dikkat edin. SplitCord-Turkey'i yalnızca **[resmi GitHub deposundan](https://github.com/cagritaskn/SplitCord-Turkey)** veya doğrudan **[en güncel kurulum dosyasından](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.5.7/SplitCord-Turkey-Setup-0.5.7.exe)** indirip kullanın.
+> İndirme yapacağınız her zaman önce adres çubuğuna bakıp URL'ye dikkat edin. SplitCord-Turkey'i yalnızca **[resmi GitHub reposundan](https://github.com/cagritaskn/SplitCord-Turkey)** veya doğrudan **[en güncel kurulum dosyasından](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.5.7/SplitCord-Turkey-Setup-0.5.7.exe)** indirip kullanın.
 
 ---
 
@@ -70,7 +70,7 @@ Kurulum sırasında farklı bir klasör seçtiyseniz, istisnayı o klasör için
 
 ### Seçenek 3 — Antivirüs yazılımını kaldırın
 
-Kaspersky/ESET'i sisteminizden tamamen kaldırırsanız, GoodbyeDPI ve Zapret motorları hiçbir kısıtlama olmadan çalışır.
+Kaspersky/ESET'i sisteminizden tamamen kaldırırsanız, GoodbyeDPI ve Zapret motorları hiçbir kısıtlama olmadan çalışır. Yazılımları kaldırdıktan sonra kurulumu tekrar gerçekleştirmeniz gerekebilir.
 
 ---
 
