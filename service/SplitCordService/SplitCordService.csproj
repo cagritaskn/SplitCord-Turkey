@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsService>true</UseWindowsService>
+    <ServiceName>SplitCordDpiService</ServiceName>
+    <AssemblyName>SplitCordService</AssemblyName>
+    <RootNamespace>SplitCord.Service</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Kendi kendine yeterli (self-contained) yayın: hedef makinede .NET Runtime kurulu
+         olması ARTIK gerekmiyor. Önceden framework-dependent yayınlanıyordu — geliştirme
+         makinesinde .NET SDK zaten kurulu olduğu için hiç fark edilmemişti, ama .NET
+         kurulu olmayan bir makineye kurulunca SplitCordService.exe (Windows Service olarak)
+         hiç başlayamıyor, sessizce çöküyor ve istemci 127.0.0.1:58271'e ECONNREFUSED alıyordu. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
+  </ItemGroup>
+
+  <!-- scripts/fetch-binaries.js tarafından indirilen ByeDPI/GoodbyeDPI/Zapret binary'lerini
+       repo kökündeki resources/bin altından servis çıktı dizinindeki bin/ altına kopyalar,
+       böylece BinaryLocator.ToolDir hem dev hem publish çıktısında aynı göreli yolu bulur. -->
+  <ItemGroup>
+    <Content Include="..\..\resources\bin\**\*" Condition="Exists('..\..\resources\bin')">
+      <Link>bin\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

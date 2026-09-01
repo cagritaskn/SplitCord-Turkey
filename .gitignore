@@ -1,0 +1,27 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# .NET
+service/**/bin/
+service/**/obj/
+
+# Electron
+client/node_modules/
+client/dist/
+client/out/
+
+# Indirilen DPI araclari (lisans nedeniyle repoya commitlenmiyor, npm run fetch-binaries ile yeniden indirilir)
+resources/bin/
+
+# Editor / OS
+.vs/
+.vscode/
+*.user
+Thumbs.db
+
+# Claude Code session state
+.claude/
+
+# ByeDPI kaynagindan derlenen ikili (npm run build-byedpi ile yeniden uretilir)
+vendor/byedpi-src/ciadpi.exe

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>SplitCord Ayarları</title>
+  <link rel="stylesheet" href="../theme/theme.css" />
+  <link rel="stylesheet" href="../titlebar.css" />
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <div class="sc-titlebar">
+    <div class="sc-titlebar-drag"><img src="../../../resources/icon.png" alt="" class="sc-titlebar-logo" /><span class="sc-titlebar-title">Ayarlar</span></div>
+    <div class="sc-titlebar-controls">
+      <button class="sc-titlebar-btn sc-titlebar-btn--close" id="btn-close-settings" title="Kapat">&#10005;</button>
+    </div>
+  </div>
+
+  <div class="sc-settings-layout">
+    <nav class="sc-settings-nav">
+      <div class="sc-settings-nav-item active" data-panel="panel-general">Genel</div>
+      <div class="sc-settings-nav-item" data-panel="panel-dpi">DPI Aşımı</div>
+      <div class="sc-settings-nav-item" data-panel="panel-appearance">Görünüm</div>
+      <div class="sc-settings-nav-item" data-panel="panel-shortcuts">Tuş Atamaları</div>
+      <div class="sc-settings-nav-item" data-panel="panel-permissions">İzinler ve Kontroller</div>
+      <div class="sc-settings-nav-item" data-panel="panel-about">Hakkında ve Güncelleme</div>
+    </nav>
+
+    <main class="sc-settings-content">
+      <section id="panel-general" class="sc-panel">
+        <h1>Genel</h1>
+        <label class="sc-toggle-row">
+          <input type="checkbox" id="toggle-autostart" />
+          <span>
+            <strong>Windows ile başlat</strong>
+            <div class="sc-engine-desc">SplitCord, oturum açıldığında otomatik başlar. DPI servisi bundan bağımsız, ayrıca arkaplanda çalışmaya devam eder.</div>
+          </span>
+        </label>
+        <label class="sc-toggle-row sc-toggle-row--indent" id="row-start-in-background" hidden>
+          <input type="checkbox" id="toggle-start-in-background" />
+          <span>
+            <strong>Arkaplanda başlat</strong>
+            <div class="sc-engine-desc">Açıksa, Windows ile otomatik başlarken pencere gösterilmez — doğrudan tepsiye küçülmüş halde başlar.</div>
+          </span>
+        </label>
+
+        <div class="sc-divider"></div>
+
+        <label class="sc-toggle-row">
+          <input type="checkbox" id="toggle-gpu" />
+          <span>
+            <strong>GPU hızlandırma</strong>
+            <div class="sc-engine-desc">Bazı sistemlerde kararsızlığa yol açabilir. Kapatmak, programı yazılım renderına geçirir; biraz daha az akıcı olabilir ama daha kararlıdır. Değişikliğin uygulanması için programın yeniden başlatılması gerekir.</div>
+          </span>
+        </label>
+
+        <div class="sc-divider"></div>
+
+        <label class="sc-toggle-row">
+          <input type="checkbox" id="toggle-open-links-externally" />
+          <span>
+            <strong>Bağlantıları varsayılan sistem tarayıcısında aç</strong>
+            <div class="sc-engine-desc">Açıksa, Discord içindeki harici bağlantılar sistemin varsayılan tarayıcısında açılır. Kapalıysa uygulama içi bir pencerede açılmaya devam eder.</div>
+          </span>
+        </label>
+
+        <div class="sc-divider"></div>
+
+        <label class="sc-toggle-row">
+          <input type="checkbox" id="toggle-link-opener-new-window" />
+          <span>
+            <strong>Davet bağlantılarını yeni pencerede aç</strong>
+            <div class="sc-engine-desc">Açıksa, üst çubuktaki "+" butonuyla eklenen discord.gg/discord.com davet bağlantıları ayrı bir pencerede açılır. Kapalıysa, bağlantılar ana pencerede açılır. (Kapalıyken davet bağlantısı açmak, ses bağlantınızı sekteye uğratabilir)</div>
+          </span>
+        </label>
+
+        <div class="sc-divider"></div>
+
+        <label class="sc-toggle-row">
+          <input type="checkbox" id="toggle-performance-mode" />
+          <span>
+            <strong>Performans modunu aç</strong>
+            <div class="sc-engine-desc">Açıkken mümkün olduğunca az sistem kaynağı kullanılır: dinamik renk örneklemesi ve renk geçişi/fade gibi animasyonlar devre dışı kalır.</div>
+          </span>
+        </label>
+
+        <div class="sc-divider"></div>
+
+        <label class="sc-toggle-row">
+          <input type="checkbox" id="toggle-notification-badge" />
+          <span>
+            <strong>Bildirim rozetlerini göster</strong>
+            <div class="sc-engine-desc">Açıkken, uygulama ikonunun üzerinde okunmamış Discord bildirimi sayısını gösteren kırmızı bir rozet belirir.</div>
+          </span>
+        </label>
+
+        <div class="sc-divider"></div>
+
+        <label class="sc-toggle-row" id="row-disable-false-voice-warning">
+          <input type="checkbox" id="toggle-disable-false-voice-warning" />
+          <span>
+            <strong>Hatalı ses uyarısını devre dışı bırak</strong>
+            <div class="sc-engine-desc">Discord'un "mikrofonundan ses alamıyor" uyarısı (Hata: 3002) genelde yanlış alarmdır — henüz konuşmadığınızda da tetiklenebilir. Açıkken bu uyarı hiç gösterilmez.</div>
+          </span>
+        </label>
+      </section>
+
+      <section id="panel-dpi" class="sc-panel" hidden>
+        <h1>DPI Aşımı</h1>
+        <p class="sc-hint">
+          Discord trafiği üzerindeki DPI kısıtlarının aşılmasının otomatik mi yoksa manuel mi olacağını seç.
+        </p>
+
+        <div class="sc-mode-switch" id="dpi-mode-switch">
+          <button class="sc-mode-btn active" id="btn-mode-automatic" data-mode="automatic">Otomatik</button>
+          <button class="sc-mode-btn" id="btn-mode-manual" data-mode="manual">Manuel</button>
+          <div class="sc-mode-switch-spinner"></div>
+        </div>
+
+        <!-- OTOMATİK: ByeDPI'nin kendi aday tarama/doğrulama akışı, kullanıcı yalnızca
+             durumu görür ve gerekirse çalışan seti "yasaklayıp" yenisini aratabilir.
+             "Gelişmiş" işaretlenmedikçe yalnızca bu kısa açıklama görünür. -->
+        <div id="dpi-automatic-view">
+          <p class="sc-hint">
+            SplitCord-Turkey, Discord'a erişebilen bir aşım ayarı bulana kadar birden çok stratejiyi otomatik
+            olarak sırayla dener. Çalışan bir ayar bulunduğunda bu ayarı kaydeder ve kullanır.
+          </p>
+
+          <p id="dpi-active-engine-info" class="sc-hint" hidden></p>
+
+          <label class="sc-toggle-row">
+            <input type="checkbox" id="toggle-dpi-advanced" />
+            <span>
+              <strong>Gelişmiş</strong>
+              <div class="sc-engine-desc">Gelişmiş seçenekleri göster.</div>
+            </span>
+          </label>
+
+          <div id="dpi-advanced-automatic-section" hidden>
+            <label class="sc-toggle-row">
+              <input type="checkbox" id="toggle-byedpi-extended-automatic" />
+              <span>
+                <strong>ByeDPI uzun argüman listesi</strong>
+                <div class="sc-engine-desc">Açıkken ByeDPI, kısa listeden sonra ~1000 ek strateji de dener. Tarama önemli ölçüde uzayabilir.</div>
+              </span>
+            </label>
+
+            <div id="restart-search-wrap" class="sc-restart-search">
+              <button id="btn-restart-search" class="sc-btn sc-btn--primary">Tekrar Arama Başlat</button>
+              <div class="sc-restart-search-spinner"></div>
+            </div>
+
+            <div id="automatic-status" class="sc-status-box">Yükleniyor…</div>
+            <button id="btn-reject-current" class="sc-btn sc-btn--danger" hidden>Argüman Setini Yasakla</button>
+
+            <div id="rejected-args-section" hidden>
+              <h2>Yasaklı Argüman Setleri</h2>
+              <p class="sc-hint">Bu setler otomatik taramada bir daha denenmeyecek.</p>
+              <div id="rejected-args-list" class="sc-rejected-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MANUEL: motor seçimi + argüman düzenleme (mevcut ekran) -->
+        <div id="dpi-manual-view" hidden>
+          <div id="engine-list" class="sc-engine-list">
+            <div class="sc-hint">Yükleniyor…</div>
+          </div>
+
+          <label class="sc-toggle-row">
+            <input type="checkbox" id="toggle-dpi-advanced-manual" />
+            <span>
+              <strong>Gelişmiş</strong>
+              <div class="sc-engine-desc">Gelişmiş seçenekleri göster.</div>
+            </span>
+          </label>
+
+          <div id="dpi-advanced-manual-section" hidden>
+            <label class="sc-toggle-row" id="byedpi-extended-manual-row" hidden>
+              <input type="checkbox" id="toggle-byedpi-extended-manual" />
+              <span>
+                <strong>ByeDPI uzun argüman listesi</strong>
+                <div class="sc-engine-desc">Açıkken ByeDPI, kısa listeden sonra ~1000 ek strateji de dener. Tarama önemli ölçüde uzayabilir.</div>
+              </span>
+            </label>
+
+            <div id="restart-search-manual-wrap" class="sc-restart-search">
+              <button id="btn-restart-search-manual" class="sc-btn sc-btn--primary">Tekrar Arama Başlat</button>
+              <div class="sc-restart-search-spinner"></div>
+            </div>
+
+            <label class="sc-field-label" for="advanced-args">Seçili motor için komut satırı argümanları</label>
+            <textarea id="advanced-args" class="sc-textarea" rows="2" placeholder="örn: --split 1+s --disorder 2 --auto=torst"></textarea>
+            <button id="btn-save-args" class="sc-btn sc-btn--primary">Kaydet</button>
+          </div>
+        </div>
+
+        <!-- Otomatik+Gelişmiş VEYA Manuel'de görünür -->
+        <div id="dpi-log-doh-section" hidden>
+          <div class="sc-divider"></div>
+
+          <h2>Günlük</h2>
+          <pre id="engine-logs" class="sc-log-box">—</pre>
+
+          <div class="sc-divider"></div>
+
+          <h2>DNS (DoH)</h2>
+          <p class="sc-hint">
+            ByeDPI aktifken DNS sorguları, sistemin (ISP'nin) DNS'i yerine buradaki sunuculara HTTPS
+            üzerinden (DNS-over-HTTPS) gönderilir — sırayla denenir, ilki başarısız olursa bir sonrakine
+            geçilir. Bu, yalnızca SplitCord-Turkey'i etkiler, sistem geneli bir DNS değişikliği yapmaz.
+          </p>
+          <label class="sc-field-label" for="doh-providers">Sunucu adresleri (satır başına bir tane, https:// ile başlamalı)</label>
+          <textarea id="doh-providers" class="sc-textarea" rows="3" placeholder="https://dns.google/dns-query"></textarea>
+          <button id="btn-save-doh" class="sc-btn sc-btn--primary">Kaydet</button>
+        </div>
+      </section>
+
+      <section id="panel-appearance" class="sc-panel" hidden>
+        <h1>Görünüm</h1>
+        <h2>Tema</h2>
+        <p class="sc-hint">
+          Otomatik'te pencere çerçevesi ve üst çubuk rengi Discord sayfasının arkaplan renginden canlı
+          olarak örneklenir. Diğer seçenekler sabit bir renk kullanır.
+        </p>
+        <div id="theme-picker" class="sc-theme-picker">
+          <button class="sc-theme-swatch" data-theme="automatic" title="Otomatik">
+            <span class="sc-theme-swatch-color sc-theme-swatch-color--auto"></span>
+            <span>Otomatik</span>
+          </button>
+          <button class="sc-theme-swatch" data-theme="light" title="Açık">
+            <span class="sc-theme-swatch-color" style="background:#ffffff"></span>
+            <span>Açık</span>
+          </button>
+          <button class="sc-theme-swatch" data-theme="ash" title="Kül">
+            <span class="sc-theme-swatch-color" style="background:#323339"></span>
+            <span>Kül</span>
+          </button>
+          <button class="sc-theme-swatch" data-theme="dark" title="Koyu">
+            <span class="sc-theme-swatch-color" style="background:#1d1d21"></span>
+            <span>Koyu</span>
+          </button>
+          <button class="sc-theme-swatch" data-theme="onyx" title="Oniks">
+            <span class="sc-theme-swatch-color" style="background:#000000"></span>
+            <span>Oniks</span>
+          </button>
+        </div>
+      </section>
+
+      <section id="panel-shortcuts" class="sc-panel" hidden>
+        <h1>Tuş Atamaları</h1>
+        <label class="sc-toggle-row">
+          <input type="checkbox" id="toggle-shortcuts-enabled" />
+          <span>
+            <strong>Global Tuş Atamalarını Aktifleştir</strong>
+            <div class="sc-engine-desc">Açıkken, aşağıda atadığınız tuş kombinasyonları uygulama arkaplanda/tepside olsa bile sistem genelinde çalışır.</div>
+          </span>
+        </label>
+
+        <div class="sc-divider"></div>
+
+        <div id="shortcuts-list" class="sc-shortcuts-list">
+          <div class="sc-shortcut-row" data-action="toggleMute">
+            <span class="sc-shortcut-label">Mikrofonu Sustur / Aç</span>
+            <div class="sc-shortcut-controls">
+              <button type="button" class="sc-shortcut-input" data-action="toggleMute">—</button>
+              <button type="button" class="sc-shortcut-clear" data-action="toggleMute" title="Kaldır">✕</button>
+            </div>
+          </div>
+          <div class="sc-shortcut-row" data-action="toggleDeafen">
+            <span class="sc-shortcut-label">Sağırlaştır / Kapat</span>
+            <div class="sc-shortcut-controls">
+              <button type="button" class="sc-shortcut-input" data-action="toggleDeafen">—</button>
+              <button type="button" class="sc-shortcut-clear" data-action="toggleDeafen" title="Kaldır">✕</button>
+            </div>
+          </div>
+          <div class="sc-shortcut-row" data-action="disconnect">
+            <span class="sc-shortcut-label">Ses Kanalından Çık</span>
+            <div class="sc-shortcut-controls">
+              <button type="button" class="sc-shortcut-input" data-action="disconnect">—</button>
+              <button type="button" class="sc-shortcut-clear" data-action="disconnect" title="Kaldır">✕</button>
+            </div>
+          </div>
+          <div class="sc-shortcut-row" data-action="bringToFront">
+            <span class="sc-shortcut-label">Pencereyi Öne Al</span>
+            <div class="sc-shortcut-controls">
+              <button type="button" class="sc-shortcut-input" data-action="bringToFront">—</button>
+              <button type="button" class="sc-shortcut-clear" data-action="bringToFront" title="Kaldır">✕</button>
+            </div>
+          </div>
+          <div class="sc-shortcut-row" data-action="minimizeToTray">
+            <span class="sc-shortcut-label">Pencereyi Tepsiye Küçült</span>
+            <div class="sc-shortcut-controls">
+              <button type="button" class="sc-shortcut-input" data-action="minimizeToTray">—</button>
+              <button type="button" class="sc-shortcut-clear" data-action="minimizeToTray" title="Kaldır">✕</button>
+            </div>
+          </div>
+        </div>
+        <p id="shortcuts-hint" class="sc-hint" style="margin-top: 12px;"></p>
+      </section>
+
+      <section id="panel-permissions" class="sc-panel" hidden>
+        <h1>İzinler ve Kontroller</h1>
+        <p class="sc-hint">SplitCord-Turkey'in düzgün çalışması için işletim sisteminden ihtiyaç duyduğu izinler.</p>
+        <div id="permissions-list" class="sc-permissions-list">
+          <div class="sc-permission-row">
+            <div class="sc-permission-info">
+              <span id="permission-firewall-icon" class="sc-permission-icon">…</span>
+              <span>ByeDPI Güvenlik Duvarı İzni</span>
+            </div>
+            <button id="btn-grant-firewall" class="sc-btn sc-btn--primary" hidden>İzin Ver</button>
+          </div>
+          <div class="sc-permission-row">
+            <div class="sc-permission-info">
+              <span id="permission-app-firewall-icon" class="sc-permission-icon">…</span>
+              <span>SplitCord-Turkey Güvenlik Duvarı İzni (ortak/özel ağlar)</span>
+            </div>
+            <button id="btn-grant-app-firewall" class="sc-btn sc-btn--primary" hidden>İzin Ver</button>
+          </div>
+        </div>
+
+        <h2>Kontroller</h2>
+        <p class="sc-hint">
+          DPI aşımını engelleyebilecek durumların tespiti.
+        </p>
+        <div class="sc-permissions-list">
+          <div class="sc-permission-row">
+            <div class="sc-permission-info">
+              <span id="permission-discord-app-icon" class="sc-permission-icon">…</span>
+              <span id="permission-discord-app-label">Resmi Discord uygulaması yüklü değil</span>
+            </div>
+            <button id="btn-uninstall-discord" class="sc-btn sc-btn--primary" hidden>Discord Uygulamasını Kaldır</button>
+          </div>
+        </div>
+        <div id="controls-list" class="sc-permissions-list">
+          <div class="sc-hint">Kontrol ediliyor…</div>
+        </div>
+
+        <h2>Ses Durumu Tanılama</h2>
+        <p class="sc-hint">
+          Ses işlevlerinin canlı durumu.
+        </p>
+        <div id="voice-state-list" class="sc-permissions-list">
+          <div class="sc-permission-row">
+            <div class="sc-permission-info">
+              <span id="voice-state-connected-icon" class="sc-permission-icon">…</span>
+              <span>Aramada / Ses Kanalında</span>
+            </div>
+          </div>
+          <div class="sc-permission-row">
+            <div class="sc-permission-info">
+              <span id="voice-state-muted-icon" class="sc-permission-icon">…</span>
+              <span>Mikrofon Susturuldu</span>
+            </div>
+          </div>
+          <div class="sc-permission-row">
+            <div class="sc-permission-info">
+              <span id="voice-state-deafened-icon" class="sc-permission-icon">…</span>
+              <span>Sağırlaştırıldı</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-about" class="sc-panel" hidden>
+        <img src="../../../resources/logo-large.png" alt="SplitCord-Turkey" class="sc-about-logo" />
+        <h1 style="text-align: center;">Hakkında ve Güncelleme</h1>
+        <p class="sc-hint">
+          SplitCord-Turkey sürüm <strong id="about-version">—</strong><br />
+          <a href="https://github.com/cagritaskn/SplitCord-Turkey" id="about-repo-link" target="_blank" rel="noopener">github.com/cagritaskn/SplitCord-Turkey</a>
+        </p>
+        <button id="btn-check-update" class="sc-btn sc-btn--primary">Güncellemeleri Kontrol Et</button>
+        <div id="about-update-status" class="sc-hint" style="margin-top: 12px;"></div>
+        <button id="btn-install-update" class="sc-btn sc-btn--primary" hidden style="margin-top: 8px;">Güncellemeyi İndir</button>
+
+        <div class="sc-divider" style="margin-top: 24px;"></div>
+        <button id="btn-reset-all-settings" class="sc-btn sc-btn--danger" style="margin-top: 8px;">Tüm Ayarları Sıfırla</button>
+      </section>
+    </main>
+  </div>
+
+  <div id="unsaved-bar" class="sc-unsaved-bar" hidden>
+    <span>Kaydedilmemiş değişiklikleriniz var.</span>
+    <div class="sc-unsaved-bar-actions">
+      <button id="btn-discard-changes" class="sc-btn">Değişiklikleri Geri Al</button>
+      <button id="btn-save-changes" class="sc-btn sc-btn--primary">Değişiklikleri Kaydet</button>
+    </div>
+  </div>
+
+  <script src="../modal.js"></script>
+  <script src="../antivirusInfo.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>
