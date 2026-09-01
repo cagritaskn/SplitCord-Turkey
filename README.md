@@ -26,8 +26,8 @@
 
 SplitCord-Turkey iki ayrı bileşenden oluşur:
 
-- **SplitCordDpiService** — SYSTEM yetkisiyle arka planda çalışan bir Windows Service. ByeDPI/GoodbyeDPI/Zapret süreçlerini yönetir, yerel bir REST API (`127.0.0.1` üzerinde) sunar. Kurulum sırasında yalnızca **bir kez** yönetici izni ister; sonrasında hiçbir zaman tekrar UAC istemi çıkmaz.
-- **SplitCord-Turkey İstemcisi** — Discord'u saran, hiçbir zaman yükseltilmiş yetkiyle çalışmayan Electron uygulaması. DPI motor seçimi ve durumu için yerel API üzerinden servisle konuşur, kendi başına elevation/servis mantığı taşımaz.
+- **SplitCordDpiService** — SYSTEM yetkisiyle arka planda çalışan bir Windows Service. ByeDPI/GoodbyeDPI/Zapret süreçlerini yönetir, yerel bir REST API (`127.0.0.1` üzerinde) sunar. Kurulum sırasında yalnızca **bir kez** yönetici izni ister; sonrasında hiçbir zaman tekrar UAC istemi çıkmaz. Ayrıca bu hizmet yalnızca SplitCord-Turkey çalışırken işlevini sürdürür.
+- **SplitCord-Turkey İstemcisi** — Discord'u saran, hiçbir zaman yükseltilmiş yetkiyle çalışmayan Electron uygulaması. DPI motor seçimi ve durumu için yerel API üzerinden servisle konuşur, kendi başına yetkilendirme yapmaz ve hizmet düzeyinde çalışmaz.
 
 ByeDPI aktifken yalnızca bu uygulamanın trafiği, kendi başlattığı bir SOCKS5 proxy üzerinden yönlendirilir (sisteminizin geri kalanı etkilenmez). GoodbyeDPI ve Zapret ise WinDivert sürücüsü ile sistem genelinde çalışır; bu iki motor aynı anda etkin olamaz, aynı anda yalnızca tek bir motor aktiftir.
 
@@ -71,7 +71,7 @@ SplitCord-Turkey şu an için yalnızca kaynak koddan derlenerek çalıştırıl
 ## Ayarlar Ekranları
 
 - **DPI Aşımı:** Otomatik/Manuel mod seçimi, motor kartları, gelişmiş argüman düzenleme, yeniden arama başlatma ve reddedilen ayar listeleri.
-- **İzinler ve Kontroller:** Güvenlik duvarı izinleri (hem ByeDPI hem de uygulamanın kendisi için), resmi Discord uygulamasıyla çakışma kontrolü, Kaspersky/ESET tespiti, çakışabilecek hizmetlerin ve harici DPI süreçlerinin listesi.
+- **İzinler ve Kontroller:** Güvenlik duvarı izinleri, resmi Discord uygulamasıyla çakışma kontrolü, Kaspersky/ESET tespiti, çakışabilecek hizmetlerin ve harici DPI süreçlerinin listesi ile ses bağlantısı kontrolleri.
 - **Genel:** Otomatik başlatma, bildirim rozeti, performans modu, bağlantıları sistem tarayıcısında açma ve benzeri genel tercihler.
 - **Görünüm:** Discord temasından otomatik renk örnekleme veya sabit tema ön ayarları.
 - **Tuş Atamaları:** Sesi kapatma/açma, sağırlaştırma ve pencereyi öne getirme için genel (uygulama arka plandayken de çalışan) kısayollar.
@@ -82,10 +82,10 @@ SplitCord-Turkey şu an için yalnızca kaynak koddan derlenerek çalıştırıl
 ## Önemli Notlar
 
 > [!NOTE]
-> **WinDivert** dosyalarının kullanımı Kaspersky gibi bazı antivirüs yazılımları tarafından engellenebiliyor. Bu durumda GoodbyeDPI ve Zapret motorları hiç denenmeden otomatik olarak atlanıp doğrudan ByeDPI'ye yönlendirilir; İzinler ve Kontroller ekranından bu tespiti görebilirsiniz.
+> **WinDivert** dosyalarının kullanımı Kaspersky ve ESET gibi bazı antivirüs yazılımları tarafından engellenebiliyor. Bu durumda GoodbyeDPI ve Zapret motorları hiç denenmeden otomatik olarak atlanıp doğrudan ByeDPI'ye yönlendirilir; İzinler ve Kontroller ekranından bu tespiti görebilirsiniz. ESET ve Kaspersky isimli antivirüs yazılımları sisteminizde kurulu ise sesli kanallara bağlanmada ve arama yapmada sorunlar yaşayabilirsiniz. 
 
 > [!NOTE]
-> ByeDPI tek başına yalnızca metin/HTTPS trafiğini kapsar; WebRTC üzerinden yürüyen sesli kanal trafiğini kapsayamaz. Bu yüzden ByeDPI devrede olduğunda, sese destek olması için arka planda ayrıca yalnızca UDP portlarını hedefleyen bağımsız bir Zapret süreci de otomatik olarak devreye alınır.
+> ByeDPI tek başına yalnızca metin/HTTPS trafiğini kapsar; WebRTC üzerinden yürüyen sesli kanal trafiğini kapsayamaz. Bu yüzden ByeDPI devrede olduğunda, sese destek olması için arka planda ayrıca yalnızca UDP portlarını hedefleyen bağımsız bir Zapret süreci de otomatik olarak devreye alınır. Yukarıda da belirtildiği üzere Kaspersky ve ESET'in varlığı halinde Zapret devreye alınamayacağından ses bağlantılarında sorun yaşayabilirsiniz hatta hiç katılamayabilirsiniz. Bunu engellemek için Kaspersky veya ESET'i sisteminizden kaldırabilir ya da bu antivirüs yazılımları içerisinde SplitCord-Turkey klasörünü bir istisna/dışlama olarak ekleyip SplitCord-Turkey'i tekrar kurarak sorunun çözülüp çözülmediğini test edebilirsiniz.
 
 > [!IMPORTANT]
 > Discord Rich Presence desteği, Discord'un web JS paketindeki dahili modülleri sabit imzalara göre bulan bir köprü script'ine dayanır. Discord kendi web paketini güncellediğinde bu köprü geçici olarak bozulabilir; böyle bir durumda yalnızca Rich Presence etkilenir, uygulamanın geri kalanı sorunsuz çalışmaya devam eder.
