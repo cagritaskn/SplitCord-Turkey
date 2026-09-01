@@ -33,9 +33,22 @@ ByeDPI aktifken yalnızca bu uygulamanın trafiği, kendi başlattığı bir SOC
 
 ---
 
-## Kurulum
+## Kurulum ve Çalıştırma
 
-SplitCord-Turkey şu an için yalnızca kaynak koddan derlenerek çalıştırılabilir.
+En kolay kurulum yöntemi, hazır kurulum dosyasını indirip çalıştırmaktır.
+
+1. [SplitCord-Turkey-Setup-0.5.7.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.5.7/SplitCord-Turkey-Setup-0.5.7.exe) dosyasını indirin. Yeni sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
+2. İndirilen dosyayı çalıştırın. Kurulum sihirbazı, arka planda çalışacak DPI aşım hizmetini (SplitCordDpiService) kaydedebilmek için yalnızca **bir kez** yönetici (UAC) izni ister; kurulum tamamlandıktan sonra uygulama hiçbir zaman yükseltilmiş yetkiyle çalışmaz.
+3. Kurulum bitince SplitCord-Turkey otomatik olarak açılır.
+
+> [!NOTE]
+> İlk açılışta uygulama sizin için en uygun DPI aşım motorunu ve ayarını bulmak amacıyla ByeDPI, GoodbyeDPI ve Zapret'i sırayla dener; bu tarama birkaç on saniye sürebilir. Bu süre boyunca "Bağlantı hazırlanıyor…" ekranını görmeniz normaldir, taramanın bitmesini bekleyin.
+
+---
+
+## Sıfırdan Derleme
+
+SplitCord-Turkey, kaynak koddan da derlenerek çalıştırılabilir.
 
 ### Gereksinimler
 
@@ -61,7 +74,7 @@ SplitCord-Turkey şu an için yalnızca kaynak koddan derlenerek çalıştırıl
    npm run dist
    ```
 
-4. Oluşan `client/dist/SplitCord-Turkey Setup *.exe` dosyasını çalıştırarak kurulumu tamamlayın.
+4. Oluşan `client/dist/SplitCord-Turkey-Setup-*.exe` dosyasını çalıştırarak kurulumu tamamlayın.
 
 > [!NOTE]
 > Yalnızca geliştirme amacıyla çalıştırmak isterseniz, servisi `service/installer/install-service.ps1` betiğiyle (yönetici olarak) kurduktan sonra `client` klasöründe `npm start` komutunu kullanabilirsiniz.
