@@ -137,6 +137,20 @@ Copyright (c) 2026 Çağrı Taşkın
 
 ---
 
+## Bağış ve Destek
+
+Bu programı kullanmak tamamen ücretsizdir. Kullanımından herhangi bir gelir elde etmiyorum. Ancak çalışmalarıma devam edebilmem için aşağıda bulunan bağış adreslerinden beni destekleyebilirsiniz. Github üzerinden (bu sayfanın en üstünden) projeye yıldız da bırakabilirsiniz.
+
+**GitHub Sponsor:**
+
+[![Sponsor](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/cagritaskn)
+
+**Patreon:**
+
+[![Static Badge](https://img.shields.io/badge/cagritaskn-purple?logo=patreon&label=Patreon)](https://www.patreon.com/cagritaskn/membership)
+
+---
+
 ## Sorumluluk Reddi Beyanı
 
 **Bu yazılım eğitim ve kişisel kullanım amacıyla oluşturulmuştur.**
