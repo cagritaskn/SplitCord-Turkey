@@ -127,6 +127,7 @@ SplitCord-Turkey, kaynak koddan da derlenerek çalıştırılabilir.
 - dominos41 - Kablonet
 - Deranged, amevoid, [alperenkrpnr](https://github.com/alperenkrpnr), Ekincanbey, [yigitacarli](https://github.com/yigitacarli) - SuperOnline
 - [hus58](https://github.com/hus58) - Millenicom
+- rafetlannister - Teknosanet
 
 
 ## Telif Hakkı
