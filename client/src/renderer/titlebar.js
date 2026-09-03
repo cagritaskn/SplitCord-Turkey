@@ -639,6 +639,24 @@ window.splitcord.onControlsIssueStatusChanged?.(checkControlsIssues);
 const btnUpdateAvailable = document.getElementById('btn-update-available');
 let pendingUpdateInfo = null;
 let updateDownloaded = false;
+// GERÇEK BUG (canlı testte bulundu): openDownloadedUpdate() (shell.openPath) kurucu
+// pencerenin GERÇEKTEN görünür hâle gelmesi bir-iki saniye sürebiliyor (ör. Defender'ın
+// yeni/imzasız bir exe'yi ilk kez taraması) — ama buton bu çağrı tamamlanır tamamlanmaz
+// (henüz pencere görünmeden) yeniden tıklanabilir hâle geliyordu. Kullanıcı sihirbazı
+// hemen görmeyince sabırsızlanıp AYNI saniye içinde tekrar tıklıyor, bu da installer.exe'nin
+// İKİNCİ bir kopyasını (ve İKİNCİ bir UAC istemini) başlatıyor — iki kurucu süreç aynı anda
+// aynı dosyaları/servisi değiştirmeye çalışınca kurulum bozuluyor, "her ikisini de onayladım
+// ama kurulum hiç uygulanmadı" şikayetinin kök nedeni tam olarak buydu (loglarda "update-
+// auto-open" ile "open-update-click"in aynı saniyede art arda geldiği doğrulandı). Kısa bir
+// soğuma penceresi bu yarışı engelliyor.
+let installerLaunchCooldownUntil = 0;
+const INSTALLER_LAUNCH_COOLDOWN_MS = 6000;
+
+async function openDownloadedUpdateGuarded() {
+  if (Date.now() < installerLaunchCooldownUntil) return;
+  installerLaunchCooldownUntil = Date.now() + INSTALLER_LAUNCH_COOLDOWN_MS;
+  await window.splitcord.app.openDownloadedUpdate();
+}
 
 window.splitcord.onUpdateAvailable?.((info) => {
   pendingUpdateInfo = info;
@@ -655,7 +673,7 @@ btnUpdateAvailable?.addEventListener('click', async () => {
   if (updateDownloaded) {
     window.splitcord.log?.('update-open-click', { version: pendingUpdateInfo.latestVersion });
     try {
-      await window.splitcord.app.openDownloadedUpdate();
+      await openDownloadedUpdateGuarded();
     } catch (err) {
       window.splitcord.log?.('update-open-error', { error: err.message });
       await window.showAlertModal({
@@ -685,7 +703,7 @@ btnUpdateAvailable?.addEventListener('click', async () => {
     // hatası) sessizce yut — buton zaten "Güncellemeyi Kur" durumunda kalıyor, kullanıcı
     // tıklayarak tekrar deneyebilir.
     window.splitcord.log?.('update-auto-open', { version: pendingUpdateInfo.latestVersion });
-    window.splitcord.app.openDownloadedUpdate().catch((err) => {
+    openDownloadedUpdateGuarded().catch((err) => {
       window.splitcord.log?.('update-auto-open-error', { error: err.message });
     });
   } catch (err) {
