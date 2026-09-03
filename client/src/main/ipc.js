@@ -325,6 +325,51 @@ function registerIpcHandlers() {
     return enabled;
   });
 
+  // Ayarlar > Genel'deki toggle VE webview'de ERR_QUIC_PROTOCOL_ERROR alındığında
+  // titlebar'da çıkan "QUIC'i Devre Dışı Bırak" butonu AYNI handler'ı çağırıyor —
+  // senkron kalmaları için ayrı bir yol yok, tek doğruluk kaynağı bu. GPU
+  // hızlandırmasındaki desenin birebir aynısı (onay + yeniden başlatma) — TEK fark,
+  // onay diyaloğunun her zaman settingsWindow'a DEĞİL, isteği yapan pencereye
+  // (ana pencere ya da ayarlar penceresi, hangisi çağırdıysa) gönderilmesi: buton ana
+  // pencerede ve ayarlar penceresi çoğunlukla hiç açık olmadığı için showThemedConfirm
+  // kapalı/null bir settingsWindow'a gönderilirse sessizce "Hayır" sonucu dönüp
+  // kullanıcı hiçbir onay ekranı GÖRMEDEN işlem iptal edilirdi.
+  ipcMain.handle('app:get-quic-disabled', () => readLocalSettings().quicDisabled ?? false);
+  ipcMain.handle('app:set-quic-disabled', async (event, enabled) => {
+    const current = readLocalSettings().quicDisabled ?? false;
+    if (enabled === current) return current;
+
+    const requesterWindow = BrowserWindow.fromWebContents(event.sender);
+    const choice = await showThemedConfirm(requesterWindow, {
+      type: 'question',
+      buttons: ['Evet', 'Hayır'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Yeniden başlatma gerekiyor',
+      message: `QUIC protokolünü ${enabled ? 'devre dışı bırakmak' : 'tekrar etkinleştirmek'} için programın tamamen yeniden başlatılması gerekiyor. Şimdi yeniden başlatılsın mı?`,
+      detail: "Hayır'ı seçerseniz bu ayar değiştirilmeden mevcut haliyle kalır.",
+    });
+    if (choice !== 0) {
+      logEvent('quic-disabled-change-cancelled', { enabled });
+      return current;
+    }
+
+    try {
+      writeLocalSettings({ quicDisabled: enabled });
+      logEvent('quic-disabled-changed', { enabled });
+    } catch (err) {
+      logEvent('quic-disabled-change-error', { enabled, error: err.message });
+      throw err;
+    }
+    hasUnsavedChanges = false;
+
+    const mw = getMainWindow();
+    if (mw) mw.isQuitting = true; // gerçek çıkış: pencere close handler'ı artık engellemiyor
+    app.relaunch();
+    app.quit();
+    return enabled;
+  });
+
   // DPI Aşımı ekranındaki Otomatik/Manuel toggle — yalnızca istemci tarafında (yerel
   // ayar) hangi görünümün gösterileceğini belirler. Otomatik'e geçilince Zapret2'nin
   // (Otomatik modun giriş noktası — bkz. DpiEngineManager.SwitchToAsync) gerçekten aktif

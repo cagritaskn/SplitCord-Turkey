@@ -57,6 +57,8 @@ contextBridge.exposeInMainWorld('splitcord', {
     setStartInBackground: (enabled) => ipcRenderer.invoke('app:set-start-in-background', enabled),
     getGpuAcceleration: () => ipcRenderer.invoke('app:get-gpu-acceleration'),
     setGpuAcceleration: (enabled) => ipcRenderer.invoke('app:set-gpu-acceleration', enabled),
+    getQuicDisabled: () => ipcRenderer.invoke('app:get-quic-disabled'),
+    setQuicDisabled: (enabled) => ipcRenderer.invoke('app:set-quic-disabled', enabled),
     getVersion: () => ipcRenderer.invoke('app:get-version'),
     getThemeMode: () => ipcRenderer.invoke('app:get-theme-mode'),
     setThemeMode: (mode) => ipcRenderer.invoke('app:set-theme-mode', mode),

@@ -56,6 +56,16 @@
         <div class="sc-divider"></div>
 
         <label class="sc-toggle-row">
+          <input type="checkbox" id="toggle-quic" />
+          <span>
+            <strong>QUIC devre dışı</strong>
+            <div class="sc-engine-desc">DPI aşım motorları yalnızca TCP trafiğini kapsar, QUIC (UDP) üzerinden hiçbir koruma sağlamaz — bazı ağlarda QUIC'in bozulup "ERR_QUIC_PROTOCOL_ERROR" hatasına yol açtığı görülebilir. Açmak Discord'u doğrudan TCP/TLS'e (DPI motorlarının kapsama alanına) düşürür. Değişikliğin uygulanması için programın yeniden başlatılması gerekir.</div>
+          </span>
+        </label>
+
+        <div class="sc-divider"></div>
+
+        <label class="sc-toggle-row">
           <input type="checkbox" id="toggle-open-links-externally" />
           <span>
             <strong>Bağlantıları varsayılan sistem tarayıcısında aç</strong>
