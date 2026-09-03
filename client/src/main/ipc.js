@@ -661,6 +661,22 @@ function registerIpcHandlers() {
       logEvent('open-downloaded-update-error', { error: err.message });
       throw err;
     }
+    // GERÇEK RİSK (kullanıcı talebiyle bulundu): kurulum sihirbazı çalışırken BU süreç
+    // (eski sürüm) açık kalmaya devam ederse, sihirbazın kendi "uygulamayı kapat" adımı
+    // (CHECK_APP_RUNNING) ya kullanıcıya bir MessageBox gösterip onay bekliyor ya da
+    // taskkill ile zorla kapatıyor -- ikisi de bir YARIŞ: kullanıcı arada Start Menu/
+    // masaüstü kısayolundan SplitCord-Turkey'i TEKRAR açarsa (sihirbaz henüz dosyaları
+    // değiştirmeye başlamışken), yeni süreç dosyaları KİLİTLER, kurucu "dosya
+    // değiştirilemedi" ile bozuk/yarım bir kuruluma düşebilir -- tam olarak "her iki UAC'yi
+    // de onayladım ama kurulum uygulanmadı" şikayetinin ikinci bir kaynağı. En güvenli
+    // çözüm: kurucuyu başarıyla başlattıktan HEMEN sonra BU süreç kendi kendine, TEMİZ
+    // şekilde kapansın (taskkill'e hiç gerek kalmadan tüm dosya tanıtıcıları serbest kalır)
+    // -- kurulum bitince zaten customInstall kendi "Exec explorer.exe SplitCord-Turkey.exe"
+    // adımıyla yeni sürümü açıyor, biz burada yeniden başlatmaya gerek duymuyoruz.
+    logEvent('quit-for-update-install', {});
+    const mw = getMainWindow();
+    if (mw) mw.isQuitting = true; // pencere close handler'ı tray'e gizlemek yerine gerçekten kapatsın
+    setImmediate(() => app.quit());
   });
 
   ipcMain.handle('app:open-diagnostic-log-location', async () => {
