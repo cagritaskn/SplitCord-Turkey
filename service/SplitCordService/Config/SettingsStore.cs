@@ -94,6 +94,9 @@ public sealed class ServiceSettings
         new() { Protocol = DnsProtocol.Doh, Address = "https://cloudflare-dns.com/dns-query" },
         new() { Protocol = DnsProtocol.Doh, Address = "https://doh.opendns.com/dns-query" },
         new() { Protocol = DnsProtocol.Doh, Address = "https://unfiltered.adguard-dns.com/dns-query" },
+        // bkz. DnsDefaultProviderPools.Doh'taki aynı not -- profilsiz/hesapsız, canlı
+        // doğrulanmış bir yedek DoH sunucusu.
+        new() { Protocol = DnsProtocol.Doh, Address = "https://dns.nextdns.io/" },
     };
 
     /// <summary>true olduğunda DnsProtocolScanner'ın (bkz. Dns/DnsProtocolScanner.cs) bu ağda
@@ -199,6 +202,18 @@ public sealed class SettingsStore
         "https://unfiltered.adguard-dns.com/dns-query",
     };
 
+    // Yukarıdaki sıra değişikliğinden HEMEN SONRA, dns.nextdns.io eklenmeden ÖNCEKİ 5'li liste
+    // (Quad9 önce) -- bu iki eski liste, UpgradeDefaultDnsProviderOrder'da AYRI AYRI kontrol
+    // edilip ikisi de doğrudan GÜNCEL (6'lı) varsayılana yükseltiliyor.
+    private static readonly List<string> PreNextDnsDohOrder = new()
+    {
+        "https://dns.quad9.net/dns-query",
+        "https://dns.google/dns-query",
+        "https://cloudflare-dns.com/dns-query",
+        "https://doh.opendns.com/dns-query",
+        "https://unfiltered.adguard-dns.com/dns-query",
+    };
+
     private static ServiceSettings Load()
     {
         try
@@ -257,8 +272,9 @@ public sealed class SettingsStore
     }
 
     /// <summary>MigrateLegacyDohProviders'daki AYNI desen, typed DnsProviders şeması için:
-    /// kullanıcı listeyi hiç özelleştirmemişse (hâlâ HEMEN ÖNCEKİ varsayılan sırada duruyorsa)
-    /// yeni varsayılan sıraya yükseltir. Kullanıcı sırayı/listeyi değiştirmişse DOKUNULMAZ.</summary>
+    /// kullanıcı listeyi hiç özelleştirmemişse (hâlâ bilinen ESKİ varsayılanlardan birinde
+    /// duruyorsa) GÜNCEL varsayılana yükseltir. Kullanıcı sırayı/listeyi değiştirmişse
+    /// DOKUNULMAZ.</summary>
     private static void UpgradeDefaultDnsProviderOrder(ServiceSettings loaded)
     {
         var addresses = loaded.DnsProviders
@@ -266,7 +282,9 @@ public sealed class SettingsStore
             .Select(p => p.Address)
             .ToList();
 
-        if (loaded.DnsProviders.Count == addresses.Count && addresses.SequenceEqual(OldDefaultDnsProviderOrder))
+        if (loaded.DnsProviders.Count != addresses.Count) return; // DoH dışı bir giriş var, elle özelleştirilmiş
+
+        if (addresses.SequenceEqual(OldDefaultDnsProviderOrder) || addresses.SequenceEqual(PreNextDnsDohOrder))
         {
             loaded.DnsProviders = new ServiceSettings().DnsProviders;
         }
