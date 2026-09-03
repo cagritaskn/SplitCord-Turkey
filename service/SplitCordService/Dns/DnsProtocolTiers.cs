@@ -2,7 +2,7 @@ using SplitCord.Service.Config;
 
 namespace SplitCord.Service.Dns;
 
-/// <summary>Zapret2/Zapret/ByeDPI'nin kendi tarama döngülerini saran DoH→DoT→DoQ→DNSCrypt dış
+/// <summary>Zapret2/Zapret/ByeDPI'nin kendi tarama döngülerini saran DoH→DNSCrypt→(DNS'siz) dış
 /// döngüsü için paylaşılan sıra + yardımcı. Her motor kendi StartAsync'inde bu sırayla ilerler:
 /// bir tier'i "aktif" yapmak (ApplyTier), motorun KENDİ mevcut tarama mekanizmasını (blockcheck2
 /// ya da sabit aday listesi) o tier aktifken baştan çalıştırmak demek — iki ayrı/bağımsız süreç
@@ -11,10 +11,18 @@ namespace SplitCord.Service.Dns;
 /// yönlendiriyor, EncryptedDnsForwarder'dan hiç geçmiyor — bkz. GoodbyeDpiEngine.cs'teki not).</summary>
 public static class DnsProtocolTiers
 {
-    // Sıra kullanıcı talebiyle belirlendi: DoH, DNSCrypt, DoT, DoQ, son çare olarak hiç DNS
-    // zorlamadan (None -- bkz. DnsProtocol.None'daki not) motorun/sistemin kendi normal
-    // çözümlemesine bırakma.
-    public static readonly DnsProtocol[] Order = { DnsProtocol.Doh, DnsProtocol.DnsCrypt, DnsProtocol.Dot, DnsProtocol.Doq, DnsProtocol.None };
+    // DoT ve DoQ kullanıcı talebiyle otomatik taramadan (bu sıradan) ÇIKARILDI: ikisi de sabit
+    // 853 portunda çalışıyor, birçok ISP protokole hiç bakmadan bu portu toptan engelliyor --
+    // yani gerçek bir ISP engeliyle karşılaşıldığında neredeyse hiç kazanmadan yalnızca tier
+    // süresini (Otomatik 5dk/Manuel 10-20dk) boşa harcıyorlardı. DoQ ayrıca QUIC'in ağda genel
+    // olarak çalışmasına bağımlı (bkz. ERR_QUIC_PROTOCOL_ERROR ile ilgili not) -- ISP QUIC'e
+    // müdahale ediyorsa zaten sistematik olarak başarısız oluyordu. DoH (443, sıradan HTTPS'ten
+    // ayırt edilmesi zor) ve DNSCrypt (nadir kullanıldığı için özel hedeflenmesi daha az olası)
+    // pratikte gerçekten işe yarayan protokoller. DotUpstream/DoqUpstream ve
+    // DnsDefaultProviderPools.Dot/Doq BİLEREK silinmedi -- Manuel > Gelişmiş'ten kullanıcı
+    // kendi ağında çalıştığını bildiği bir protokolü hâlâ elle sabitleyebilir (bkz.
+    // SettingsStore.ManualDnsProtocol), yalnızca OTOMATİK sıradan çıkarıldı.
+    public static readonly DnsProtocol[] Order = { DnsProtocol.Doh, DnsProtocol.DnsCrypt, DnsProtocol.None };
     public static readonly TimeSpan ManualPinnedProtocolTimeout = TimeSpan.FromMinutes(15);
 
     /// <summary>SettingsStore.DnsProviders'ı verilen protokolün doğrulanmış varsayılan havuzuyla
