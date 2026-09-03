@@ -2,7 +2,7 @@
   "name": "splitcord-turkey",
   "private": true,
   "version": "0.1.0",
-  "description": "SplitCord Turkey - DPI asim araclarini indirip resources/bin altina hazirlayan yardimci betikler",
+  "description": "SplitCord-Turkey",
   "scripts": {
     "fetch-binaries": "node scripts/fetch-binaries.js",
     "build-byedpi": "node scripts/build-byedpi.js"
