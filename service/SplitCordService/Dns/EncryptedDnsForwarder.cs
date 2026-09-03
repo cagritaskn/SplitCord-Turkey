@@ -28,11 +28,13 @@ public sealed class EncryptedDnsForwarder : IHostedService, IDisposable
     public const int Port = 53535;
 
     // Liste birden fazla sağlayıcı içerebildiği için (bkz. SettingsStore.DnsProviders) her
-    // birine verilen süre toplam gecikmeyi doğrudan etkiliyor — hem ciadpi'nin kendi
-    // SC_DOH_TIMEOUT_MS'i hem de motorların TestConnectivityAsync zaman aşımı buna göre
-    // ayarlandığı için burada da makul/kısa tutuyoruz. DoT/DoQ/DNSCrypt de kendi ayrı bir
-    // zaman aşımı tanımlamıyor, aynı per-provider ekonomisini paylaşıyor.
-    private static readonly TimeSpan PerProviderTimeout = TimeSpan.FromSeconds(1.5);
+    // birine verilen süre toplam gecikmeyi doğrudan etkiliyor — makul/kısa tutuyoruz.
+    // DoT/DoQ/DNSCrypt de kendi ayrı bir zaman aşımı tanımlamıyor, aynı per-provider
+    // ekonomisini paylaşıyor. internal: SelfTestResolver.QueryTimeout bu değere ve
+    // sağlayıcı sayısına göre hesaplanıyor (bkz. oradaki not) — burada TEK bir yerde
+    // tutup ikisinin birbirinden bağımsız sürüklenmesini (canlı testte, Teknosanet
+    // ISP'sinde yaşanan bir bug'ın kök nedeniydi) önlüyoruz.
+    internal static readonly TimeSpan PerProviderTimeout = TimeSpan.FromSeconds(1.5);
 
     private readonly SettingsStore _settings;
     private readonly ILogger<EncryptedDnsForwarder> _logger;
