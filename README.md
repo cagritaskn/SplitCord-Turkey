@@ -12,7 +12,7 @@
 
 Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'i kurup kullanmaya başlayabilirsiniz.
 
-1. **[SplitCord-Turkey-Setup-0.9.5.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.9.5/SplitCord-Turkey-Setup-0.9.5.exe)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
+1. **[SplitCord-Turkey-Setup-0.9.6.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.9.6/SplitCord-Turkey-Setup-0.9.6.exe)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
 2. İndirilen dosyayı çalıştırın. SmartScreen uyarısı görürseniz **(Windows kişisel bilgisayarınızı korudu başlıklı)** pencerede bulunan **Ek bilgi** kısmına tıklayıp daha sonra **Yine de çalıştır** butonuna tıklayın. Set-up, arka planda çalışacak DPI aşım hizmetini (SplitCordDpiService) kaydedebilmek için yönetici izni isteyebilir; kurulum tamamlandıktan sonra uygulama hiçbir zaman yükseltilmiş yetkiyle çalışmaz (Yönetici izni istemez).
 3. Kurulum bitince SplitCord-Turkey'i çalıştırın.
 4. İlk açılışta uygulama sizin için en uygun DPI aşım motorunu ve ayarını bulmak amacıyla Zapret2, Zapret, ByeDPI ve GoodbyeDPI'yi sırayla dener; bu tarama birkaç dakika sürebilir. Bu süre boyunca "Bağlantı hazırlanıyor…" ekranını görmeniz normaldir, taramanın bitmesini bekleyin.
@@ -28,7 +28,7 @@ Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'
 - **Discord'a görsel ve işlevsel olarak birebir yakın bir arayüz.** Kendi özel başlık çubuğu, bildirimleri, tepsi simgesi ve ekran paylaşımı seçicisiyle resmi masaüstü istemcisinin yerini alabilecek şekilde tasarlanmıştır.
 - **Dört DPI aşım motoru, tek uygulama:** Zapret2 (sistem geneli, WinDivert tabanlı — blockcheck2 ile otomatik strateji keşfi yaparak Otomatik modun giriş noktasıdır), Zapret (sistem geneli, WinDivert tabanlı), ByeDPI (yalnızca bu uygulamanın trafiğini kapsayan yerel proxy) ve GoodbyeDPI (sistem geneli, WinDivert tabanlı). Otomatik modda motorlar sırayla denenir, çalışan ilk ayar kaydedilip kullanılır.
 - **Otomatik ve Manuel mod.** Otomatik modda uygulama sizin için en uygun motoru ve stratejiyi bulur; Manuel modda hangi motorun, hangi parametrelerle çalışacağını kendiniz seçebilirsiniz.
-- **Şifreli DNS desteği (DoH/DoT/DoQ/DNSCrypt).** DNS seviyesinde yaşanan engellemelere karşı Zapret2/Zapret/ByeDPI, DoH → DNSCrypt → DoT → DoQ → DNS'siz sırasıyla otomatik olarak dener; sağlayıcıları Ayarlar ekranından kendiniz de özelleştirebilirsiniz.
+- **Şifreli DNS desteği (DoH/DNSCrypt, isteğe bağlı DoT/DoQ).** DNS seviyesinde yaşanan engellemelere karşı Zapret2/Zapret/ByeDPI, DoH → DNSCrypt → DNS'siz sırasıyla otomatik olarak dener (DoT/DoQ sabit 853 portunda çalıştığı ve birçok ISP tarafından protokole bakılmaksızın toptan engellendiği için otomatik sıradan çıkarıldı, Manuel moddan hâlâ elle sabitlenebilir); DoH sağlayıcıları arasında, diğerlerinin tamamı engellendiğinde devreye giren bir NextDNS yedeği de bulunur. Sağlayıcıları Ayarlar ekranından kendiniz de özelleştirebilirsiniz.
 - **Sesli kanal desteği.** ByeDPI'nin kapsayamadığı WebRTC/UDP trafiği için, ByeDPI aktifken arka planda otomatik olarak devreye giren bir Zapret UDP eşlik süreci bulunur.
 - **Discord Rich Presence desteği.** Resmi olmayan istemcilerde normalde çalışmayan bu özellik, [arRPC](https://github.com/OpenAsar/arrpc) tabanlı yerel bir RPC sunucusu ile desteklenir.
 - **İzinler ve Kontroller ekranı.** Güvenlik duvarı izinlerini, çakışabilecek güvenlik yazılımlarını (Kaspersky, ESET) ve elle kurulmuş harici DPI süreçlerini/hizmetlerini tespit edip yönetmenizi sağlar.
@@ -37,6 +37,7 @@ Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'
 - **Ekran paylaşımı seçicisi.** Kalite, FPS ve sistem sesi paylaşımını tek pencereden ayarlayabileceğiniz özel bir ekran/pencere paylaşım aracı içerir.
 - **Tema desteği.** Discord'un o anki temasından otomatik renk örnekleme veya sabit tema ön ayarları arasında seçim yapabilirsiniz.
 - **Kolay kaldırma.** Windows'un dahili program ekleme ve kaldırma menülerinden SplitCord-Turkey'i kolaylıkla kaldırabilirsiniz; kaldırma işlemi hizmeti, tüm DPI aşım süreçlerini ve WinDivert sürücü kayıtlarını da tam olarak temizler.
+- **Kendi kendine kurtarma.** Discord uzun süre bağlanamadığında, Discord'un kendi yükleme ekranında beliren bir butonla mevcut ayarı yasaklayıp Otomatik moddan sıfırdan bir tarama başlatabilirsiniz.
 
 ---
 
@@ -57,7 +58,7 @@ Otomatik modun giriş noktası **Zapret2**'dir: bol-van/zapret2 projesinin resmi
 
 - **DPI Aşımı:** Otomatik/Manuel mod seçimi, motor kartları, gelişmiş argüman düzenleme, DNS protokolü sırası ve sağlayıcıları, Zapret2 blockcheck2 tarama zamanaşımı, yeniden arama başlatma ve reddedilen ayar listeleri.
 - **İzinler ve Kontroller:** Güvenlik duvarı izinleri, resmi Discord uygulamasıyla çakışma kontrolü, Kaspersky/ESET tespiti, çakışabilecek hizmetlerin ve harici DPI süreçlerinin listesi ile ses bağlantısı kontrolleri.
-- **Genel:** Otomatik başlatma, bildirim rozeti, performans modu, bağlantıları sistem tarayıcısında açma ve benzeri genel tercihler.
+- **Genel:** Otomatik başlatma, bildirim rozeti, performans modu, bağlantıları sistem tarayıcısında açma, QUIC devre dışı bırakma ve benzeri genel tercihler.
 - **Görünüm:** Discord temasından otomatik renk örnekleme veya sabit tema ön ayarları.
 - **Tuş Atamaları:** Sesi kapatma/açma, sağırlaştırma ve pencereyi öne getirme için genel (uygulama arka plandayken de çalışan) kısayollar.
 - **Hakkında:** Sürüm bilgisi, güncelleme kontrolü, tanılama günlüğü dosya konumunu açma ve tüm ayarları sıfırlama.
@@ -119,7 +120,8 @@ SplitCord-Turkey, kaynak koddan da derlenerek çalıştırılabilir.
 - **[GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI)** by **[ValdikSS](https://github.com/ValdikSS)**
 - **[zapret](https://github.com/bol-van/zapret)** ve **[zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube)** by **[bol-van](https://github.com/bol-van)** / **[Flowseal](https://github.com/Flowseal)**
 - **[zapret2](https://github.com/bol-van/zapret2)** (blockcheck2 ile otomatik strateji keşfi) by **[bol-van](https://github.com/bol-van)**
-- **[dnsproxy](https://github.com/AdguardTeam/dnsproxy)** (DoQ ve DNSCrypt desteği için) by **[AdguardTeam](https://github.com/AdguardTeam)**
+- **[dnsproxy](https://github.com/AdguardTeam/dnsproxy)** (DNSCrypt ve, Manuel modda, DoQ desteği için) by **[AdguardTeam](https://github.com/AdguardTeam)**
+- **[nextdns](https://github.com/nextdns/nextdns)** (diğer DoH sağlayıcıları engellendiğinde devreye giren ek bir yedek olarak) by **[NextDNS](https://github.com/nextdns)**
 - **[WinDivert](https://github.com/basil00/WinDivert)** by **[basil00](https://github.com/basil00)**
 - **[arRPC](https://github.com/OpenAsar/arrpc)** by **[OpenAsar](https://github.com/OpenAsar)**
 - **[Electron](https://github.com/electron/electron)**
