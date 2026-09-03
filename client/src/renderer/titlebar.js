@@ -1,5 +1,15 @@
 'use strict';
 
+// Ana süreçteki dialog.showMessageBoxSync yerine geçen temaya uygun modal köprüsü —
+// bkz. client/src/main/themedDialog.js ve renderer/modal.js. settings.js'teki AYNI desen;
+// burada da gerekiyor çünkü discordWebviewPreload.js'in enjekte ettiği butonlar (webview
+// KENDİ ayrı bir renderer olduğu için window.showConfirmModal'a hiç erişemiyor) onay
+// kutusunu showThemedConfirm ile BU pencereyi hedefleyerek istiyor.
+window.splitcord.onShowConfirmModal(async ({ id, ...options }) => {
+  const choice = await window.showConfirmModal(options);
+  window.splitcord.sendConfirmModalResult(id, choice);
+});
+
 document.getElementById('btn-minimize')?.addEventListener('click', () => window.splitcord.window.minimize());
 document.getElementById('btn-maximize')?.addEventListener('click', () => window.splitcord.window.toggleMaximize());
 document.getElementById('btn-close')?.addEventListener('click', () => window.splitcord.window.close());

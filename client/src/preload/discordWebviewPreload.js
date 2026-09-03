@@ -567,9 +567,15 @@ if (document.readyState === 'loading') {
 
   async function handleClick(button) {
     if (button.dataset.splitcordBusy === 'true') return;
-    const confirmed = window.confirm(
-      'Şu an kullanılan argüman seti yasaklanıp Otomatik modda sıfırdan bir tarama başlatılacak. Devam edilsin mi?',
-    );
+    // window.confirm() yerine bizim temamıza uyan modal — bkz. ipc.js'teki
+    // webview:confirm-ban-current-args (ana pencereyi hedefleyip showThemedConfirm ile açar).
+    let confirmed = false;
+    try {
+      confirmed = await ipcRenderer.invoke('webview:confirm-ban-current-args');
+    } catch (err) {
+      console.error('[SplitCord] Onay kutusu açılamadı:', err);
+      return;
+    }
     if (!confirmed) return;
 
     const originalText = button.textContent;

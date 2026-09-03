@@ -440,6 +440,26 @@ function registerIpcHandlers() {
       throw err;
     }
   });
+
+  // discordWebviewPreload.js'teki "Kullanılan Argüman Setini Yasaklamayı Deneyin" butonu
+  // için — webview KENDİ ayrı bir renderer (Discord'un sayfası), ana penceredeki
+  // window.showConfirmModal'a hiç erişemiyor (ayrı DOM/JS realm'i). showThemedConfirm ana
+  // pencereyi hedefleyip 'modal:show-confirm' gönderiyor, ana penceredeki köprü (bkz.
+  // titlebar.js'in en üstü, settings.js'teki AYNI desen) bunu window.showConfirmModal'a
+  // çeviriyor -- yani onay kutusu GERÇEKTEN ana pencerede, bizim temamızla açılıyor, native
+  // bir Windows dialog'u değil.
+  ipcMain.handle('webview:confirm-ban-current-args', async () => {
+    const choice = await showThemedConfirm(getMainWindow(), {
+      type: 'question',
+      buttons: ['Evet', 'Vazgeç'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Argüman seti yasaklansın mı?',
+      message: 'Şu an kullanılan argüman seti yasaklanıp Otomatik modda sıfırdan bir tarama başlatılacak.',
+      detail: 'Bu işlem birkaç dakika sürebilir.',
+    });
+    return choice === 0;
+  });
   ipcMain.handle('dpi:unreject-args', async (_event, id, args) => {
     logEvent('unreject-args', { id, args });
     try {
