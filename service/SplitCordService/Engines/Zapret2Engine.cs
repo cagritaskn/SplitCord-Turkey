@@ -151,17 +151,29 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
 
         var rejected = _settings.Current.Zapret2RejectedArgs;
 
-        // Kalıcı olarak reddedilenler listesinden AYRI, yalnızca BU StartAsync çağrısı boyunca
-        // yaşayan bir hafıza: blockcheck2 SCANLEVEL=quick + erken-durdurma sayesinde deterministik
-        // çalışıyor -- aynı ağ koşullarında hep AYNI ilk-uygun adayı buluyor. Bir aday gerçek
-        // doğrulamada (TestConnectivityAsync ya da "doğrulama sırasında beklenmedik durdu")
-        // başarısız olduğunda, blockcheck2'yi tekrar baştan çalıştırdığımızda YİNE aynı adayı
-        // bulup üst sınırın (5-15dk) TAMAMINI bu TEK adayı boşuna denemekle harcıyorduk (canlı
-        // testte doğrulandı: aynı aday ~16 saniyede bir art arda 10+ kez denenip her seferinde
-        // aynı şekilde başarısız oldu). RunBlockcheck2Async'in erken-durdurma mekanizması bu
-        // sette olan bir adayı görürse DURMUYOR, blockcheck2'nin bir SONRAKİ (test dosyasındaki
-        // farklı bir) adaya geçmesine izin veriyor.
-        var triedAndFailed = new HashSet<string>(StringComparer.Ordinal);
+        // Yalnızca BU StartAsync çağrısı boyunca yaşayan bir hafıza: blockcheck2 SCANLEVEL=quick +
+        // erken-durdurma sayesinde deterministik çalışıyor -- aynı ağ koşullarında hep AYNI
+        // ilk-uygun adayı buluyor. Bir aday gerçek doğrulamada (TestConnectivityAsync ya da
+        // "doğrulama sırasında beklenmedik durdu") başarısız olduğunda, blockcheck2'yi tekrar
+        // baştan çalıştırdığımızda YİNE aynı adayı bulup üst sınırın (5-15dk) TAMAMINI bu TEK
+        // adayı boşuna denemekle harcıyorduk (canlı testte doğrulandı: aynı aday ~16 saniyede bir
+        // art arda 10+ kez denenip her seferinde aynı şekilde başarısız oldu). RunBlockcheck2Async'in
+        // erken-durdurma mekanizması bu sette olan bir adayı görürse DURMUYOR, blockcheck2'nin bir
+        // SONRAKİ (test dosyasındaki farklı bir) adaya geçmesine izin veriyor.
+        //
+        // KULLANICI TALEBİ (bu turda bulunan ayrı bir loop bugı): kalıcı olarak reddedilmiş
+        // (Zapret2RejectedArgs) bir argüman seti blockcheck2'nin bulduğu İLK aday olduğunda, eskiden
+        // bu liste burada DEĞİL, yalnızca aşağıdaki foreach içinde (candidate doğrulamaya hiç
+        // girmeden "rejected.Contains" ile) kontrol ediliyordu -- ama RunBlockcheck2Async'in erken
+        // durdurma mekanizması bunu BİLMEDİĞİ için blockcheck2'yi TAM OLARAK bu reddedilmiş adayı
+        // bulur bulmaz durduruyordu, foreach de onu atlayıp triedAndFailed'a hiç EKLEMİYORDU --
+        // sonuç: bir sonraki while turunda blockcheck2 yeniden baştan çalıştırılıp deterministik
+        // olarak YİNE aynı reddedilmiş adayı buluyor, sonsuz döngüye giriyordu (zapret2 hiç
+        // başlamıyordu). Kalıcı reddedilenler listesini BAŞTAN triedAndFailed'a dahil ederek
+        // RunBlockcheck2Async'in erken durdurma mekanizması bu adayları hiç görmüyormuş gibi atlayıp
+        // blockcheck2'nin AYNI çalıştırma içinde farklı, reddedilmemiş bir adaya geçmesini sağlıyoruz
+        // -- zapret2 yalnızca gerçekten yeni ve reddedilmemiş bir ayar bulunduğunda başlatılıyor.
+        var triedAndFailed = new HashSet<string>(rejected, StringComparer.Ordinal);
 
         // Kayıtlı bir ayar varsa (daha önce belirli bir DNS protokolü aktifken doğrulanmış bir
         // (protokol, strateji) ikilisi — DnsProviders o tier'de bırakıldığı için burada AYRICA
@@ -300,7 +312,14 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
                 if (candidate == savedArgs) continue; // az önce yukarıda 3 kez denendi
                 if (rejected.Contains(candidate))
                 {
+                    // Bu tarama BAŞLARKEN triedAndFailed zaten rejected'ın tamamıyla dolduruldu
+                    // (bkz. StartAsync'teki not), bu yüzden normalde buraya hiç düşülmemeli --
+                    // ama tarama SÜRERKEN kullanıcı ayrı bir uçtan (ör. Ayarlar ekranından) yeni
+                    // bir strateji reddettiyse (rejected canlı/paylaşılan liste), o adayı da
+                    // burada triedAndFailed'a ekleyip AYNI loop bugının bu geç-reddetme
+                    // senaryosunda da oluşmasını engelliyoruz.
                     _logger.LogInformation("Zapret2 stratejisi atlanıyor (daha önce reddedildi): {Args}", candidate);
+                    triedAndFailed.Add(candidate);
                     continue;
                 }
                 ct.ThrowIfCancellationRequested();
