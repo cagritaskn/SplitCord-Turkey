@@ -536,3 +536,97 @@ if (document.readyState === 'loading') {
   }
   startObserving();
 })();
+
+/**
+ * Discord'un KENDİ "bağlantı kurulamadı / uzun süre yüklenemedi" durumunda gösterdiği statik
+ * yükleme kabuğu (React tam devreye girmeden önceki basit HTML — bu yüzden diğer React
+ * bileşenlerine kıyasla çok daha kararlı/nadiren değişen bir yapı; "BİLİYOR MUYDUN?" ipucu +
+ * Discord logosu + "Bağlantı sorunları mı? Bize bildir!" + Twitter/X ve Sunucu Durumu
+ * bağlantıları) kullanıcı talebiyle "Kullanılan Argüman Setini Yasaklamayı Deneyin" butonu
+ * ekleniyor — tıklanınca (onaydan sonra) o an aktif motorun kayıtlı argüman setini reddedip
+ * Otomatik moda geçip sıfırdan bir tarama başlatıyor (btnStatusRetryAuto'nun — bkz.
+ * titlebar.js — AYNI "mod zorla Otomatik + zapret2'den başlat" deseni, öncesine bir de
+ * reddetme adımı eklenmiş hâli).
+ *
+ * DİL BAĞIMSIZ EŞLEŞTİRME: metne değil (Discord'un dili her neyse bu ekran ona göre
+ * değişir), Discord'un HER dilde AYNI kalan sabit bağlantılarına (resmi durum sayfası
+ * discordstatus.com, resmi Twitter/X hesabı) bakılıyor — setupKeybindsNoticeReplacer/
+ * setupVoiceWarningNoticeHandler'daki AYNI ilke. NOT: bu ekranın gerçek DOM'u bu oturumda
+ * canlı olarak doğrulanamadı (ISP bu makinede discord.com'u DNS/SNI seviyesinde engelliyor,
+ * yalnızca SplitCord-Turkey'in kendi DPI aşımı üzerinden erişilebiliyor) — eşleştirme
+ * Discord'un uzun süredir DEĞİŞMEYEN, herkese açık durum sayfası adresine dayanıyor; hedef
+ * bağlantı hiç bulunamazsa buton sessizce hiç eklenmez (diğer enjeksiyonlarla aynı, zararsız
+ * başarısızlık deseni).
+ */
+(function setupBanCurrentArgsButton() {
+  function findFooterAnchor(root) {
+    return root.querySelector(
+      'a[href*="discordstatus.com"], a[href*="twitter.com/discord"], a[href*="x.com/discord"]',
+    );
+  }
+
+  async function handleClick(button) {
+    if (button.dataset.splitcordBusy === 'true') return;
+    const confirmed = window.confirm(
+      'Şu an kullanılan argüman seti yasaklanıp Otomatik modda sıfırdan bir tarama başlatılacak. Devam edilsin mi?',
+    );
+    if (!confirmed) return;
+
+    const originalText = button.textContent;
+    button.dataset.splitcordBusy = 'true';
+    button.disabled = true;
+    button.textContent = 'Yeni ayar aranıyor…';
+    try {
+      const status = await ipcRenderer.invoke('dpi:get-status');
+      const activeEngineId = status?.activeEngineId;
+      if (activeEngineId) {
+        await ipcRenderer.invoke('dpi:reject-current-args', activeEngineId);
+      }
+      const mode = await ipcRenderer.invoke('dpi:get-mode');
+      if (mode === 'manual') {
+        await ipcRenderer.invoke('dpi:set-mode', 'automatic');
+      }
+      await ipcRenderer.invoke('dpi:activate-engine', 'zapret2');
+    } catch (err) {
+      console.error('[SplitCord] Argüman seti yasaklanamadı:', err);
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+      button.dataset.splitcordBusy = 'false';
+    }
+  }
+
+  function tryInject(root) {
+    const anchor = findFooterAnchor(root);
+    if (!anchor) return;
+
+    const container = anchor.closest('div')?.parentElement || anchor.parentElement;
+    if (!container || container.querySelector('[data-splitcord-ban-args-btn]')) return;
+
+    const btn = document.createElement('button');
+    btn.textContent = 'Kullanılan Argüman Setini Yasaklamayı Deneyin';
+    btn.setAttribute('data-splitcord-ban-args-btn', 'true');
+    btn.style.marginTop = '12px';
+    btn.style.padding = '6px 14px';
+    btn.style.borderRadius = '4px';
+    btn.style.border = 'none';
+    btn.style.background = '#5865F2';
+    btn.style.color = '#fff';
+    btn.style.cursor = 'pointer';
+    btn.style.fontSize = '13px';
+    btn.style.fontFamily = 'inherit';
+    btn.addEventListener('click', () => handleClick(btn));
+    container.appendChild(btn);
+  }
+
+  function startObserving() {
+    if (!document.body) {
+      setTimeout(startObserving, 50);
+      return;
+    }
+    tryInject(document.body);
+    const observer = new MutationObserver(() => tryInject(document.body));
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+  startObserving();
+})();
