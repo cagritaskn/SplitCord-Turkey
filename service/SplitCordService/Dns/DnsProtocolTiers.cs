@@ -25,6 +25,17 @@ public static class DnsProtocolTiers
     public static readonly DnsProtocol[] Order = { DnsProtocol.Doh, DnsProtocol.DnsCrypt, DnsProtocol.None };
     public static readonly TimeSpan ManualPinnedProtocolTimeout = TimeSpan.FromMinutes(15);
 
+    // ApplyTier'ın DoH tier'ine eklediği ekstra (NextDns) girdi sayısı -- SelfTestResolver.
+    // QueryTimeout bunu DnsDefaultProviderPools.Doh.Count'a EKLEYEREK hesaplıyor. Burada TEK
+    // bir sabitte tutulmasının nedeni: bu değer güncellenip ApplyTier'daki eklenen girdi
+    // sayısı değişirse (ör. ileride ikinci bir deneysel girdi daha eklenirse), SelfTestResolver
+    // otomatik olarak doğru toplamı hesaplasın -- CANLI TESTTE BULUNAN BUG (bkz. SelfTestResolver
+    // içindeki not): NextDns girdisi eklendiğinde bu sabit GÜNCELLENMEMİŞTİ, DoH tier'i artık
+    // gerçekte 7 sağlayıcı deniyorken QueryTimeout hâlâ 6 sağlayıcıya göre (payı SIFIRA indirecek
+    // şekilde) hesaplanıyordu -- "yükleme ekranında sık takılma" olarak geri bildirilen
+    // regresyonun kök nedeni buydu.
+    public const int DohTierExtraEntryCount = 1;
+
     /// <summary>SettingsStore.DnsProviders'ı verilen protokolün doğrulanmış varsayılan havuzuyla
     /// (bkz. DnsDefaultProviderPools) değiştirip kaydeder — EncryptedDnsForwarder bir sonraki
     /// sorguda bunu otomatik kullanır (ByeDPI'nin ciadpi.exe'si ve Zapret/Zapret2'nin
