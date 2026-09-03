@@ -230,6 +230,35 @@ code {
   resize: none;
 }
 
+.sc-select {
+  width: 100%;
+  background: var(--sc-bg-tertiary);
+  color: var(--sc-text-normal);
+  border: 1px solid var(--sc-bg-hover);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.sc-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sc-slider-row input[type='range'] {
+  flex: 1 1 auto;
+  accent-color: var(--sc-accent, #5865f2);
+}
+
+.sc-slider-value {
+  flex: 0 0 auto;
+  min-width: 48px;
+  text-align: right;
+  font-size: 13px;
+  color: var(--sc-text-muted);
+}
+
 .sc-log-box {
   height: 140px;
   overflow-y: auto;
@@ -249,6 +278,76 @@ code {
 .sc-btn--primary {
   background: var(--sc-brand);
   color: #fff;
+}
+
+.sc-btn--secondary {
+  background: var(--sc-bg-tertiary);
+  color: var(--sc-text-normal);
+  margin-right: 8px;
+}
+
+.sc-btn--secondary:hover {
+  background: var(--sc-bg-hover);
+}
+
+.sc-dns-providers-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sc-dns-provider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--sc-bg-secondary);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.sc-dns-provider-protocol {
+  background: var(--sc-bg-tertiary);
+  color: var(--sc-text-normal);
+  border: 1px solid var(--sc-bg-hover);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  flex: 0 0 auto;
+}
+
+.sc-dns-provider-address {
+  flex: 1 1 auto;
+  background: var(--sc-bg-tertiary);
+  color: var(--sc-text-normal);
+  border: 1px solid var(--sc-bg-hover);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: Consolas, monospace;
+  min-width: 0;
+}
+
+.sc-dns-provider-remove {
+  background: transparent;
+  border: none;
+  color: var(--sc-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+
+.sc-dns-provider-remove:hover {
+  color: var(--sc-danger);
+  background: var(--sc-bg-tertiary);
+}
+
+.sc-dns-providers-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
 }
 
 .sc-btn--primary:hover {

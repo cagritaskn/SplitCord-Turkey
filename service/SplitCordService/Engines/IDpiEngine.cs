@@ -18,6 +18,12 @@ public interface IDpiEngine
     EngineStatus GetStatus();
     IReadOnlyList<string> GetRecentLogs();
 
+    /// <summary>Ayarlar > Hakkında'daki "Tüm Ayarları Sıfırla" için — motorun log ring
+    /// buffer'ındaki eski/kalıntı satırları temizler. Bu OLMADAN sıfırlama sonrası eski bir
+    /// tarama sonucu (ör. "Bu strateji çalışıyor, kaydedildi.") bellekte kalıp kullanıcıya
+    /// yanlışlıkla güncel bir sonuçmuş gibi görünüyordu (canlı testte doğrulandı).</summary>
+    void ClearLogs();
+
     /// <summary>İzinler ve Kontroller ekranındaki "başka bir kaynaktan başlatılmış aynı isimli
     /// süreç" tespitinin, bizim kendi yönettiğimiz süreci yanlışlıkla "harici/fazladan" olarak
     /// göstermemesi için — null ise şu an bu motora ait çalışan bir süreç yok.</summary>

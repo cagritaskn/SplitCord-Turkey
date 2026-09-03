@@ -24,7 +24,7 @@ async function applyDpiProxy() {
     const active = status.engines?.find((e) => e.id === status.activeEngineId);
     if (active?.running && active.proxyAddress) {
       await discordSession.setProxy({ proxyRules: active.proxyAddress });
-      configureSecureDns(false);
+      await configureSecureDns(false);
       logEvent('proxy-applied', { engineId: active.id, proxyAddress: active.proxyAddress });
       return { applied: true, proxyAddress: active.proxyAddress };
     }
@@ -37,11 +37,11 @@ async function applyDpiProxy() {
     // engelli) neredeyse her zaman başarısız oluyor (canlı testte doğrulandı). Bu yüzden
     // Zapret aktifken Google DoH ZORLANMAYA DEVAM EDİYOR — bu, sistem/adaptör DNS
     // ayarlarına dokunmayan, yalnızca bu Electron sürecine özel bir ayar (bkz. secureDns.js).
-    configureSecureDns(active?.running && active.id === 'goodbyedpi');
+    await configureSecureDns(active?.running && active.id === 'goodbyedpi');
     logEvent('proxy-direct', { activeEngineId: status.activeEngineId, detail: active?.detail });
   } catch (err) {
     // DPI Service kurulu değil veya çalışmıyor; aşağıda direct moda düşülüyor.
-    configureSecureDns(false);
+    await configureSecureDns(false);
     logEvent('proxy-direct-fallback', { error: err.message });
   }
 

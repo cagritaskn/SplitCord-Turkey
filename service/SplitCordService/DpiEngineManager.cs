@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using SplitCord.Service.Config;
+using SplitCord.Service.Dns;
 using SplitCord.Service.Engines;
 
 namespace SplitCord.Service;
@@ -44,6 +45,24 @@ public sealed class DpiEngineManager : IHostedService
     // ByeDPI tükenip otomatik GoodbyeDPI/Zapret'e geçildiğinde de güncellenir (bkz. aşağıdaki
     // escalationOrder döngüsü).
     private volatile string? _switchingToEngineId;
+
+    // Otomatik modun tam eskalasyon zinciri: Zapret2 giriş noktası, sonra Zapret, sonra
+    // ByeDPI, son çare GoodbyeDPI (bkz. SwitchToAsync'teki AllCandidatesFailedException
+    // yakalama bloğu — bir motorun tüm adayları/blockcheck2 taraması başarısız olursa
+    // zincirdeki bir SONRAKİ motora otomatik geçilir).
+    private static readonly string[] EscalationChain = { "zapret2", "zapret", "byedpi", "goodbyedpi" };
+
+    // Zapret2/Zapret/GoodbyeDPI aynı WinDivert sürücüsünü kullanıyor — kendini koruyan bir
+    // antivirüs (Kaspersky/ESET) varken hiçbiri denenmemeli (bkz. AntivirusConflictDetected
+    // kontrolleri aşağıda).
+    private static bool IsWinDivertBased(string engineId) => engineId is "zapret2" or "zapret" or "goodbyedpi";
+
+    private bool AntivirusDetected() => SystemControlsHelper.GetStatus(
+            _engines.FirstOrDefault(e => e.Id == "goodbyedpi")?.GetOwnProcessId(),
+            _engines.FirstOrDefault(e => e.Id == "zapret")?.GetOwnProcessId(),
+            _engines.FirstOrDefault(e => e.Id == "byedpi")?.GetOwnProcessId(),
+            ownZapret2Pid: _engines.FirstOrDefault(e => e.Id == "zapret2")?.GetOwnProcessId())
+        .AntivirusConflictDetected;
 
     public DpiEngineManager(IEnumerable<IDpiEngine> engines, SettingsStore settings, ILogger<DpiEngineManager> logger)
     {
@@ -131,20 +150,16 @@ public sealed class DpiEngineManager : IHostedService
     /// "Otomatik Taramayı Tekrarla" butonu) escalation'a izin verir.</summary>
     public async Task SwitchToAsync(string engineId, bool allowEscalation = true)
     {
-        // Zapret Otomatik modun giriş noktası (bkz. escalationOrder aşağıda: Zapret ->
-        // ByeDPI -> GoodbyeDPI) — Kaspersky ya da ESET kuruluysa WinDivert tabanlı Zapret'i
-        // hiç denemeden doğrudan ByeDPI'ye yönlendiriyoruz. Aksi hâlde Zapret'in tüm
-        // adayları (muhtemelen hepsi bu yüzden başarısız) sırayla denenip zaman kaybettirir
-        // — eski davranışta bu kontrol yalnızca ByeDPI'den GoodbyeDPI/Zapret'e eskalasyon
-        // anında yapılıyordu, şimdi giriş noktasının kendisi için de gerekiyor.
-        if (engineId == "zapret" && allowEscalation
-            && SystemControlsHelper.GetStatus(
-                    _engines.FirstOrDefault(e => e.Id == "goodbyedpi")?.GetOwnProcessId(),
-                    _engines.FirstOrDefault(e => e.Id == "zapret")?.GetOwnProcessId(),
-                    _engines.FirstOrDefault(e => e.Id == "byedpi")?.GetOwnProcessId())
-                .AntivirusConflictDetected)
+        // Zapret2 Otomatik modun giriş noktası (bkz. EscalationChain: Zapret2 -> Zapret ->
+        // ByeDPI -> GoodbyeDPI) — Kaspersky ya da ESET kuruluysa WinDivert tabanlı Zapret2/
+        // Zapret'i hiç denemeden doğrudan ByeDPI'ye yönlendiriyoruz. Aksi hâlde tüm
+        // adayları/blockcheck2 taraması (muhtemelen hepsi bu yüzden başarısız) sırayla
+        // denenip zaman kaybettirir — eski davranışta bu kontrol yalnızca ByeDPI'den
+        // GoodbyeDPI/Zapret'e eskalasyon anında yapılıyordu, şimdi giriş noktasının
+        // kendisi için de gerekiyor.
+        if (IsWinDivertBased(engineId) && allowEscalation && AntivirusDetected())
         {
-            _logger.LogWarning("Kaspersky/ESET tespit edildi, Zapret denemesine hiç geçilmiyor, doğrudan ByeDPI'ye yönlendiriliyor");
+            _logger.LogWarning("Kaspersky/ESET tespit edildi, {Id} denemesine hiç geçilmiyor, doğrudan ByeDPI'ye yönlendiriliyor", engineId);
             _lastAutoScanResult = "antivirus";
             await SwitchToAsync("byedpi", allowEscalation);
             return;
@@ -184,6 +199,15 @@ public sealed class DpiEngineManager : IHostedService
             // — yalnızca ByeDPI eskalasyonla aktifken anlamlı, aşağıda yeniden başlatılıyor.
             await StopZapretUdpCompanionAsync();
 
+            // DNS protokol tier döngüsünün (bkz. Dns/DnsProtocolTiers.cs) hem tier başına üst
+            // sınırını (Zapret2: Manuel'de 10dk/Otomatik'te 5dk) hem de Manuel > Gelişmiş'ten
+            // sabitlenen tek-protokol yolunu (SettingsStore.ManualDnsProtocol) etkinleştirmek
+            // için hedef motora Otomatik/Manuel bilgisini iletiyoruz — allowEscalation=true
+            // Otomatik giriş noktası, false Manuel açık seçim demek (kod tabanında zaten bu
+            // anlamda kullanılıyor). GoodbyeDPI bu arayüzü bilerek uygulamıyor (DNS tier
+            // döngüsünün tamamen dışında).
+            if (target is IDnsTierAware tierAwareTarget) tierAwareTarget.IsManualActivation = !allowEscalation;
+
             try
             {
                 await target.StartAsync(scanCts.Token);
@@ -197,15 +221,16 @@ public sealed class DpiEngineManager : IHostedService
                 await target.StopAsync(CancellationToken.None);
                 return;
             }
-            catch (AllCandidatesFailedException) when (engineId == "zapret" && allowEscalation)
+            catch (AllCandidatesFailedException) when (allowEscalation && EscalationChain.Contains(engineId))
             {
-                // Zapret'in TÜM stratejileri tükendi — otomatik olarak ByeDPI'nin, o da
-                // tükenirse GoodbyeDPI'nin kendi aday listesine geçiyoruz. AYNI kilit altında;
-                // SwitchToAsync'i recursive ÇAĞIRMIYORUZ (_switchLock SemaphoreSlim(1,1),
+                // engineId'nin TÜM stratejileri/blockcheck2 taraması tükendi — otomatik olarak
+                // EscalationChain'de kendisinden SONRA gelen motora, o da tükenirse bir
+                // sonrakine geçiyoruz (Zapret2 -> Zapret -> ByeDPI -> GoodbyeDPI). AYNI kilit
+                // altında; SwitchToAsync'i recursive ÇAĞIRMIYORUZ (_switchLock SemaphoreSlim(1,1),
                 // yeniden giriş yapılamaz — deadlock olurdu), bu yüzden mantık satır içi.
-                _logger.LogWarning("Zapret'in tüm stratejileri başarısız oldu, otomatik geçiş deneniyor...");
+                _logger.LogWarning("{Id} tükendi, otomatik geçiş deneniyor...", engineId);
 
-                var escalationOrder = new[] { "byedpi", "goodbyedpi" };
+                var escalationOrder = EscalationChain.SkipWhile(id => id != engineId).Skip(1);
                 var escalated = false;
                 var cancelled = false;
                 foreach (var nextEngineId in escalationOrder)
@@ -213,26 +238,27 @@ public sealed class DpiEngineManager : IHostedService
                     var nextEngine = _engines.FirstOrDefault(e => e.Id == nextEngineId);
                     if (nextEngine is null) continue;
 
-                    // GoodbyeDPI de WinDivert tabanlı — Kaspersky/ESET varsa ByeDPI zaten
-                    // denendi (aşağıda), bu ikinci WinDivert denemesini de atlayıp doğrudan
-                    // tükendi sayıyoruz.
-                    if (nextEngineId == "goodbyedpi"
-                        && SystemControlsHelper.GetStatus(
-                                _engines.FirstOrDefault(e => e.Id == "goodbyedpi")?.GetOwnProcessId(),
-                                _engines.FirstOrDefault(e => e.Id == "zapret")?.GetOwnProcessId(),
-                                _engines.FirstOrDefault(e => e.Id == "byedpi")?.GetOwnProcessId())
-                            .AntivirusConflictDetected)
+                    // Zapret/GoodbyeDPI de WinDivert tabanlı — Kaspersky/ESET varsa bu
+                    // denemeyi de atlayıp doğrudan tükendi sayıyoruz.
+                    if (IsWinDivertBased(nextEngineId) && AntivirusDetected())
                     {
-                        // Kaspersky/ESET, WinDivert tabanlı GoodbyeDPI/Zapret ile çakışabildiği
-                        // için (kendini koruyan bir antivirüs, zorla durdurulamıyor) hiç
-                        // denenmiyor — kullanıcıya "İzinler ve Kontroller"e yönlendiren bir
-                        // mesaj gösterilmesi Electron tarafının sorumluluğunda (bkz. titlebar.js).
-                        _logger.LogWarning("Kaspersky/ESET tespit edildi, GoodbyeDPI denemesine geçilmiyor");
+                        // Kaspersky/ESET, WinDivert tabanlı Zapret2/Zapret/GoodbyeDPI ile
+                        // çakışabildiği için (kendini koruyan bir antivirüs, zorla
+                        // durdurulamıyor) hiç denenmiyor — kullanıcıya "İzinler ve Kontroller"e
+                        // yönlendiren bir mesaj gösterilmesi Electron tarafının sorumluluğunda
+                        // (bkz. titlebar.js).
+                        _logger.LogWarning("Kaspersky/ESET tespit edildi, {Id} denemesine geçilmiyor", nextEngineId);
                         _lastAutoScanResult = "antivirus";
                         continue;
                     }
 
                     _switchingToEngineId = nextEngineId;
+                    // Bu dal yalnızca allowEscalation=true (Otomatik mod) iken çalışır — bir
+                    // önceki manuel aktivasyondan kalma stale bir IsManualActivation=true
+                    // değeri yüzünden bu motorun kendi 4 tier'lik döngüsü yerine yanlışlıkla
+                    // Manuel'in sabit-protokol yoluna girmemesi için burada da açıkça false'a
+                    // ayarlanıyor (bkz. IDnsTierAware).
+                    if (nextEngine is IDnsTierAware nextTierAware) nextTierAware.IsManualActivation = false;
                     try
                     {
                         await nextEngine.StartAsync(scanCts.Token);
@@ -377,6 +403,12 @@ public sealed class DpiEngineManager : IHostedService
                 case "zapret":
                     _settings.Current.ZapretVerified = true;
                     break;
+                case "zapret2":
+                    // Eksikti — bkz. GetRejectedArgsList'teki eşdeğer eksiklik notu. Sonuç:
+                    // Manuel'de Zapret2 için elle argüman kaydedildiğinde Zapret2Verified hiç
+                    // true'ya ayarlanmıyordu.
+                    _settings.Current.Zapret2Verified = true;
+                    break;
             }
             _settings.Save();
 
@@ -459,6 +491,13 @@ public sealed class DpiEngineManager : IHostedService
                 case "zapret":
                     _settings.Current.ZapretVerified = false;
                     break;
+                case "zapret2":
+                    // Eksikti — bu yüzden webview'in did-fail-load'dan sonra çağırdığı bu akış
+                    // Zapret2 için doğrulamayı hiç sıfırlamıyordu (bkz. GetRejectedArgsList'teki
+                    // eşdeğer eksiklik notu).
+                    _settings.Current.Zapret2Verified = false;
+                    _settings.Current.Zapret2VoiceVerified = false;
+                    break;
             }
             _settings.Save();
         }
@@ -484,7 +523,14 @@ public sealed class DpiEngineManager : IHostedService
         try
         {
             foreach (var engine in _engines)
+            {
                 await engine.StopAsync(CancellationToken.None);
+                // Eski bir tarama sonucu (ör. "Bu strateji çalışıyor, kaydedildi.") bellekte
+                // kalıp kullanıcıya sıfırlama sonrası güncel bir sonuçmuş gibi görünmesin
+                // (canlı testte doğrulandı) — ring buffer settings.Reset()'ten bağımsız,
+                // burada elle temizleniyor.
+                engine.ClearLogs();
+            }
             await StopZapretUdpCompanionAsync();
 
             _settings.Reset();
@@ -501,6 +547,12 @@ public sealed class DpiEngineManager : IHostedService
         "byedpi" => _settings.Current.ByeDpiRejectedArgs,
         "goodbyedpi" => _settings.Current.GoodbyeDpiRejectedArgs,
         "zapret" => _settings.Current.ZapretRejectedArgs,
+        // Zapret2Engine kendi Zapret2RejectedArgs listesini StartAsync'te zaten okuyordu
+        // (bkz. Zapret2Engine.cs) ama bu eşleştirmede eksikti — sonuç: Ayarlar ekranının
+        // periyodik GET /engines/zapret2/rejected-args çağrısı HER SEFERİNDE "Bilinmeyen
+        // motor: zapret2" hatasıyla başarısız oluyordu (canlı testte splitcord.log'da
+        // doğrulandı) ve "Argüman Setini Yasakla" da Zapret2 için hiç çalışmıyordu.
+        "zapret2" => _settings.Current.Zapret2RejectedArgs,
         _ => throw new ArgumentException($"Bilinmeyen motor: {engineId}"),
     };
 
@@ -545,6 +597,11 @@ public sealed class DpiEngineManager : IHostedService
                 case "zapret":
                     _settings.Current.ZapretVerified = false;
                     break;
+                case "zapret2":
+                    // Eksikti — bkz. GetRejectedArgsList'teki eşdeğer eksiklik notu.
+                    _settings.Current.Zapret2Verified = false;
+                    _settings.Current.Zapret2VoiceVerified = false;
+                    break;
             }
             _settings.Save();
         }
@@ -569,6 +626,10 @@ public sealed class DpiEngineManager : IHostedService
                 "byedpi" => _settings.Current.ByeDpiVerified,
                 "goodbyedpi" => _settings.Current.GoodbyeDpiVerified,
                 "zapret" => _settings.Current.ZapretVerified,
+                // Eksikti — bkz. GetRejectedArgsList'teki eşdeğer eksiklik notu. Sonuç: istemci
+                // tarafındaki "doğrulanmış" rozeti Zapret2 gerçekte doğrulanmış olsa bile HER ZAMAN
+                // false gösteriyordu.
+                "zapret2" => _settings.Current.Zapret2Verified,
                 _ => false,
             };
             return new

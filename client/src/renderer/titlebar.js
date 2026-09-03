@@ -210,12 +210,51 @@ function clearStatusScanLog() {
   if (statusLogBackdrop) statusLogBackdrop.textContent = '';
 }
 
+// Zapret2'nin DoH→DNSCrypt→DoT→DoQ→DNS'siz dış döngüsündeki tier sayısı (bkz.
+// DnsProtocolTiers.Order) -- tahmini üst sınır süresini hesaplamak için kullanılıyor.
+const ZAPRET2_DNS_TIER_COUNT = 5;
+
+// "Bağlantı hazırlanıyor…"un yanında Zapret2 için gösterilecek tahmini üst sınır (dakika):
+// Ayarlar > DPI Aşımı > Gelişmiş'teki slider'dan (Otomatik/Manuel modun kendi değeri) × 5
+// DNS protokolü/tier'i (kullanıcı talebi). Gerçek süre çoğunlukla çok daha kısa olur (ilk
+// çalışan ayar bulunur bulunmaz durulur) -- bu yalnızca "en kötü senaryo" üst sınırı.
+async function getZapret2EstimatedMaxMinutes() {
+  try {
+    const [tierTimeout, mode] = await Promise.all([
+      window.splitcord.dpi.getZapret2TierTimeout(),
+      window.splitcord.dpi.getMode(),
+    ]);
+    const perTierMinutes = mode === 'manual' ? tierTimeout.manualMinutes : tierTimeout.automaticMinutes;
+    return perTierMinutes * ZAPRET2_DNS_TIER_COUNT;
+  } catch (err) {
+    window.splitcord.log?.('zapret2-estimate-max-minutes-error', { error: err.message });
+    return null;
+  }
+}
+
 async function updateStatusScanLog(engineId, engines) {
   if (!statusOverlay || !statusLogBackdrop || !engineId) return;
   statusOverlay.setAttribute('data-scanning', '');
 
   const engine = engines?.find((e) => e.id === engineId);
   const label = engine?.displayName ?? engineId;
+
+  // Zapret2 için ana durum metnini de aşamaya göre güncelliyoruz -- kullanıcı talebi:
+  // (a) kayıtlı ayar art arda yeniden deneniyorsa (bkz. Zapret2Engine.GetStatus() "Kayıtlı
+  // ayar deneniyor (N/M)" detail'i) bu GERÇEKTEN görünsün, motor her deneme arasında kısa
+  // süreliğine durduğu için yanlışlıkla "Durduruldu" sanılmasın; (b) genel "hazırlanıyor"
+  // aşamasında ise tahmini üst sınır süresi de eklensin.
+  if (engineId === 'zapret2' && engine?.detail?.startsWith('Kayıtlı ayar deneniyor')) {
+    showStatus(`Discord'a erişilemiyor.\n${engine.detail}`);
+  } else if (engineId === 'zapret2') {
+    const estimateMinutes = await getZapret2EstimatedMaxMinutes();
+    showStatus(
+      estimateMinutes
+        ? `Bağlantı hazırlanıyor… (Zapret2 en fazla ~${estimateMinutes} dk sürebilir)`
+        : 'Bağlantı hazırlanıyor…',
+    );
+  }
+
   try {
     const logs = await window.splitcord.dpi.getLogs(engineId);
     const recent = logs.slice(-12);
@@ -276,8 +315,8 @@ btnStatusRetryAuto?.addEventListener('click', async () => {
   // bunu burada beklemek yerine arkaplanda başlatıp refreshConnection()'ın kendi
   // switching-farkında yoklama döngüsüne (3 sn'de bir) ilerlemeyi göstermesine bırakıyoruz.
   showStatus('Bağlantı hazırlanıyor…');
-  // Otomatik modun giriş noktası artık Zapret (bkz. DpiEngineManager.SwitchToAsync).
-  window.splitcord.dpi.activateEngine('zapret').catch((err) => {
+  // Otomatik modun giriş noktası artık Zapret2 (bkz. DpiEngineManager.SwitchToAsync).
+  window.splitcord.dpi.activateEngine('zapret2').catch((err) => {
     window.splitcord.log?.('status-retry-auto-activate-error', { error: err.message });
   });
   btnStatusRetryAuto.disabled = false;
@@ -286,17 +325,43 @@ btnStatusRetryAuto?.addEventListener('click', async () => {
 
 // Bir tarama SONUÇLANDIĞINDA (çalışan bir ayar bulundu YA DA tüm denemeler tükendi) ve
 // Kaspersky/ESET tespit edildiyse, kullanıcı Kontroller ekranını hiç açmasa da onu
-// proaktif olarak bilgilendiriyoruz (bkz. antivirusInfo.js). Yalnızca tarama başına BİR
-// kez gösterilsin diye bu bayrak yeni bir tarama başladığında (status.switching) sıfırlanıyor.
-let antivirusDialogShown = false;
+// proaktif olarak bilgilendiriyoruz (bkz. antivirusInfo.js). Kullanıcı talebi: bu dialog
+// 15 dakika içinde EN FAZLA BİR KEZ gösterilsin — eskiden yalnızca "bu tarama başına bir
+// kez" (yeni bir tarama başladığında sıfırlanan bir bayrak) idi, ama Otomatik moddaki bir
+// motor arka arkaya birden çok kez yeniden tarayabildiği için (ör. uygulama sık sık
+// yeniden başlatıldığında) bu, kullanıcıyı kısa aralıklarla aynı dialog'la boğabiliyordu.
+// localStorage kullanıyoruz ki bu süre uygulama kapatılıp açılsa bile korunsun (renderer
+// belleği her yeniden başlatmada sıfırlanır, localStorage sıfırlanmaz).
+const ANTIVIRUS_DIALOG_LAST_SHOWN_KEY = 'splitcord-antivirus-dialog-last-shown-at';
+const ANTIVIRUS_DIALOG_THROTTLE_MS = 15 * 60 * 1000;
+
+function canShowAntivirusDialog() {
+  try {
+    const lastShownAt = Number(localStorage.getItem(ANTIVIRUS_DIALOG_LAST_SHOWN_KEY) || 0);
+    return Date.now() - lastShownAt >= ANTIVIRUS_DIALOG_THROTTLE_MS;
+  } catch {
+    // localStorage erişilemezse (ör. gizli/kısıtlı depolama) güvenli varsayılan: göster.
+    return true;
+  }
+}
+
+function markAntivirusDialogShown() {
+  try {
+    localStorage.setItem(ANTIVIRUS_DIALOG_LAST_SHOWN_KEY, String(Date.now()));
+  } catch {
+    // Yazılamazsa bir sonraki kontrolde tekrar denenir; kritik değil.
+  }
+}
 
 async function maybeShowAntivirusDialog(scanConcluded) {
-  if (antivirusDialogShown || !scanConcluded) return;
+  if (!scanConcluded || !canShowAntivirusDialog()) return;
   try {
     const systemControls = await window.splitcord.dpi.getSystemControlsStatus();
     if (systemControls?.kasperskyDetected || systemControls?.esetDetected) {
-      antivirusDialogShown = true;
-      window.showAntivirusDetectedModal(systemControls.kasperskyDetected ? 'kaspersky' : 'eset');
+      const kind = systemControls.kasperskyDetected ? 'kaspersky' : 'eset';
+      window.splitcord.log?.('antivirus-dialog-shown', { kind });
+      markAntivirusDialogShown();
+      window.showAntivirusDetectedModal(kind);
     }
   } catch (err) {
     window.splitcord.log?.('get-system-controls-status-error', { error: err.message });
@@ -332,7 +397,6 @@ async function refreshConnection() {
     // görünmesi GEÇİCİ ve NORMAL — bunu hata sayıp spinner'ı durdurmuyoruz, "Bağlantı
     // hazırlanıyor…" göstermeye devam edip birkaç saniye sonra sessizce tekrar deniyoruz.
     if (status.switching) {
-      antivirusDialogShown = false;
       window.splitcord.log?.('connection-status-switching', { activeEngineId: status.activeEngineId });
       updateStatusScanLog(status.switchingToEngineId || status.activeEngineId, status.engines);
       setTimeout(refreshConnection, 3000);

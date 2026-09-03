@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Linq;
 using SplitCord.Service.Config;
+using SplitCord.Service.Dns;
 
 namespace SplitCord.Service.Engines;
 
@@ -19,7 +20,7 @@ namespace SplitCord.Service.Engines;
 /// kaydedilir (EngineArgs + ByeDpiVerified=true), sonraki açılışlarda doğrudan o
 /// kullanılır ve yeniden test edilmez.
 /// </summary>
-public sealed class ByeDpiEngine : IDpiEngine
+public sealed class ByeDpiEngine : IDpiEngine, IDnsTierAware
 {
     // Sıralama önem taşıyor: en yüksek güvenilirlikli/doğrulanmış adaylar önce denenir.
     // 1-2: kullanıcı tarafından Türkiye'de çalıştığı doğrulanmış argümanlar.
@@ -41,6 +42,37 @@ public sealed class ByeDpiEngine : IDpiEngine
         "-s1 -d1 -At -r1+s -An",
         "-s1 -At -d2 -r1+s -An",
         "-Ku -a1 -An -d1 -s0+s -d3+s -s6+s -d9+s -s12+s -d15+s -s20+s -d25+s -s30+s -d35+s -At,r,s -s1 -q1 -At,r,s -s5 -o25000+s -At,r,s -o1 -d1 -r1+s -t10 -b1500 -s0+s -d3+s -At,r,s -f-1 -r1+s -At,r,s -s1 -o1+s -s-1",
+
+        // 10-19: ExtendedCandidateStrategies'in (~1000 fuzzer/topluluk stratejisi) TCP/TLS
+        // tekniği (fake/fake-sni/fake-data/fake-tls-mod/tlsrec/oob/disoob/split/disorder/
+        // mod-http) bakımından birbirinden en çok FARKLILAŞAN 10 kombinasyonu. (Orijinal
+        // fuzzer çıktısındaki --drop-sack, bu projede pinlenen ciadpi.exe sürümünde
+        // TANINMAYAN bir seçenek olduğu için — canlı testte doğrulandı, "unknown option"
+        // hatası veriyordu — ilgili 2 adaydan çıkarıldı.)
+        //
+        // ÖNEMLİ — bu adaylar sesli kanal (WebRTC/UDP) sorununu ÇÖZMEZ: her biri
+        // `--proto udp --udp-fake N` ile başlıyor gibi görünse de, bu yalnızca ciadpi'nin
+        // KENDİ SOCKS5 sunucusuna gelen bir UDP ASSOCIATE isteğine uygulanacak ayar —
+        // Chromium'un WebRTC yığını (Discord'un sesli kanal trafiği) hiçbir zaman ciadpi'ye
+        // UDP ASSOCIATE isteği GÖNDERMİYOR (canlı CDP testiyle doğrulandı, bkz.
+        // Desktop\SplitCord-Turkey-Deneysel\3-byedpi-native-udp\OKUBENI.md) — yani bu
+        // stratejilerin udp-fake kısmı bu uygulamada FİİLEN HİÇ ÇALIŞMIYOR/erişilmiyor.
+        // Sesli kanal sorununun asıl çözüm adayları Deneysel klasöründeki Yöntem 1/2/4'te.
+        //
+        // Buraya eklenme sebepleri TAMAMEN farklı: bu 10 kombinasyonun `--proto tls,http`
+        // kısmı (asıl metin/HTTPS trafiğine uygulanan gerçek desync tekniği), kısa listedeki
+        // 9 adaydan belirgin şekilde farklı teknik kombinasyonları temsil ediyor — ByeDPI'nin
+        // TCP tarafının en zorlu ISP'lerde de bir tanesinin tutma ihtimalini artırmak için.
+        "--tlsrec 2+sm --oob -9+n --disorder -5+he --auto none",
+        "--fake -8+ne --fake-data :\\xbb\\x1a\\x02\\xfa\\x43\\x9d\\x6d\\x99\\x75\\x87 --fake 10+nm --ttl 12 --fake-sni ozon.ru --auto none",
+        "--fake -5+s --fake-sni apple.com --auto none",
+        "--fake 6+n --fake-sni apple.com --fake-tls-mod r --fake 1+he --fake-offset -7+nm --auto none",
+        "--disorder -1+s --auto none",
+        "--split -2+nm --tlsrec -3+n --split -3+he --auto none",
+        "--disorder 10+hm --disoob 6+nm --oob-data \\x48 --mod-http h,d --auto none",
+        "--tlsrec -6+nm --split -9+he --disorder 1+hm --mod-http r,h --auto none",
+        "--oob 7+hm --auto none",
+        "--disorder 10+ne --mod-http d,r --auto none",
     };
 
     // Genisletilmis liste: yukaridaki 9 adaya ek olarak ~1000 topluluk/fuzzer kaynakli
@@ -1081,6 +1113,12 @@ public sealed class ByeDpiEngine : IDpiEngine
     public string DisplayName => "ByeDPI";
     public bool RequiresSystemWideAccess => false;
 
+    /// <summary>DpiEngineManager.SwitchToAsync tarafından ayarlanıyor — bkz. IDnsTierAware.
+    /// Manuel > Gelişmiş'ten sabitlenen tek bir DNS protokolü varsa (SettingsStore.
+    /// ManualDnsProtocol) ve bu true ise, StartAsync 4 tier'lik döngü yerine yalnızca o
+    /// protokolü dener.</summary>
+    public bool IsManualActivation { get; set; }
+
     public ByeDpiEngine(SettingsStore settings, ILogger<ByeDpiEngine> logger)
     {
         _settings = settings;
@@ -1106,6 +1144,14 @@ public sealed class ByeDpiEngine : IDpiEngine
         _settings.Current.EngineArgs.TryGetValue(Id, out var savedArgs);
         if (!string.IsNullOrWhiteSpace(savedArgs) && !rejected.Contains(savedArgs))
         {
+            // Kayıtlı ayar, DOĞRUDAN doğrulandığı DNS protokolüyle birlikte yeniden denenmeli —
+            // ARADA başka bir motor DnsProviders'ı değiştirmiş olsa bile (bkz.
+            // SettingsStore.ByeDpiVerifiedProtocol'deki not).
+            if (_settings.Current.ByeDpiVerifiedProtocol is { } savedProtocol)
+            {
+                DnsProtocolTiers.ApplyTier(_settings, savedProtocol);
+            }
+
             for (var attempt = 1; attempt <= SavedArgsRetryAttempts; attempt++)
             {
                 _logger.LogInformation("ByeDPI kayıtlı ayar ile başlatılıyor (deneme {Attempt}/{Max}): {Args}", attempt, SavedArgsRetryAttempts, savedArgs);
@@ -1120,6 +1166,8 @@ public sealed class ByeDpiEngine : IDpiEngine
                     _logs.Add("Kayıtlı ayar çalışıyor.");
                     _settings.Current.EngineArgs[Id] = savedArgs;
                     _settings.Current.ByeDpiVerified = true;
+                    // Bu MOTORA ÖZEL kombo hafızası (bkz. SettingsStore.ByeDpiVerifiedProtocol'deki not).
+                    _settings.Current.ByeDpiVerifiedProtocol = _settings.Current.VerifiedDnsProtocol;
                     _settings.Save();
                     return;
                 }
@@ -1133,6 +1181,74 @@ public sealed class ByeDpiEngine : IDpiEngine
         }
 
         var candidateStrategies = GetCandidateStrategies();
+
+        // Manuel > Gelişmiş'ten kullanıcı tek bir DNS protokolü sabitlediyse (bkz.
+        // SettingsStore.ManualDnsProtocol), 4 tier'lik döngüye hiç girmiyoruz — YALNIZCA o
+        // protokol aktifken sabit aday listesi bir kez taranıyor (liste zaten sonlu/sabit
+        // olduğu için ayrı bir üst sınıra gerek yok). Yalnızca Manuel açık seçimde etkili —
+        // Otomatik giriş noktasında yok sayılır.
+        if (IsManualActivation && _settings.Current.ManualDnsProtocol is { } pinnedProtocol)
+        {
+            DnsProtocolTiers.ApplyTier(_settings, pinnedProtocol);
+            _logger.LogInformation("ByeDPI: Manuel modda sabitlenen DNS protokolü {Protocol} ile aday listesi taranıyor", pinnedProtocol);
+            _logs.Add($"Manuel modda sabitlenen DNS protokolü ({pinnedProtocol}) ile aday listesi taranıyor...");
+
+            if (await ScanCandidatesAsync(candidateStrategies, savedArgs, rejected, ct))
+            {
+                if (pinnedProtocol == DnsProtocol.None) DnsProtocolTiers.RestoreDefaultAfterNoneTier(_settings);
+                return;
+            }
+
+            DnsProtocolTiers.RestoreDefaultAfterNoneTier(_settings);
+            _logger.LogError("ByeDPI: sabitlenen DNS protokolü {Protocol} ile hiçbir strateji Discord'a erişemedi", pinnedProtocol);
+            _logs.Add($"Sabitlenen DNS protokolü ({pinnedProtocol}) ile hiçbir strateji Discord'a erişemedi.");
+            _lastProbeFailed = true;
+            throw new AllCandidatesFailedException(Id);
+        }
+
+        // DoH→DoT→DoQ→DNSCrypt dış döngüsü (kullanıcı talebi — bkz. plan Faz 9 v2): her tier
+        // "aktif" yapılıp (ApplyTier: DnsProviders o tier'in havuzuna ayarlanır) SABİT aday
+        // listesinin TAMAMI o tier aktifken denenir. ciadpi.exe kendi DNS sorgusunu HER ZAMAN
+        // AYNI yerel forwarder'a (127.0.0.1:53535) gönderiyor — TestConnectivityAsync
+        // SelfTestResolver KULLANMASA da, forwarder hangi tier'e ayarlıysa ciadpi'nin
+        // çözümlemesi otomatik o tier'i kullanır, C# tarafında ek bir hook gerekmiyor. Bir
+        // tier'in tüm adayları tükenmeden sonraki tier'e geçilmez. NOT: "geniş aday" listesi
+        // açıkken (1024 aday) 4 tier ciddi şekilde uzayabilir (bilinçli bir trade-off,
+        // varsayılan kısa listede 19x4=76 makul).
+        foreach (var protocol in DnsProtocolTiers.Order)
+        {
+            DnsProtocolTiers.ApplyTier(_settings, protocol);
+            _logger.LogInformation("ByeDPI: DNS protokolü {Protocol} aktifken aday listesi taranıyor", protocol);
+            _logs.Add($"DNS protokolü {protocol} aktifken aday listesi taranıyor...");
+
+            if (await ScanCandidatesAsync(candidateStrategies, savedArgs, rejected, ct))
+            {
+                // "No DNS" tier'i kazandıysa DnsProviders bilerek boş kaldı -- kullanıcı talebi:
+                // sonraki aşım yöntemleri için şifreli DNS tekrar devreye girmeli (bkz.
+                // DnsProtocolTiers.RestoreDefaultAfterNoneTier'daki not). ByeDPI eskalasyon
+                // zincirinin SONUNCUSU (GoodbyeDPI bu döngüye hiç girmiyor) olduğu için bu
+                // kontrol BURADA ÖZELLİKLE önemli — aksi hâlde boş bırakılırsa hiçbir sonraki
+                // adım bunu bir daha düzeltmez.
+                if (protocol == DnsProtocol.None) DnsProtocolTiers.RestoreDefaultAfterNoneTier(_settings);
+                return;
+            }
+        }
+
+        DnsProtocolTiers.RestoreDefaultAfterNoneTier(_settings);
+        _logger.LogError("Denenen hiçbir ByeDPI stratejisi/DNS protokolü kombinasyonu Discord'a erişemedi ({Count} strateji x {Tiers} protokol/tier)", candidateStrategies.Length, DnsProtocolTiers.Order.Length);
+        _logs.Add("Denenen hiçbir strateji/DNS protokolü kombinasyonu Discord'a erişemedi.");
+        _lastProbeFailed = true;
+        // DpiEngineManager bunu yakalayıp otomatik olarak GoodbyeDPI'nin kendi aday
+        // listesine geçiyor (bkz. DpiEngineManager.SwitchToAsync).
+        throw new AllCandidatesFailedException(Id);
+    }
+
+    /// <summary>candidateStrategies listesinin TAMAMINI (o an DnsProviders'ta aktif olan
+    /// protokolle) sırayla dener — bir aday doğrulanırsa true (StartAsync hemen return eder),
+    /// liste tükenirse false döner. Hem 4 tier'lik döngü hem de Manuel'de sabitlenen
+    /// tek-protokol yolu tarafından ortak kullanılıyor.</summary>
+    private async Task<bool> ScanCandidatesAsync(string[] candidateStrategies, string? savedArgs, List<string> rejected, CancellationToken ct)
+    {
         foreach (var candidate in candidateStrategies)
         {
             if (candidate == savedArgs) continue; // az önce yukarıda 3 kez denendi
@@ -1147,9 +1263,9 @@ public sealed class ByeDpiEngine : IDpiEngine
             _logs.Add($"Deneniyor: {candidate}");
             await SpawnAsync(candidate, ct);
 
-            // DoH sağlayıcı listesi 5'e çıkarıldı (DohForwarder her birine ~1.5 sn veriyor,
-            // en kötü durumda ~7.5 sn) — bu süre dolmadan bağlantı testi zaman aşımına
-            // uğrarsa, çalışabilecek bir sağlayıcıya hiç sıra gelmeden aday haksız yere
+            // DNS sağlayıcı listesi 5'e çıkarıldı (EncryptedDnsForwarder her birine ~1.5 sn
+            // veriyor, en kötü durumda ~7.5 sn) — bu süre dolmadan bağlantı testi zaman
+            // aşımına uğrarsa, çalışabilecek bir sağlayıcıya hiç sıra gelmeden aday haksız yere
             // "başarısız" işaretlenirdi.
             var reachable = await WaitForPortAsync(_port, TimeSpan.FromSeconds(3))
                 && await TestConnectivityAsync(TimeSpan.FromSeconds(12));
@@ -1160,21 +1276,20 @@ public sealed class ByeDpiEngine : IDpiEngine
                 _logs.Add("Bu strateji çalışıyor, kaydedildi.");
                 _settings.Current.EngineArgs[Id] = candidate;
                 _settings.Current.ByeDpiVerified = true;
+                // DnsProviders zaten bu adayın doğrulandığı tier'e ayarlı -- burada
+                // yalnızca teşhis amaçlı işaretliyoruz.
+                _settings.Current.DnsProtocolVerified = true;
+                // Bu MOTORA ÖZEL kombo hafızası (bkz. SettingsStore.ByeDpiVerifiedProtocol'deki not).
+                _settings.Current.ByeDpiVerifiedProtocol = _settings.Current.VerifiedDnsProtocol;
                 _settings.Save();
-                return;
+                return true;
             }
 
             _logger.LogWarning("ByeDPI stratejisi Discord'a erişemedi: {Args}", candidate);
             _logs.Add("Bu strateji Discord'a erişemedi.");
             await StopAsync(ct);
         }
-
-        _logger.LogError("Denenen hiçbir ByeDPI stratejisi Discord'a erişemedi ({Count} strateji)", candidateStrategies.Length);
-        _logs.Add("Denenen hiçbir strateji Discord'a erişemedi.");
-        _lastProbeFailed = true;
-        // DpiEngineManager bunu yakalayıp otomatik olarak GoodbyeDPI'nin kendi aday
-        // listesine geçiyor (bkz. DpiEngineManager.SwitchToAsync).
-        throw new AllCandidatesFailedException(Id);
+        return false;
     }
 
     public async Task StopAsync(CancellationToken ct)
@@ -1210,6 +1325,7 @@ public sealed class ByeDpiEngine : IDpiEngine
     }
 
     public IReadOnlyList<string> GetRecentLogs() => _logs.Snapshot();
+    public void ClearLogs() => _logs.Clear();
 
     public int? GetOwnProcessId() => _process is { HasExited: false } ? _process.Id : null;
 
@@ -1261,7 +1377,10 @@ public sealed class ByeDpiEngine : IDpiEngine
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) _logs.Add(e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) _logs.Add(e.Data); };
-        process.Exited += (_, _) => _logger.LogWarning("ByeDPI (ciadpi.exe) beklenmedik şekilde durdu");
+        // bkz. Dns/DnsProxyToolProcess.cs'teki not: servis kapanışı sırasında EventLog provider'ı
+        // dispose edilmişken bu handler tetiklenirse çıplak bir _logger.Log* çağrısı TÜM SERVİSİ
+        // çöktürüyor (ThreadPool callback'inde yakalanmayan istisna) — try/catch ile yutuluyor.
+        process.Exited += (_, _) => { try { _logger.LogWarning("ByeDPI (ciadpi.exe) beklenmedik şekilde durdu"); } catch { /* bkz. yukarıdaki not */ } };
 
         try
         {

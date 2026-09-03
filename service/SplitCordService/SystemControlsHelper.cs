@@ -11,7 +11,8 @@ public sealed record SystemControlsStatus(
     List<ConflictingServiceInfo> ConflictingServicesInstalled,
     List<DetectedProcess> ExternalGoodbyeDpiProcesses,
     List<DetectedProcess> ExternalZapretProcesses,
-    List<DetectedProcess> ExtraCiadpiProcesses)
+    List<DetectedProcess> ExtraCiadpiProcesses,
+    List<DetectedProcess> ExternalZapret2Processes)
 {
     // Zapret/GoodbyeDPI'nin dayandığı WinDivert sürücüsüyle çakışabilen, kendini koruyan
     // (zorla durdurulamayan) güvenlik yazılımları — DpiEngineManager bunlardan biri
@@ -42,7 +43,7 @@ public static class SystemControlsHelper
         ("GoodbyeDPI", "GoodbyeDPI"),
     };
 
-    public static SystemControlsStatus GetStatus(int? ownGoodbyeDpiPid, int? ownZapretPid, int? ownByeDpiPid, int? ownZapretCompanionPid = null)
+    public static SystemControlsStatus GetStatus(int? ownGoodbyeDpiPid, int? ownZapretPid, int? ownByeDpiPid, int? ownZapretCompanionPid = null, int? ownZapret2Pid = null)
     {
         var kaspersky = Process.GetProcessesByName("avp").Length > 0
             || Process.GetProcessesByName("avpui").Length > 0;
@@ -65,6 +66,11 @@ public static class SystemControlsHelper
             .Select(p => new DetectedProcess(p.Id, p.ProcessName))
             .ToList();
 
+        var externalZapret2 = Process.GetProcessesByName("winws2")
+            .Where(p => p.Id != ownZapret2Pid)
+            .Select(p => new DetectedProcess(p.Id, p.ProcessName))
+            .ToList();
+
         var conflictingServices = KnownConflictingServices
             .Where(s => IsServiceInstalled(s.ServiceName))
             .Select(s => new ConflictingServiceInfo(s.ServiceName, s.DisplayName))
@@ -76,7 +82,8 @@ public static class SystemControlsHelper
             conflictingServices,
             externalGoodbyeDpi,
             externalZapret,
-            extraCiadpi);
+            extraCiadpi,
+            externalZapret2);
     }
 
     public static void KillProcess(int pid)

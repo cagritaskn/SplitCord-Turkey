@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
-using System.Text.Json;
+using SplitCord.Service.Dns;
 using SplitCord.Service.Config;
 
 namespace SplitCord.Service.Engines;
@@ -19,7 +19,7 @@ namespace SplitCord.Service.Engines;
 /// GoodbyeDPI'nin de TÜM adayları başarısız olduğunda DpiEngineManager tarafından otomatik
 /// olarak devreye alınıyor (bkz. DpiEngineManager.SwitchToAsync/TryEscalateAsync).
 /// </summary>
-public sealed class ZapretEngine : IDpiEngine
+public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
 {
     // Kullanıcı tarafından sağlanan, sırayla denenecek hazır kombinasyonlar.
     //
@@ -89,6 +89,12 @@ public sealed class ZapretEngine : IDpiEngine
     public string DisplayName => "Zapret";
     public bool RequiresSystemWideAccess => true;
 
+    /// <summary>DpiEngineManager.SwitchToAsync tarafından ayarlanıyor — bkz. IDnsTierAware.
+    /// Manuel > Gelişmiş'ten sabitlenen tek bir DNS protokolü varsa (SettingsStore.
+    /// ManualDnsProtocol) ve bu true ise, StartAsync 4 tier'lik döngü yerine yalnızca o
+    /// protokolü dener.</summary>
+    public bool IsManualActivation { get; set; }
+
     public ZapretEngine(SettingsStore settings, ILogger<ZapretEngine> logger)
     {
         _settings = settings;
@@ -114,6 +120,14 @@ public sealed class ZapretEngine : IDpiEngine
         _settings.Current.EngineArgs.TryGetValue(Id, out var savedArgs);
         if (!string.IsNullOrWhiteSpace(savedArgs) && !rejected.Contains(savedArgs))
         {
+            // Kayıtlı ayar, DOĞRUDAN doğrulandığı DNS protokolüyle birlikte yeniden denenmeli —
+            // ARADA başka bir motor DnsProviders'ı değiştirmiş olsa bile (bkz.
+            // SettingsStore.ZapretVerifiedProtocol'deki not).
+            if (_settings.Current.ZapretVerifiedProtocol is { } savedProtocol)
+            {
+                DnsProtocolTiers.ApplyTier(_settings, savedProtocol);
+            }
+
             for (var attempt = 1; attempt <= SavedArgsRetryAttempts; attempt++)
             {
                 var label = $"Kayıtlı ayar deneniyor ({attempt}/{SavedArgsRetryAttempts})";
@@ -125,6 +139,67 @@ public sealed class ZapretEngine : IDpiEngine
             _logs.Add("Kayıtlı ayar üç denemede de başarısız oldu, aday taramasına geçiliyor.");
         }
 
+        // Manuel > Gelişmiş'ten kullanıcı tek bir DNS protokolü sabitlediyse (bkz.
+        // SettingsStore.ManualDnsProtocol), 4 tier'lik döngüye hiç girmiyoruz — YALNIZCA o
+        // protokol aktifken sabit aday listesi bir kez taranıyor (liste zaten sonlu/sabit
+        // olduğu için Zapret2/blockcheck2'deki gibi ayrı bir üst sınıra gerek yok). Yalnızca
+        // Manuel açık seçimde etkili — Otomatik giriş noktasında yok sayılır.
+        if (IsManualActivation && _settings.Current.ManualDnsProtocol is { } pinnedProtocol)
+        {
+            DnsProtocolTiers.ApplyTier(_settings, pinnedProtocol);
+            _logger.LogInformation("Zapret: Manuel modda sabitlenen DNS protokolü {Protocol} ile aday listesi taranıyor", pinnedProtocol);
+            _logs.Add($"Manuel modda sabitlenen DNS protokolü ({pinnedProtocol}) ile aday listesi taranıyor...");
+
+            if (await ScanCandidatesAsync(savedArgs, rejected, ct))
+            {
+                if (pinnedProtocol == DnsProtocol.None) DnsProtocolTiers.RestoreDefaultAfterNoneTier(_settings);
+                return;
+            }
+
+            DnsProtocolTiers.RestoreDefaultAfterNoneTier(_settings);
+            _logger.LogError("Zapret: sabitlenen DNS protokolü {Protocol} ile hiçbir strateji Discord'a erişemedi", pinnedProtocol);
+            _logs.Add($"Sabitlenen DNS protokolü ({pinnedProtocol}) ile hiçbir strateji Discord'a erişemedi.");
+            _lastProbeFailed = true;
+            throw new AllCandidatesFailedException(Id);
+        }
+
+        // DoH→DoT→DoQ→DNSCrypt dış döngüsü (kullanıcı talebi — bkz. plan Faz 9 v2): her tier
+        // "aktif" yapılıp (ApplyTier: DnsProviders o tier'in havuzuna ayarlanır) SABİT aday
+        // listesinin TAMAMI o tier aktifken denenir (TestConnectivityAsync zaten
+        // SelfTestResolver→EncryptedDnsForwarder→DnsProviders üzerinden bu tier'i kullanır) —
+        // bir tier'in tüm adayları tükenmeden sonraki tier'e geçilmez. Bir aday doğrulanırsa
+        // hemen kaydedilip dönülür; 4 tier de (tüm adaylarıyla) tükenirse
+        // AllCandidatesFailedException fırlatılır — DpiEngineManager bunu yakalayıp zincirdeki
+        // sonraki motora eskalasyon yapar, o motor da KENDİ döngüsünü sıfırdan dener.
+        foreach (var protocol in DnsProtocolTiers.Order)
+        {
+            DnsProtocolTiers.ApplyTier(_settings, protocol);
+            _logger.LogInformation("Zapret: DNS protokolü {Protocol} aktifken aday listesi taranıyor", protocol);
+            _logs.Add($"DNS protokolü {protocol} aktifken aday listesi taranıyor...");
+
+            if (await ScanCandidatesAsync(savedArgs, rejected, ct))
+            {
+                // "No DNS" tier'i kazandıysa DnsProviders bilerek boş kaldı -- kullanıcı talebi:
+                // sonraki aşım yöntemleri/motorlar için şifreli DNS tekrar devreye girmeli (bkz.
+                // DnsProtocolTiers.RestoreDefaultAfterNoneTier'daki not).
+                if (protocol == DnsProtocol.None) DnsProtocolTiers.RestoreDefaultAfterNoneTier(_settings);
+                return;
+            }
+        }
+
+        DnsProtocolTiers.RestoreDefaultAfterNoneTier(_settings);
+        _logger.LogError("Denenen hiçbir Zapret stratejisi/DNS protokolü kombinasyonu Discord'a erişemedi ({Count} strateji x {Tiers} protokol/tier)", CandidateStrategies.Length, DnsProtocolTiers.Order.Length);
+        _logs.Add("Denenen hiçbir strateji/DNS protokolü kombinasyonu Discord'a erişemedi.");
+        _lastProbeFailed = true;
+        throw new AllCandidatesFailedException(Id);
+    }
+
+    /// <summary>CandidateStrategies listesinin TAMAMINI (o an DnsProviders'ta aktif olan
+    /// protokolle) sırayla dener — bir aday doğrulanırsa true (StartAsync hemen return eder),
+    /// liste tükenirse false döner. Hem 4 tier'lik döngü hem de Manuel'de sabitlenen
+    /// tek-protokol yolu tarafından ortak kullanılıyor.</summary>
+    private async Task<bool> ScanCandidatesAsync(string? savedArgs, List<string> rejected, CancellationToken ct)
+    {
         foreach (var candidate in CandidateStrategies)
         {
             if (candidate == savedArgs) continue; // az önce yukarıda 3 kez denendi
@@ -134,13 +209,9 @@ public sealed class ZapretEngine : IDpiEngine
                 continue;
             }
             ct.ThrowIfCancellationRequested();
-            if (await TryCandidateAsync(candidate, "Deneniyor", ct)) return;
+            if (await TryCandidateAsync(candidate, "Deneniyor", ct)) return true;
         }
-
-        _logger.LogError("Denenen hiçbir Zapret stratejisi Discord'a erişemedi ({Count} strateji)", CandidateStrategies.Length);
-        _logs.Add("Denenen hiçbir strateji Discord'a erişemedi.");
-        _lastProbeFailed = true;
-        throw new AllCandidatesFailedException(Id);
+        return false;
     }
 
     private async Task<bool> TryCandidateAsync(string candidate, string label, CancellationToken ct)
@@ -168,6 +239,11 @@ public sealed class ZapretEngine : IDpiEngine
             _logs.Add("Bu strateji çalışıyor, kaydedildi.");
             _settings.Current.EngineArgs[Id] = candidate;
             _settings.Current.ZapretVerified = true;
+            // DnsProviders zaten bu adayın doğrulandığı tier'e ayarlı (bkz. StartAsync'teki
+            // DnsProtocolTiers.ApplyTier çağrısı) -- burada yalnızca teşhis amaçlı işaretliyoruz.
+            _settings.Current.DnsProtocolVerified = true;
+            // Bu MOTORA ÖZEL kombo hafızası (bkz. SettingsStore.ZapretVerifiedProtocol'deki not).
+            _settings.Current.ZapretVerifiedProtocol = _settings.Current.VerifiedDnsProtocol;
             _settings.Save();
             return true;
         }
@@ -235,7 +311,10 @@ public sealed class ZapretEngine : IDpiEngine
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) _logs.Add($"[UDP eşlik] {e.Data}"); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) _logs.Add($"[UDP eşlik] {e.Data}"); };
-        process.Exited += (_, _) => _logger.LogWarning("Zapret UDP eşlik süreci beklenmedik şekilde durdu");
+        // bkz. Dns/DnsProxyToolProcess.cs'teki not: servis kapanışı sırasında EventLog provider'ı
+        // dispose edilmişken bu handler tetiklenirse çıplak bir _logger.Log* çağrısı TÜM SERVİSİ
+        // çöktürüyor (ThreadPool callback'inde yakalanmayan istisna) — try/catch ile yutuluyor.
+        process.Exited += (_, _) => { try { _logger.LogWarning("Zapret UDP eşlik süreci beklenmedik şekilde durdu"); } catch { /* bkz. yukarıdaki not */ } };
 
         try
         {
@@ -272,6 +351,7 @@ public sealed class ZapretEngine : IDpiEngine
     }
 
     public IReadOnlyList<string> GetRecentLogs() => _logs.Snapshot();
+    public void ClearLogs() => _logs.Clear();
 
     public int? GetOwnProcessId() => _process is { HasExited: false } ? _process.Id : null;
 
@@ -304,7 +384,10 @@ public sealed class ZapretEngine : IDpiEngine
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) _logs.Add(e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) _logs.Add(e.Data); };
-        process.Exited += (_, _) => _logger.LogWarning("Zapret (winws.exe) beklenmedik şekilde durdu");
+        // bkz. Dns/DnsProxyToolProcess.cs'teki not: servis kapanışı sırasında EventLog provider'ı
+        // dispose edilmişken bu handler tetiklenirse çıplak bir _logger.Log* çağrısı TÜM SERVİSİ
+        // çöktürüyor (ThreadPool callback'inde yakalanmayan istisna) — try/catch ile yutuluyor.
+        process.Exited += (_, _) => { try { _logger.LogWarning("Zapret (winws.exe) beklenmedik şekilde durdu"); } catch { /* bkz. yukarıdaki not */ } };
 
         try
         {
@@ -330,49 +413,15 @@ public sealed class ZapretEngine : IDpiEngine
     private const int ConnectivityTestAttempts = 2;
     private static readonly TimeSpan ConnectivityRetryDelay = TimeSpan.FromSeconds(1.5);
 
-    /// <summary>Zapret'in (winws.exe) GoodbyeDPI'nin --dns-addr'ı gibi kendi bir DNS/DoH
-    /// mekanizması yok — sistem çözümleyicisine (ISP DNS'i potansiyel olarak zehirli/engelli
-    /// olabilir) bırakılırsa test neredeyse her zaman başarısız oluyordu (canlı testte
-    /// doğrulandı). Bu yüzden ismi kendimiz Cloudflare'in DoH uç noktasından (1.1.1.1,
-    /// IP harfiyen kullanıldığı için bu isteğin kendisi bile sistem DNS'ine bağımlı değil)
-    /// çözüp SocketsHttpHandler.ConnectCallback ile doğrudan o IP'ye bağlanıyoruz — TLS SNI
-    /// yine de context.DnsEndPoint.Host'tan (discord.com) geliyor, yani sertifika doğrulaması
-    /// normal şekilde çalışıyor.</summary>
-    private static async Task<IPAddress?> ResolveViaDohAsync(string hostname, CancellationToken ct)
-    {
-        try
-        {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-            client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/dns-json");
-            using var response = await client.GetAsync($"https://1.1.1.1/dns-query?name={hostname}&type=A", ct);
-            response.EnsureSuccessStatusCode();
-            using var stream = await response.Content.ReadAsStreamAsync(ct);
-            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
-            if (doc.RootElement.TryGetProperty("Answer", out var answers))
-            {
-                foreach (var answer in answers.EnumerateArray())
-                {
-                    if (answer.TryGetProperty("type", out var type) && type.GetInt32() == 1
-                        && answer.TryGetProperty("data", out var data)
-                        && IPAddress.TryParse(data.GetString(), out var ip))
-                    {
-                        return ip;
-                    }
-                }
-            }
-        }
-        catch
-        {
-            // aşağıda null dönülüp çağıran tarafta hata olarak ele alınıyor
-        }
-        return null;
-    }
-
     /// <summary>WinDivert sistem geneli çalıştığı için (ByeDPI'nin aksine ayrı bir proxy
     /// portu yok) bu sürecin KENDİ isteği de winws'nin paket müdahalesine tabi oluyor — bu
     /// yüzden doğrudan discord.com/app'e normal bir istek atıp test edebiliyoruz. Herhangi
-    /// bir HTTP yanıtı (hata durum kodu dahil) "erişilebilir" sayılır. DNS çözümlemesi
-    /// yukarıdaki ResolveViaDohAsync ile yapılıyor (bkz. üstteki not).</summary>
+    /// bir HTTP yanıtı (hata durum kodu dahil) "erişilebilir" sayılır. DNS çözümlemesi artık
+    /// SelfTestResolver ile yapılıyor — ByeDPI'nin (ciadpi.exe) zaten konuştuğu AYNI yerel
+    /// EncryptedDnsForwarder'a (bkz. Dns/SelfTestResolver.cs) düz DNS-wire UDP sorgusu
+    /// gönderiyor, bu yüzden kullanıcının yapılandırdığı HERHANGİ bir protokolü (DoH/DoT/
+    /// DoQ/DNSCrypt) motor-özel kod yazmadan otomatik kullanır (eskiden burada Cloudflare'e
+    /// sabit, ayrı bir DoH-JSON istemcisi vardı).</summary>
     private async Task<bool> TestConnectivityAsync(TimeSpan timeout)
     {
         for (var attempt = 1; attempt <= ConnectivityTestAttempts; attempt++)
@@ -383,8 +432,8 @@ public sealed class ZapretEngine : IDpiEngine
                 {
                     ConnectCallback = async (context, ct) =>
                     {
-                        var ip = await ResolveViaDohAsync(context.DnsEndPoint.Host, ct)
-                            ?? throw new InvalidOperationException($"DoH ile {context.DnsEndPoint.Host} çözümlenemedi");
+                        var ip = await SelfTestResolver.ResolveAsync(context.DnsEndPoint.Host, ct)
+                            ?? throw new InvalidOperationException($"DNS ile {context.DnsEndPoint.Host} çözümlenemedi");
                         var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
                         try
                         {

@@ -2,6 +2,7 @@
 
 const { app, ipcMain, BrowserWindow, shell, session } = require('electron');
 const path = require('node:path');
+const fs = require('node:fs');
 const { getMainWindow } = require('./window');
 const serviceClient = require('./serviceClient');
 const { isAutoStartEnabled, isStartInBackgroundEnabled, applyAutoStart } = require('./autostart');
@@ -325,7 +326,7 @@ function registerIpcHandlers() {
   });
 
   // DPI Aşımı ekranındaki Otomatik/Manuel toggle — yalnızca istemci tarafında (yerel
-  // ayar) hangi görünümün gösterileceğini belirler. Otomatik'e geçilince Zapret'in
+  // ayar) hangi görünümün gösterileceğini belirler. Otomatik'e geçilince Zapret2'nin
   // (Otomatik modun giriş noktası — bkz. DpiEngineManager.SwitchToAsync) gerçekten aktif
   // motor olduğundan emin olunur.
   ipcMain.handle('dpi:get-mode', () => readLocalSettings().dpiMode);
@@ -334,9 +335,22 @@ function registerIpcHandlers() {
     try {
       writeLocalSettings({ dpiMode: mode });
       if (mode === 'automatic') {
-        await serviceClient.activateEngine('zapret');
-        await applyDpiProxy();
-        getMainWindow()?.webContents.send('dpi:engine-changed');
+        // Manuel'den gelirken zaten Zapret2 aktif/taranıyorsa (bkz. settings.js
+        // carryOverZapret2Scan) o tarama hiç iptal edilmeden burada da dokunmadan
+        // bırakılıyor — aksi hâlde zaten sürmekte olan aynı taramayı sıfırdan yeniden
+        // başlatıp kullanıcı gözünden hiçbir şey değişmemiş gibi görünürdü.
+        let status = null;
+        try {
+          status = await serviceClient.getDpiStatus();
+        } catch (err) {
+          logEvent('get-status-before-set-mode-error', { error: err.message });
+        }
+        const currentEngineId = status?.switching ? status.switchingToEngineId : status?.activeEngineId;
+        if (currentEngineId !== 'zapret2') {
+          await serviceClient.activateEngine('zapret2');
+          await applyDpiProxy();
+          getMainWindow()?.webContents.send('dpi:engine-changed');
+        }
       }
       return mode;
     } catch (err) {
@@ -401,6 +415,34 @@ function registerIpcHandlers() {
       return await serviceClient.setByeDpiUseExtendedCandidates(enabled);
     } catch (err) {
       logEvent('set-byedpi-use-extended-candidates-error', { enabled, error: err.message });
+      throw err;
+    }
+  });
+
+  // Manuel > Gelişmiş'ten sabitlenen tek DNS protokolü — aynı desen: sürmekte olan bir
+  // taramayı iptal edip yeniden başlatma kararı (onay dahil) renderer tarafında veriliyor,
+  // burada yalnızca servise kaydediyoruz.
+  ipcMain.handle('dpi:get-manual-dns-protocol', () => serviceClient.getManualDnsProtocol());
+  ipcMain.handle('dpi:set-manual-dns-protocol', async (_event, protocol) => {
+    logEvent('set-manual-dns-protocol', { protocol });
+    try {
+      return await serviceClient.setManualDnsProtocol(protocol);
+    } catch (err) {
+      logEvent('set-manual-dns-protocol-error', { protocol, error: err.message });
+      throw err;
+    }
+  });
+
+  // Yalnızca Zapret2 için: Otomatik/Manuel modun tier başına blockcheck2 üst sınırı (dakika,
+  // bağımsız iki değer). Aynı desen: sürmekte olan bir taramayı iptal edip yeniden başlatma
+  // kararı (onay dahil) renderer tarafında veriliyor.
+  ipcMain.handle('dpi:get-zapret2-tier-timeout', () => serviceClient.getZapret2TierTimeout());
+  ipcMain.handle('dpi:set-zapret2-tier-timeout', async (_event, automaticMinutes, manualMinutes) => {
+    logEvent('set-zapret2-tier-timeout', { automaticMinutes, manualMinutes });
+    try {
+      return await serviceClient.setZapret2TierTimeout(automaticMinutes, manualMinutes);
+    } catch (err) {
+      logEvent('set-zapret2-tier-timeout-error', { automaticMinutes, manualMinutes, error: err.message });
       throw err;
     }
   });
@@ -556,6 +598,17 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('app:open-diagnostic-log-location', async () => {
+    logEvent('open-diagnostic-log-location', {});
+    try {
+      const { directory } = await serviceClient.getDiagnosticLogLocation();
+      await shell.openPath(directory);
+    } catch (err) {
+      logEvent('open-diagnostic-log-location-error', { error: err.message });
+      throw err;
+    }
+  });
+
   ipcMain.handle('app:get-protocol-handler-status', () => ({
     officialDiscordInstalled: isOfficialDiscordInstalled(),
     isDefaultHandler: isDefaultProtocolHandler(),
@@ -655,13 +708,13 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('dpi:get-doh-providers', () => serviceClient.getDohProviders());
-  ipcMain.handle('dpi:set-doh-providers', async (_event, providers) => {
-    logEvent('set-doh-providers', { providers });
+  ipcMain.handle('dpi:get-dns-providers', () => serviceClient.getDnsProviders());
+  ipcMain.handle('dpi:set-dns-providers', async (_event, providers) => {
+    logEvent('set-dns-providers', { providers });
     try {
-      return await serviceClient.setDohProviders(providers);
+      return await serviceClient.setDnsProviders(providers);
     } catch (err) {
-      logEvent('set-doh-providers-error', { providers, error: err.message });
+      logEvent('set-dns-providers-error', { providers, error: err.message });
       throw err;
     }
   });
@@ -749,6 +802,58 @@ function registerIpcHandlers() {
     const mw = getMainWindow();
     if (mw) mw.isQuitting = true; // gerçek çıkış: pencere close handler'ı artık engellemiyor
     app.relaunch();
+    app.quit();
+  });
+
+  // Ayarlar > Hakkında'daki "SplitCord-Turkey'i Kaldır" — NSIS'in ürettiği resmi kaldırıcıyı
+  // (kendi elevation'ını kendi ister) çalıştırmadan ÖNCE, dosyaların silinmesine engel
+  // olabilecek her şeyi burada elden geldiğince temizliyoruz: servisten tüm motorları
+  // durdurmasını istiyoruz (best-effort — servis o an yanıt vermese bile devam ediyoruz,
+  // asıl garanti kaldırıcının kendi customUnInstall adımındaki uninstall-service.ps1'de,
+  // o script winws.exe/ciadpi.exe/goodbyedpi.exe'yi zaten zorla kapatıp WinDivert sürücü
+  // kalıntılarını da temizliyor). Kaldırıcı elektron paketinin YANINDA duruyor (electron-
+  // builder'ın standart "Uninstall <productName>.exe" çıktısı) — sabit isim yerine desenle
+  // arıyoruz ki productName ileride değişirse kırılmasın.
+  ipcMain.handle('app:uninstall-app', async () => {
+    logEvent('uninstall-app-click', {});
+
+    try {
+      await Promise.race([
+        serviceClient.stopAllEngines(),
+        new Promise((resolve) => setTimeout(resolve, 5000)),
+      ]);
+    } catch (err) {
+      logEvent('uninstall-app-stop-engines-error', { error: err.message });
+    }
+
+    const installDir = path.dirname(process.execPath);
+    let uninstallerName;
+    try {
+      uninstallerName = fs.readdirSync(installDir).find((f) => /^Uninstall .*\.exe$/i.test(f));
+    } catch (err) {
+      logEvent('uninstall-app-readdir-error', { error: err.message });
+    }
+
+    if (!uninstallerName) {
+      logEvent('uninstall-app-not-found', { installDir });
+      throw new Error('Kaldırıcı bulunamadı (yalnızca kurulmuş sürümde kullanılabilir).');
+    }
+
+    const uninstallerPath = path.join(installDir, uninstallerName);
+    logEvent('uninstall-app-launching', { uninstallerPath });
+
+    // shell.openPath (ShellExecuteEx tabanlı) kullanıyoruz — kaldırıcının .exe manifestindeki
+    // requireAdministrator, yalnızca ShellExecute üzerinden başlatılırsa otomatik UAC istemi
+    // gösteriyor; düz child_process.spawn (CreateProcess tabanlı) manifest elevation'ı
+    // TETİKLEMEZ, sessizce "yükseltme gerekli" hatasıyla başarısız olurdu.
+    const openError = await shell.openPath(uninstallerPath);
+    if (openError) {
+      logEvent('uninstall-app-open-error', { error: openError });
+      throw new Error(`Kaldırıcı başlatılamadı: ${openError}`);
+    }
+
+    const mw = getMainWindow();
+    if (mw) mw.isQuitting = true;
     app.quit();
   });
 }

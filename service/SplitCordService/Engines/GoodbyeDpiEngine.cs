@@ -33,6 +33,18 @@ public sealed class GoodbyeDpiEngine : IDpiEngine
     //   standart olmayan 1253 portu) bunu doğruluyor. Bu yüzden onaylanmış komut BİRİNCİ
     //   aday, ve tüm DNS-yönlendirmeli fallback'ler artık 1.1.1.1:53 yerine aynı Yandex
     //   sunucusunu/1253 portunu kullanıyor.
+    // DENENDİ VE KALDIRILDI (2026-09-02, canlı testte): GoodbyeDPI'nin WinDivert ile
+    // yakaladığı düz UDP:53 sorgularını sabit Yandex yerine kendi EncryptedDnsForwarder'ımıza
+    // (127.0.0.1:53535) yönlendirmeyi ("-5 --set-ttl 5 --dns-addr 127.0.0.1 --dns-port 53535
+    // --dnsv6-addr ::1 --dnsv6-port 53535") tier-0 aday olarak denedik — amaç, çalışırsa
+    // GoodbyeDPI'nin de kullanıcının yapılandırdığı şifreli DNS'ten (DoH/DoT/DoQ/DNSCrypt)
+    // faydalanmasıydı. Canlı testte İKİ denemede de tam 12 saniyelik HTTP zaman aşımıyla
+    // KESİN olarak başarısız oldu (kararsız/aralıklı değil, tutarlı bir başarısızlık) —
+    // WinDivert bu OS/ağda düz UDP:53'ü loopback'e güvenilir şekilde DNAT edemiyor. Aşağıdaki
+    // kanıtlanmış Yandex adayına otomatik olarak sorunsuz düştü (mevcut "sırayla dene, ilk
+    // geçen kazanır" mekanizması sayesinde, regresyon yok), ama her taramada ~24 saniye boşa
+    // harcatacağı için kalıcı olarak kaldırıldı. GoodbyeDPI'nin DNS'i bu yüzden BİLEREK sabit
+    // Yandex'te kalıyor — şifreli DNS entegrasyonu yalnızca ByeDPI/Zapret/Zapret2'yi kapsıyor.
     private static readonly string[] CandidateStrategies =
     {
         // Kullanıcı tarafından doğrulanmış, gerçekten çalışan tam komut.
@@ -207,6 +219,7 @@ public sealed class GoodbyeDpiEngine : IDpiEngine
     }
 
     public IReadOnlyList<string> GetRecentLogs() => _logs.Snapshot();
+    public void ClearLogs() => _logs.Clear();
 
     public int? GetOwnProcessId() => _process is { HasExited: false } ? _process.Id : null;
 
@@ -231,7 +244,10 @@ public sealed class GoodbyeDpiEngine : IDpiEngine
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) _logs.Add(e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) _logs.Add(e.Data); };
-        process.Exited += (_, _) => _logger.LogWarning("GoodbyeDPI beklenmedik şekilde durdu");
+        // bkz. Dns/DnsProxyToolProcess.cs'teki not: servis kapanışı sırasında EventLog provider'ı
+        // dispose edilmişken bu handler tetiklenirse çıplak bir _logger.Log* çağrısı TÜM SERVİSİ
+        // çöktürüyor (ThreadPool callback'inde yakalanmayan istisna) — try/catch ile yutuluyor.
+        process.Exited += (_, _) => { try { _logger.LogWarning("GoodbyeDPI beklenmedik şekilde durdu"); } catch { /* bkz. yukarıdaki not */ } };
 
         try
         {
