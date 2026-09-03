@@ -17,17 +17,26 @@ public static class SelfTestResolver
     // CANLI TESTTE BULUNAN BUG (Teknosanet ISP'si): EncryptedDnsForwarder, DnsProviders
     // listesindeki sağlayıcıları SIRAYLA dener, her birine EncryptedDnsForwarder.
     // PerProviderTimeout kadar süre tanıyıp başarısız olursa bir SONRAKİ sağlayıcıya geçer
-    // — varsayılan 5 sağlayıcıyla en kötü ihtimalde bu 5 × PerProviderTimeout'a kadar
+    // — varsayılan sağlayıcı sayısıyla en kötü ihtimalde bu N × PerProviderTimeout'a kadar
     // sürebilir. Buradaki QueryTimeout eskiden bundan BAĞIMSIZ, sabit 3 saniyeydi: bir ISP
     // listedeki İLK 1-2 sağlayıcıyı (ör. Cloudflare, Google — DoH engelleyen ISP'lerin en
     // sık hedeflediği ikisi) engellediğinde, forwarder listede daha aşağıda GERÇEKTEN
     // çalışan bir sağlayıcıya (ör. Quad9) hiç sıra veremeden bu 3 saniye zaten doluyor,
     // ResolveAsync null dönüp "DNS ile discord.com çözümlenemedi" ile bağlantı testi
-    // BAŞARISIZ sayılıyordu — oysa listede sonraki bir sağlayıcı gayet çalışıyordu. Şimdi
-    // forwarder'ın gerçek en-kötü-ihtimal süresine (varsayılan sağlayıcı sayısı + 1 pay)
-    // göre hesaplanıyor, ikisi birbirinden bağımsız sürüklenemiyor.
+    // BAŞARISIZ sayılıyordu — oysa listede sonraki bir sağlayıcı gayet çalışıyordu.
+    //
+    // İKİNCİ CANLI TESTTE BULUNAN BUG (bu turda, "yükleme ekranında sık takılma" olarak geri
+    // bildirildi): NextDns (bkz. NextDnsProxyProcess) DoH tier'ine EK bir sağlayıcı olarak
+    // eklendiğinde (DnsProtocolTiers.ApplyTier), bu formül GÜNCELLENMEMİŞTİ — DoH tier'i
+    // artık gerçekte DnsDefaultProviderPools.Doh.Count + DohTierExtraEntryCount (7) sağlayıcı
+    // deniyorken, QueryTimeout hâlâ yalnızca +1 (6 sağlayıcı varsayımıyla) hesaplanıyordu —
+    // yani NextDns eklenmeden ÖNCEKİ tasarımın bıraktığı payın TAMAMI yeni sağlayıcı
+    // tarafından tüketilmiş, gerçek pay SIFIRA inmişti. Artık DohTierExtraEntryCount da
+    // toplama katılıyor, ikisi (ApplyTier'ın gerçekte eklediği sağlayıcı sayısı ile buradaki
+    // hesap) yeniden bağımsız sürüklenemiyor.
     private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(
-        EncryptedDnsForwarder.PerProviderTimeout.TotalSeconds * (DnsDefaultProviderPools.Doh.Count + 1));
+        EncryptedDnsForwarder.PerProviderTimeout.TotalSeconds *
+        (DnsDefaultProviderPools.Doh.Count + DnsProtocolTiers.DohTierExtraEntryCount + 1));
 
     public static async Task<IPAddress?> ResolveAsync(string hostname, CancellationToken ct)
     {
