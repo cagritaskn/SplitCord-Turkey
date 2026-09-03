@@ -39,8 +39,28 @@
 ; İÇİNE gömüyoruz (electron-builder'ın kendi NSIS derlemesi sırasında, ${__FILEDIR__} bu
 ; installer.nsh'nin kendi dizinini verir) — çalışma zamanında $PLUGINSDIR'a çıkarılan bu
 ; gömülü kopya, $INSTDIR'da NE OLURSA OLSUN her zaman mevcut.
+; KRİTİK #3 — asıl kök neden (bu turda, electron-builder'ın kendi şablon kaynağı
+; doğrudan okunarak bulundu): electron-builder'ın çalışan uygulamayı kapatan
+; CHECK_APP_RUNNING/taskkill adımı (installSection.nsh) yalnızca "install" Section'ında
+; çalışıyor — customInit ise .onInit içinde, o Section'dan ÖNCE tetikleniyor
+; (installer.nsi:70-74 vs installSection.nsh:33-38). Yani güncelleme sırasında bu
+; yedekleme, kullanıcı henüz kapatılmamış ESKİ uygulama HÂLÂ AÇIKKEN çalışıyordu.
+; Chromium, persist:discord partition'ındaki Cookies/LevelDB/IndexedDB dosyalarını
+; uygulama açıkken kilitli tutar; CopyFiles /SILENT bu kilitli dosyaları hatasız/sessizce
+; ATLAR. Sonuç: yedek "var" görünüyordu ama TAM OLARAK giriş oturumunu tutan dosyalar
+; eksikti — restore sonrası hesap/oturum kayboluyordu, kilitli olmayan diğer ayarlar ise
+; sorunsuz görünüyordu. Düzeltme: yedeklemeden ÖNCE, hâlâ açık olabilecek eski uygulamayı
+; burada kendimiz kapatıp dosya tanıtıcılarının serbest kalmasını bekliyoruz —
+; electron-builder'ın kendi taskkill'i daha sonra (Section içinde) yine çalışacak, o an
+; süreç zaten kapalı olduğu için zararsız bir no-op'a dönüşecek.
 !macro customInit
   InitPluginsDir
+
+  DetailPrint "Varsa açık SplitCord-Turkey oturumu kapatılıyor (veri yedeklemesi öncesi)..."
+  nsExec::Exec 'taskkill /im "SplitCord-Turkey.exe" /t'
+  Sleep 2000
+  nsExec::Exec 'taskkill /f /im "SplitCord-Turkey.exe" /t'
+  Sleep 500
 
   ${IfNot} ${FileExists} "$APPDATA\splitcord-client\*.*"
   ${Else}
