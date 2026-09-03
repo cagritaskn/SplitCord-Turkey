@@ -609,6 +609,19 @@ if (document.readyState === 'loading') {
     const container = anchor.closest('div')?.parentElement || anchor.parentElement;
     if (!container || container.querySelector('[data-splitcord-ban-args-btn]')) return;
 
+    const warning = document.createElement('div');
+    warning.setAttribute('data-splitcord-ban-args-warning', 'true');
+    warning.style.marginTop = '12px';
+    warning.style.maxWidth = '360px';
+    warning.style.color = '#faa61a';
+    warning.style.fontSize = '12px';
+    warning.style.lineHeight = '1.4';
+    warning.textContent =
+      '⚠️ Lütfen biraz sabredin. SplitCord-Turkey\'in bağlantınızı hazırlaması biraz zaman ' +
+      'alabilir. Eğer 5 dakikadan fazla süredir bekliyorsanız aşağıdaki butonla argüman ' +
+      'setini yasaklamayı deneyebilirsiniz.';
+    container.appendChild(warning);
+
     const btn = document.createElement('button');
     btn.textContent = 'Kullanılan Argüman Setini Yasaklamayı Deneyin';
     btn.setAttribute('data-splitcord-ban-args-btn', 'true');
