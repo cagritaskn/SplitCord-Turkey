@@ -179,6 +179,7 @@ btnStatusToggleLog?.addEventListener('click', () => {
 const btnStatusRetryAuto = document.getElementById('btn-status-retry-auto');
 const btnStatusManualSetup = document.getElementById('btn-status-manual-setup');
 const btnStatusOpenPermissions = document.getElementById('btn-status-open-permissions');
+const btnStatusDisableQuic = document.getElementById('btn-status-disable-quic');
 
 // isError=false (varsayılan): bir şey hâlâ deneniyor demektir, spinner döner.
 // isError=true: kesin/geçici olarak duraklamış bir durum (kullanıcı elle Yenile'ye
@@ -190,7 +191,7 @@ function showStatus(message, isError = false) {
   else statusOverlay.removeAttribute('data-error');
   if (isError) clearStatusScanLog();
   if (statusActions) statusActions.hidden = true;
-  [btnStatusRetryAuto, btnStatusManualSetup, btnStatusOpenPermissions].forEach((btn) => {
+  [btnStatusRetryAuto, btnStatusManualSetup, btnStatusOpenPermissions, btnStatusDisableQuic].forEach((btn) => {
     if (btn) btn.hidden = true;
   });
   statusOverlay.hidden = false;
@@ -281,6 +282,22 @@ function showStatusWithActions(message, buttonsToShow) {
 btnStatusOpenPermissions?.addEventListener('click', () => {
   window.splitcord.log?.('status-open-permissions-click', {});
   window.splitcord.window.openSettings('panel-permissions');
+});
+
+// ipc.js'teki app:set-quic-disabled handler'ı KENDİ onay diyaloğunu (yeniden başlatma
+// gerektiği için) zaten gösteriyor -- burada AYRICA window.showConfirmModal ile önceden
+// sormuyoruz, aksi halde kullanıcı üst üste iki onay ekranı görürdü. Ayarlar > Genel'deki
+// toggle da AYNI handler'ı çağırıyor, tek doğruluk kaynağı bu (bkz. ipc.js notu).
+btnStatusDisableQuic?.addEventListener('click', async () => {
+  window.splitcord.log?.('status-disable-quic-click', {});
+  btnStatusDisableQuic.disabled = true;
+  try {
+    await window.splitcord.app.setQuicDisabled(true);
+  } catch (err) {
+    window.splitcord.log?.('status-disable-quic-error', { error: err.message });
+  } finally {
+    btnStatusDisableQuic.disabled = false;
+  }
 });
 
 btnStatusManualSetup?.addEventListener('click', async () => {
@@ -474,6 +491,21 @@ webview?.addEventListener('did-fail-load', async (event) => {
 
   // -3 = ERR_ABORTED: genelde reload/navigasyon değişikliği sırasında oluşur, gerçek hata değil.
   if (!event.isMainFrame || event.errorCode === -3) return;
+
+  // ERR_QUIC_PROTOCOL_ERROR (ve QUIC'in diğer hata türleri): hiçbir DPI aşım motoru
+  // QUIC/UDP trafiğine dokunmuyor (WinDivert filtreleri yalnızca --wf-tcp-out ile TCP'yi
+  // hedefliyor), bu yüzden bunu "motor/strateji artık çalışmıyor" sanıp aşağıdaki normal
+  // yeniden tarama akışına sokmak anlamsız -- hiçbir strateji değişikliği bunu düzeltmez.
+  // Bunun yerine kullanıcıya doğrudan QUIC'i kapatma seçeneği sunuyoruz (bkz.
+  // btnStatusDisableQuic click handler'ı / ipc.js app:set-quic-disabled).
+  if (/QUIC/i.test(event.errorDescription || '')) {
+    window.splitcord.log?.('did-fail-load-quic-error', { errorDescription: event.errorDescription });
+    showStatusWithActions(
+      `Discord yüklenemedi (${event.errorDescription}).\nBu, bazı ağlarda QUIC protokolünün düzgün çalışmamasından kaynaklanıyor olabilir.`,
+      [btnStatusDisableQuic],
+    );
+    return;
+  }
 
   if (retryInFlight) return;
   retryInFlight = true;

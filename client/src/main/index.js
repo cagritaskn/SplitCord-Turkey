@@ -91,6 +91,13 @@ if (!readLocalSettings().gpuAcceleration) {
   app.disableHardwareAcceleration();
 }
 
+// Aynı nedenle (yalnızca whenReady()'den ÖNCE etkili) — bkz. localSettings.js'teki
+// quicDisabled notu: DPI motorlarımızın hiçbiri QUIC/UDP'yi kapsamıyor, bu ayar
+// açıkken Chromium QUIC'i hiç denemeden TCP/TLS'e düşüyor.
+if (readLocalSettings().quicDisabled) {
+  app.commandLine.appendSwitch('disable-quic');
+}
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {

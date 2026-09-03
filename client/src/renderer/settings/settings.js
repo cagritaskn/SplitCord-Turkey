@@ -799,6 +799,7 @@ const autostartToggle = document.getElementById('toggle-autostart');
 const startInBackgroundToggle = document.getElementById('toggle-start-in-background');
 const rowStartInBackground = document.getElementById('row-start-in-background');
 const gpuToggle = document.getElementById('toggle-gpu');
+const quicToggle = document.getElementById('toggle-quic');
 const openLinksExternallyToggle = document.getElementById('toggle-open-links-externally');
 const linkOpenerNewWindowToggle = document.getElementById('toggle-link-opener-new-window');
 const performanceModeToggle = document.getElementById('toggle-performance-mode');
@@ -821,6 +822,7 @@ const initialGeneral = {
   autostart: null,
   startInBackground: null,
   gpuAcceleration: null,
+  quicDisabled: null,
   openLinksExternally: null,
   linkOpenerNewWindow: null,
   performanceMode: null,
@@ -912,6 +914,28 @@ async function initGpuToggle() {
       pendingGeneral.gpuAcceleration = gpuToggle.checked;
     }
     window.splitcord.log('gpu-toggle-changed', { checked: gpuToggle.checked });
+    updateUnsavedBar();
+  });
+}
+
+async function initQuicToggle() {
+  let value = quicToggle.checked;
+  try {
+    value = await window.splitcord.app.getQuicDisabled();
+    quicToggle.checked = value;
+  } catch (err) {
+    console.error(err);
+    window.splitcord.log('get-quic-disabled-error', { error: err.message });
+  }
+  initialGeneral.quicDisabled = value;
+
+  quicToggle.addEventListener('change', () => {
+    if (quicToggle.checked === initialGeneral.quicDisabled) {
+      delete pendingGeneral.quicDisabled;
+    } else {
+      pendingGeneral.quicDisabled = quicToggle.checked;
+    }
+    window.splitcord.log('quic-toggle-changed', { checked: quicToggle.checked });
     updateUnsavedBar();
   });
 }
@@ -1115,6 +1139,19 @@ btnSaveChanges.addEventListener('click', async () => {
       initialGeneral.gpuAcceleration = applied;
       delete pendingGeneral.gpuAcceleration;
     }
+    if ('quicDisabled' in pendingGeneral) {
+      // bkz. yukarıdaki gpuAcceleration bloğundaki AYNI not -- ipc.js'teki
+      // app:set-quic-disabled da kendi onay diyaloğunu gösterip onaylanırsa
+      // uygulamayı yeniden başlatıyor.
+      const applied = await window.splitcord.app.setQuicDisabled(pendingGeneral.quicDisabled);
+      if (applied === pendingGeneral.quicDisabled) {
+        return;
+      }
+      window.splitcord.log('quic-disabled-change-cancelled', {});
+      quicToggle.checked = applied;
+      initialGeneral.quicDisabled = applied;
+      delete pendingGeneral.quicDisabled;
+    }
     updateUnsavedBar();
   } catch (err) {
     console.error(err);
@@ -1131,6 +1168,7 @@ btnDiscardChanges.addEventListener('click', () => {
   if ('autostart' in pendingGeneral) autostartToggle.checked = initialGeneral.autostart;
   if ('startInBackground' in pendingGeneral) startInBackgroundToggle.checked = initialGeneral.startInBackground;
   if ('gpuAcceleration' in pendingGeneral) gpuToggle.checked = initialGeneral.gpuAcceleration;
+  if ('quicDisabled' in pendingGeneral) quicToggle.checked = initialGeneral.quicDisabled;
   if ('openLinksExternally' in pendingGeneral) openLinksExternallyToggle.checked = initialGeneral.openLinksExternally;
   if ('linkOpenerNewWindow' in pendingGeneral) linkOpenerNewWindowToggle.checked = initialGeneral.linkOpenerNewWindow;
   if ('performanceMode' in pendingGeneral) performanceModeToggle.checked = initialGeneral.performanceMode;
@@ -1968,6 +2006,7 @@ Promise.all([
   initAutoStartToggle(),
   initStartInBackgroundToggle(),
   initGpuToggle(),
+  initQuicToggle(),
   initOpenLinksExternallyToggle(),
   initLinkOpenerNewWindowToggle(),
   initPerformanceModeToggle(),

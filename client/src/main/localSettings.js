@@ -77,6 +77,15 @@ const DEFAULTS = {
   // henüz konuşmadığında da tetikleniyor) yine de gerçek bir mikrofon sorununu
   // gizleyebileceği için varsayılan KAPALI — kullanıcı bilinçli olarak açmalı.
   disableFalseVoiceWarning: false,
+  // Ayarlar > Genel'de (ya da webview'de ERR_QUIC_PROTOCOL_ERROR alındığında çıkan
+  // "QUIC'i Devre Dışı Bırak" butonundan) kapatılabilir. Zapret2/Zapret/GoodbyeDPI'nin
+  // WinDivert filtreleri yalnızca TCP'yi hedefliyor, QUIC (UDP:443) hiçbir DPI aşım
+  // motorunun kapsama alanına girmiyor — bazı ISP'ler QUIC'i ayrıca bozup/kesip
+  // ERR_QUIC_PROTOCOL_ERROR'a yol açabiliyor. Açıkken Chromium'a 'disable-quic' komut
+  // satırı anahtarı verilir (yalnızca app.whenReady()'den ÖNCE etkili olur, bkz.
+  // index.js), Discord QUIC hiç denemeden doğrudan TCP/TLS'e (DPI motorlarının
+  // kapsama alanına) düşer.
+  quicDisabled: false,
 };
 
 function readLocalSettings() {
