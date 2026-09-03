@@ -8,11 +8,17 @@ public static class DnsDefaultProviderPools
 {
     public static readonly IReadOnlyList<string> Doh = new[]
     {
-        "https://dns.quad9.net/dns-query",
+        // Kullanıcı talebiyle Quad9 AdGuard'ın arkasına alındı: canlı testte, Quad9'un DoH
+        // uç noktası bizim isteklerimize tutarlı şekilde "505 HTTP Version Not Supported"
+        // ile yanıt veriyordu (yavaş bir zaman aşımı değil, hızlı ama HER SEFERİNDE
+        // başarısız bir yanıt) — listenin başında olduğu için her çözümleme bu garantili
+        // başarısızlıkla başlayıp bir sonrakine düşüyordu. Sıralamada en arkaya değil,
+        // AdGuard'ın hemen ardına alındı ki tamamen işe yaramaz sayılmasın.
         "https://dns.google/dns-query",
         "https://cloudflare-dns.com/dns-query",
         "https://doh.opendns.com/dns-query",
         "https://unfiltered.adguard-dns.com/dns-query",
+        "https://dns.quad9.net/dns-query",
         // Kullanıcı talebiyle eklendi: Vodafone TR'de yukarıdaki 5 sağlayıcının TAMAMI
         // başarısız olurken NextDNS'in kendi altyapısı (kullanıcı NextDNS'i sistem geneli
         // çalıştırdığında) çalışıyordu. Kaynak kodu incelendi (github.com/nextdns/nextdns,

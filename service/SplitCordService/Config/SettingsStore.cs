@@ -89,11 +89,13 @@ public sealed class ServiceSettings
     /// tarafından elle eklenebilir.</summary>
     public List<DnsProvider> DnsProviders { get; set; } = new()
     {
-        new() { Protocol = DnsProtocol.Doh, Address = "https://dns.quad9.net/dns-query" },
+        // bkz. DnsDefaultProviderPools.Doh'taki aynı not -- Quad9 canlı testte tutarlı
+        // şekilde "505 HTTP Version Not Supported" döndürdüğü için AdGuard'ın arkasına alındı.
         new() { Protocol = DnsProtocol.Doh, Address = "https://dns.google/dns-query" },
         new() { Protocol = DnsProtocol.Doh, Address = "https://cloudflare-dns.com/dns-query" },
         new() { Protocol = DnsProtocol.Doh, Address = "https://doh.opendns.com/dns-query" },
         new() { Protocol = DnsProtocol.Doh, Address = "https://unfiltered.adguard-dns.com/dns-query" },
+        new() { Protocol = DnsProtocol.Doh, Address = "https://dns.quad9.net/dns-query" },
         // bkz. DnsDefaultProviderPools.Doh'taki aynı not -- profilsiz/hesapsız, canlı
         // doğrulanmış bir yedek DoH sunucusu.
         new() { Protocol = DnsProtocol.Doh, Address = "https://dns.nextdns.io/" },
@@ -229,6 +231,17 @@ public sealed class SettingsStore
             (DnsProtocol.Doh, "https://doh.opendns.com/dns-query"),
             (DnsProtocol.Doh, "https://unfiltered.adguard-dns.com/dns-query"),
             (DnsProtocol.Doh, "https://dns.nextdns.io/"),
+        },
+        // Quad9 hâlâ önde, kullanıcı talebiyle AdGuard'ın arkasına alınmadan ÖNCEKİ 7'li liste.
+        new()
+        {
+            (DnsProtocol.Doh, "https://dns.quad9.net/dns-query"),
+            (DnsProtocol.Doh, "https://dns.google/dns-query"),
+            (DnsProtocol.Doh, "https://cloudflare-dns.com/dns-query"),
+            (DnsProtocol.Doh, "https://doh.opendns.com/dns-query"),
+            (DnsProtocol.Doh, "https://unfiltered.adguard-dns.com/dns-query"),
+            (DnsProtocol.Doh, "https://dns.nextdns.io/"),
+            (DnsProtocol.NextDns, ""),
         },
     };
 
