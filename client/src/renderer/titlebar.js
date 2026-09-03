@@ -49,6 +49,20 @@ if (webview && window.splitcord?.paths?.discordWebviewPreload) {
 let retryInFlight = false;
 let refreshInFlight = false;
 
+// Fresh install'da (veya servis daha yeni başladıysa) uygulama açılışında BURADAKİ ilk
+// refreshConnection() çağrısı, ana süreçteki startConfiguredEngine()'in POST /activate
+// isteğini servise ULAŞTIRMASINDAN ÖNCE çalışabiliyor (ikisi bağımsız, senkronize
+// edilmemiş iki async akış — bkz. index.js/dpiLifecycle.js). O anki, HENÜZ HİÇ deneme
+// yapılmamış anlık görüntüde Zapret2Engine.GetStatus() running=false + detail="Durduruldu"
+// döndürüyor (bkz. Zapret2Engine.cs GetStatus) -- bu, GERÇEKTEN durmuş/tükenmiş bir
+// taramayla AYNI görünüyor, ama aslında yalnızca "henüz başlamadı" demek; gerçek POST
+// servise ulaşıp _switching=true olduğunda birkaç yüz milisaniye içinde çözülüyor (canlı
+// testte doğrulandı). Açılıştan sonraki ilk birkaç kontrolde bu belirsiz durumu terminal
+// saymayıp kısa aralıklarla sessizce tekrar deniyoruz; grace tükenirse (gerçekten durmuş
+// olabilir ihtimaline karşı) normal terminal UI'a düşülüyor.
+let startupGraceChecksRemaining = 8;
+const STARTUP_GRACE_RETRY_MS = 750;
+
 // Teşhis amaçlı: Discord webview'inin kendi DevTools'unu (Network sekmesi dahil) F12 ile
 // aç/kapat. Varsayılan olarak <webview> için bir bağlam menüsü/kısayolu yok, bu yüzden
 // elle ekliyoruz.
@@ -461,6 +475,14 @@ async function refreshConnection() {
       );
     } else if (status.autoScanResult === 'exhausted') {
       showStatusWithActions('Çalışan hiçbir ayar bulunamadı.', [btnStatusRetryAuto, btnStatusManualSetup]);
+    } else if (startupGraceChecksRemaining > 0) {
+      // Henüz kesin bir sonuç (running/antivirus/exhausted) yok -- açılış sonrası olası
+      // startConfiguredEngine() yarışını (yukarıdaki not) atlatmak için terminal UI'ı
+      // göstermeden kısa bir süre sessizce tekrar deniyoruz.
+      startupGraceChecksRemaining -= 1;
+      window.splitcord.log?.('connection-status-startup-grace-retry', { remaining: startupGraceChecksRemaining });
+      setTimeout(refreshConnection, STARTUP_GRACE_RETRY_MS);
+      return;
     } else {
       // Kullanıcı talebi: bu "Durduruldu" tipi kesin/duraklamış durumun altında HER ZAMAN
       // "Otomatik Arama Başlat" butonu bulunsun — kullanıcı Manuel moddaysa bile tek
