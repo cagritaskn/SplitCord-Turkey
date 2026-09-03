@@ -12,14 +12,14 @@
 
 Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'i kurup kullanmaya başlayabilirsiniz.
 
-1. [SplitCord-Turkey-Setup-0.9.5.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.9.5/SplitCord-Turkey-Setup-0.9.5.exe) dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
-2. İndirilen dosyayı çalıştırın. Set-up, arka planda çalışacak DPI aşım hizmetini (SplitCordDpiService) kaydedebilmek için yönetici (UAC) izni isteyebilir; kurulum tamamlandıktan sonra uygulama hiçbir zaman yükseltilmiş yetkiyle çalışmaz.
+1. **[SplitCord-Turkey-Setup-0.9.5.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.9.5/SplitCord-Turkey-Setup-0.9.5.exe)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
+2. İndirilen dosyayı çalıştırın. SmartScreen uyarısı görürseniz **(Windows kişisel bilgisayarınızı korudu başlıklı)** pencerede bulunan **Ek bilgi** kısmına tıklayıp daha sonra **Yine de çalıştır** butonuna tıklayın. Set-up, arka planda çalışacak DPI aşım hizmetini (SplitCordDpiService) kaydedebilmek için yönetici izni isteyebilir; kurulum tamamlandıktan sonra uygulama hiçbir zaman yükseltilmiş yetkiyle çalışmaz (Yönetici izni istemez).
 3. Kurulum bitince SplitCord-Turkey'i çalıştırın.
 4. İlk açılışta uygulama sizin için en uygun DPI aşım motorunu ve ayarını bulmak amacıyla Zapret2, Zapret, ByeDPI ve GoodbyeDPI'yi sırayla dener; bu tarama birkaç dakika sürebilir. Bu süre boyunca "Bağlantı hazırlanıyor…" ekranını görmeniz normaldir, taramanın bitmesini bekleyin.
-5. Eğer programın başlık çubuğunda "Eylem Gerekiyor" ifadesini görürseniz bu uyarıya tıklayarak gerekli eylemleri uygulamanız gerekir, aksi halde SplitCord-Turkey beklendiği gibi çalışmayabilir.
+5. Eğer programın başlık çubuğunda ya da bir uyarı kutucuğunda **"Eylem Gerekiyor"** ifadesini görürseniz bu uyarıya tıklayarak gerekli eylemleri uygulamanız gerekir, aksi halde SplitCord-Turkey beklendiği gibi çalışmayabilir.
 
 > [!NOTE]
-> Kaspersky veya ESET isimli antivirüs yazılımları sisteminizde kuruluysa doğru ve çalışan bir ayar bulmakta, sesli sohbet kanallarına bağlanmakta ve çeşitli farklı işlevlerde sorunlar yaşarsınız. Kaspersky ve ESET hakkında daha fazla bilgi için [bu sayfayı](https://github.com/cagritaskn/SplitCord-Turkey/blob/main/resources/ANTIVIRUS.md) ziyaret edebilirsiniz.
+> **Kaspersky** veya **ESET** isimli antivirüs yazılımları sisteminizde kuruluysa doğru ve çalışan bir ayar bulmakta, sesli sohbet kanallarına bağlanmakta ve çeşitli farklı işlevlerde sorunlar yaşarsınız. Kaspersky ve ESET hakkında daha fazla bilgi için [bu sayfayı](https://github.com/cagritaskn/SplitCord-Turkey/blob/main/resources/ANTIVIRUS.md) ziyaret edebilirsiniz.
 
 ---
 
@@ -126,6 +126,7 @@ SplitCord-Turkey, kaynak koddan da derlenerek çalıştırılabilir.
 
 ---
 ## Özel Teşekkürler
+- Yazılımın geliştirilmesine katkıda bulunan **[Techolay.net](https://techolay.net/sosyal/)** kurucusu **[Recep Baltaş](https://www.youtube.com/@Techolay/)**'a çok teşekkür ederim.
 
 ### Test Edenler:
 - [alperenkrpnr](https://github.com/alperenkrpnr) - Debugging
