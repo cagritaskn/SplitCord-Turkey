@@ -296,8 +296,8 @@ btnStatusManualSetup?.addEventListener('click', async () => {
 
 btnStatusRetryAuto?.addEventListener('click', async () => {
   const choice = await window.showConfirmModal({
-    title: 'Otomatik tarama tekrar başlatılsın mı?',
-    message: 'Zapret, ByeDPI ve GoodbyeDPI ayarları en baştan sırayla denenecek.',
+    title: 'Otomatik arama başlatılsın mı?',
+    message: 'Zapret2, Zapret, ByeDPI ve GoodbyeDPI ayarları en baştan sırayla denenecek.',
     detail: 'Bu işlem birkaç dakika sürebilir; süre boyunca "Bağlantı hazırlanıyor…" gösterilecek.',
   });
   if (choice !== 0) return;
@@ -435,7 +435,12 @@ async function refreshConnection() {
     } else if (status.autoScanResult === 'exhausted') {
       showStatusWithActions('Çalışan hiçbir ayar bulunamadı.', [btnStatusRetryAuto, btnStatusManualSetup]);
     } else {
-      showStatus(`Discord'a erişilemiyor.\n${active?.detail ?? 'DPI motoru çalışmıyor.'}`, true);
+      // Kullanıcı talebi: bu "Durduruldu" tipi kesin/duraklamış durumun altında HER ZAMAN
+      // "Otomatik Arama Başlat" butonu bulunsun — kullanıcı Manuel moddaysa bile tek
+      // tıkla Otomatik moda geçip taramayı sıfırdan başlatabilsin (bkz. aşağıdaki
+      // btnStatusRetryAuto click handler'ı — zaten hem mod geçişini hem sıfırdan
+      // taramayı yapıyor).
+      showStatusWithActions(`Discord'a erişilemiyor.\n${active?.detail ?? 'DPI motoru çalışmıyor.'}`, [btnStatusRetryAuto]);
     }
   } finally {
     refreshInFlight = false;
