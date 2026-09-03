@@ -119,9 +119,9 @@ SplitCord-Turkey, kaynak koddan da derlenerek çalıştırılabilir.
 - **[ByeDPI](https://github.com/hufrea/byedpi)** by **[hufrea](https://github.com/hufrea)**
 - **[GoodbyeDPI](https://github.com/ValdikSS/GoodbyeDPI)** by **[ValdikSS](https://github.com/ValdikSS)**
 - **[zapret](https://github.com/bol-van/zapret)** ve **[zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube)** by **[bol-van](https://github.com/bol-van)** / **[Flowseal](https://github.com/Flowseal)**
-- **[zapret2](https://github.com/bol-van/zapret2)** (blockcheck2 ile otomatik strateji keşfi) by **[bol-van](https://github.com/bol-van)**
-- **[dnsproxy](https://github.com/AdguardTeam/dnsproxy)** (DNSCrypt ve, Manuel modda, DoQ desteği için) by **[AdguardTeam](https://github.com/AdguardTeam)**
-- **[nextdns](https://github.com/nextdns/nextdns)** (diğer DoH sağlayıcıları engellendiğinde devreye giren ek bir yedek olarak) by **[NextDNS](https://github.com/nextdns)**
+- **[zapret2](https://github.com/bol-van/zapret2)** by **[bol-van](https://github.com/bol-van)**
+- **[dnsproxy](https://github.com/AdguardTeam/dnsproxy)** by **[AdguardTeam](https://github.com/AdguardTeam)**
+- **[nextdns](https://github.com/nextdns/nextdns)** by **[NextDNS](https://github.com/nextdns)**
 - **[WinDivert](https://github.com/basil00/WinDivert)** by **[basil00](https://github.com/basil00)**
 - **[arRPC](https://github.com/OpenAsar/arrpc)** by **[OpenAsar](https://github.com/OpenAsar)**
 - **[Electron](https://github.com/electron/electron)**
