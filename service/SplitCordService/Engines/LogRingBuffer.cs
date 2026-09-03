@@ -22,4 +22,9 @@ public sealed class LogRingBuffer
     {
         lock (_lock) return _lines.ToArray();
     }
+
+    public void Clear()
+    {
+        lock (_lock) _lines.Clear();
+    }
 }

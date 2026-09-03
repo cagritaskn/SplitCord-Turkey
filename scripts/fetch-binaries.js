@@ -61,6 +61,31 @@ const TARGETS = [
       return count;
     },
   },
+  {
+    // AdGuard'ın dnsproxy'si — DoQ (DNS-over-QUIC) VE DNSCrypt desteği için kullanılıyor.
+    // .NET 8'de System.Net.Quic hâlâ "preview feature" (EnablePreviewFeatures gerektiriyor,
+    // üretime çıkan bir uygulamada Microsoft'un önermediği bir risk) ve DNSCrypt'in .NET'te
+    // hiç yerleşik desteği olmadığı için ikisini de C#'ta native implemente etmek yerine bu
+    // gerçek, aktif geliştirilen Go binary'sini iki ayrı yerel forwarder süreci olarak
+    // çalıştırıyoruz (bkz. Dns/DoqProxyProcess.cs, Dns/DnsCryptProxyProcess.cs) — diğer 4
+    // motorla aynı "vendored binary + shell out" deseni.
+    tool: 'dnsproxy',
+    url: 'https://github.com/AdguardTeam/dnsproxy/releases/download/v0.84.1/dnsproxy-windows-amd64-v0.84.1.zip',
+    extract(zip, destDir) {
+      const wanted = new Set(['dnsproxy.exe']);
+      let count = 0;
+      for (const entry of zip.getEntries()) {
+        const base = path.basename(entry.entryName);
+        if (!wanted.has(base.toLowerCase())) continue;
+        fs.writeFileSync(path.join(destDir, base), entry.getData());
+        count += 1;
+      }
+      if (count !== wanted.size) {
+        throw new Error(`dnsproxy: beklenen ${wanted.size} dosyadan ${count} tanesi bulundu (zip yapısı değişmiş olabilir)`);
+      }
+      return count;
+    },
+  },
 ];
 
 async function download(url) {

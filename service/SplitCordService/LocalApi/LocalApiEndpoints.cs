@@ -1,11 +1,18 @@
 using SplitCord.Service.Config;
+using SplitCord.Service.Dns;
 using SplitCord.Service.Engines;
 
 namespace SplitCord.Service.LocalApi;
 
+using SplitCord.Service;
+
 public sealed record ActivateEngineResponseError(string error);
 public sealed record SetArgsPayload(string? Args, bool Restart = true);
-public sealed record SetDohProvidersPayload(List<string>? Providers);
+public sealed record DnsProviderPayload(string Protocol, string Address);
+public sealed record SetDnsProvidersPayload(List<DnsProviderPayload>? Providers);
+public sealed record SetManualDnsProtocolPayload(string? Protocol);
+public sealed record SetZapret2TierTimeoutPayload(int? AutomaticMinutes, int? ManualMinutes);
+public sealed record DiagnosticLogPayload(string? Tag, string? Level, string? Message);
 public sealed record UnrejectArgsPayload(string Args);
 public sealed record SetByeDpiExtendedCandidatesPayload(bool Enabled);
 public sealed record KillProcessPayload(int Pid);
@@ -125,28 +132,131 @@ public static class LocalApiEndpoints
             return Results.Ok(mgr.GetStatus());
         });
 
-        // ByeDPI'nin yerel DoH yönlendiricisinin (bkz. DohForwarder.cs) hangi DNS-over-HTTPS
-        // sunucularını sırayla deneyeceği. Değişiklik anında etkili olur, servis yeniden
-        // başlatmaya gerek yoktur (DohForwarder her sorguda güncel listeyi okur).
-        app.MapGet("/doh-providers", (SettingsStore settings) => Results.Ok(settings.Current.DohProviders));
+        // Yerel şifreli DNS yönlendiricisinin (bkz. EncryptedDnsForwarder.cs) hangi DoH/DoT/
+        // DoQ/DNSCrypt sağlayıcılarını sırayla deneyeceği. Değişiklik anında etkili olur,
+        // servis yeniden başlatmaya gerek yoktur (forwarder her sorguda güncel listeyi okur
+        // -- DNSCrypt hariç, bkz. Faz 3'teki DnsCryptProxyProcess.ReconfigureAsync notu).
+        app.MapGet("/dns-providers", (SettingsStore settings) =>
+            Results.Ok(settings.Current.DnsProviders.Select(p => new DnsProviderPayload(p.Protocol.ToString().ToLowerInvariant(), p.Address))));
 
-        app.MapPost("/doh-providers", (SetDohProvidersPayload payload, SettingsStore settings) =>
+        app.MapPost("/dns-providers", (SetDnsProvidersPayload payload, SettingsStore settings) =>
         {
-            var providers = (payload.Providers ?? new List<string>())
-                .Select(p => p.Trim())
-                .Where(p => p.Length > 0)
-                .ToList();
-
-            var invalid = providers.FirstOrDefault(p => !p.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
-            if (invalid is not null)
+            var providers = new List<DnsProvider>();
+            foreach (var item in payload.Providers ?? new List<DnsProviderPayload>())
             {
-                return Results.BadRequest(new { error = $"Geçersiz DoH adresi (https:// ile başlamalı): {invalid}" });
+                var address = item.Address?.Trim() ?? "";
+                if (address.Length == 0) continue;
+
+                if (!Enum.TryParse<DnsProtocol>(item.Protocol, ignoreCase: true, out var protocol))
+                {
+                    return Results.BadRequest(new { error = $"Bilinmeyen DNS protokolü: {item.Protocol}" });
+                }
+
+                string? validationError = protocol switch
+                {
+                    DnsProtocol.Doh when !address.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                        => $"Geçersiz DoH adresi (https:// ile başlamalı): {address}",
+                    DnsProtocol.DnsCrypt when !address.StartsWith("sdns://", StringComparison.OrdinalIgnoreCase)
+                        => $"Geçersiz DNSCrypt adresi (sdns:// ile başlamalı): {address}",
+                    _ => null,
+                };
+                if (validationError is not null)
+                {
+                    return Results.BadRequest(new { error = validationError });
+                }
+
+                providers.Add(new DnsProvider { Protocol = protocol, Address = address });
             }
 
-            settings.Current.DohProviders = providers;
+            settings.Current.DnsProviders = providers;
             settings.Save();
-            return Results.Ok(settings.Current.DohProviders);
+            return Results.Ok(settings.Current.DnsProviders.Select(p => new DnsProviderPayload(p.Protocol.ToString().ToLowerInvariant(), p.Address)));
         });
+
+        // Manuel > Gelişmiş'ten sabitlenen tek DNS protokolü (bkz. SettingsStore.
+        // ManualDnsProtocol) — null/"" "Otomatik" (4 tier'lik döngü) anlamına gelir. Yalnızca
+        // ayarı kaydeder; sürmekte olan bir taramayı iptal edip yeni protokolle yeniden
+        // başlatma kararı (onay dahil) istemci tarafında yönetiliyor (bkz. settings.js,
+        // ByeDPI uzun liste anahtarıyla aynı desen: kaydet + activateEngine).
+        app.MapGet("/manual-dns-protocol", (SettingsStore settings) =>
+            Results.Ok(new { protocol = settings.Current.ManualDnsProtocol?.ToString().ToLowerInvariant() }));
+
+        app.MapPost("/manual-dns-protocol", (SetManualDnsProtocolPayload payload, SettingsStore settings) =>
+        {
+            if (string.IsNullOrWhiteSpace(payload.Protocol))
+            {
+                settings.Current.ManualDnsProtocol = null;
+            }
+            else if (Enum.TryParse<DnsProtocol>(payload.Protocol, ignoreCase: true, out var protocol))
+            {
+                settings.Current.ManualDnsProtocol = protocol;
+            }
+            else
+            {
+                return Results.BadRequest(new { error = $"Bilinmeyen DNS protokolü: {payload.Protocol}" });
+            }
+
+            settings.Save();
+            return Results.Ok(new { protocol = settings.Current.ManualDnsProtocol?.ToString().ToLowerInvariant() });
+        });
+
+        // Yalnızca Zapret2 için: DoH/DoT/DoQ/DNSCrypt/DNS'siz tier döngüsünde HER bir protokolü
+        // blockcheck2 ile tarama üst sınırı (dakika) — Otomatik ve Manuel modun kendi bağımsız
+        // değerleri var (bkz. SettingsStore'daki alanlar). 5-60 dakika aralığı dışında bir
+        // değer reddediliyor. Yalnızca kaydeder; sürmekte olan bir taramayı iptal edip yeni
+        // süreyle sıfırdan yeniden başlatma kararı (onay dahil) istemci tarafında yönetiliyor
+        // (bkz. settings.js, ByeDPI uzun liste anahtarıyla aynı desen).
+        const int MinTierTimeoutMinutes = 5;
+        const int MaxTierTimeoutMinutes = 60;
+        app.MapGet("/zapret2/tier-timeout", (SettingsStore settings) => Results.Ok(new
+        {
+            automaticMinutes = settings.Current.Zapret2AutomaticTierTimeoutMinutes,
+            manualMinutes = settings.Current.Zapret2ManualTierTimeoutMinutes,
+        }));
+
+        app.MapPost("/zapret2/tier-timeout", (SetZapret2TierTimeoutPayload payload, SettingsStore settings) =>
+        {
+            if (payload.AutomaticMinutes is { } automatic)
+            {
+                if (automatic < MinTierTimeoutMinutes || automatic > MaxTierTimeoutMinutes)
+                {
+                    return Results.BadRequest(new { error = $"Otomatik mod süresi {MinTierTimeoutMinutes}-{MaxTierTimeoutMinutes} dakika arasında olmalı" });
+                }
+                settings.Current.Zapret2AutomaticTierTimeoutMinutes = automatic;
+            }
+
+            if (payload.ManualMinutes is { } manual)
+            {
+                if (manual < MinTierTimeoutMinutes || manual > MaxTierTimeoutMinutes)
+                {
+                    return Results.BadRequest(new { error = $"Manuel mod süresi {MinTierTimeoutMinutes}-{MaxTierTimeoutMinutes} dakika arasında olmalı" });
+                }
+                settings.Current.Zapret2ManualTierTimeoutMinutes = manual;
+            }
+
+            settings.Save();
+            return Results.Ok(new
+            {
+                automaticMinutes = settings.Current.Zapret2AutomaticTierTimeoutMinutes,
+                manualMinutes = settings.Current.Zapret2ManualTierTimeoutMinutes,
+            });
+        });
+
+        // İstemcinin (Electron) kendi olay günlüğünü (bkz. client/src/main/ipc.js logEvent)
+        // servisin tuttuğu TEK birleşik tanılama dosyasına (bkz. DiagnosticLog.cs) iletmesi
+        // için — böylece "programda gerçekleşen her şey" tek dosyada toplanıyor. Yalnızca
+        // en iyi çaba: başarısızlık istemciyi hiçbir şekilde etkilememeli.
+        app.MapPost("/diagnostic-log", (DiagnosticLogPayload payload, DiagnosticLogWriter diagnosticLog) =>
+        {
+            diagnosticLog.Append("client", payload.Level ?? "Information", payload.Tag ?? "renderer", payload.Message ?? "");
+            return Results.Ok();
+        });
+
+        // Ayarlar > Hakkında ve Güncelleme'deki "Günlük Dosyası Konumunu Aç" butonu için —
+        // istemci bu klasörü kendi başına tahmin etmek yerine (SettingsStore'un service-settings.json
+        // için kullandığı %ProgramData%\SplitCord ile AYNI dizin) servisten soruyor.
+        app.MapGet("/diagnostic-log/location", (DiagnosticLogWriter diagnosticLog) =>
+            Results.Ok(new { directory = diagnosticLog.DirectoryPath }));
 
         // ByeDPI "uzun argüman listesi" anahtarı — kapalıyken (varsayılan) yalnızca 9
         // kişilik kısa listeyi, açıkken bunun ardından ~1000 ek stratejiyi de tarar (bkz.
@@ -177,8 +287,8 @@ public static class LocalApiEndpoints
         // "İzinler ve Kontroller" — DPI aşımını bozabilecek, programımız dışında çalışan
         // şeylerin (Kaspersky, elle kurulmuş GoodbyeDPI/Zapret servisleri, fazladan
         // ciadpi.exe kopyaları) tespiti ve (mümkün olanların) durdurulması.
-        app.MapGet("/system-controls/status", (ByeDpiEngine byeDpi, GoodbyeDpiEngine goodbyeDpi, ZapretEngine zapret) =>
-            Results.Ok(SystemControlsHelper.GetStatus(goodbyeDpi.GetOwnProcessId(), zapret.GetOwnProcessId(), byeDpi.GetOwnProcessId(), zapret.GetUdpCompanionProcessId())));
+        app.MapGet("/system-controls/status", (ByeDpiEngine byeDpi, GoodbyeDpiEngine goodbyeDpi, ZapretEngine zapret, Zapret2Engine zapret2) =>
+            Results.Ok(SystemControlsHelper.GetStatus(goodbyeDpi.GetOwnProcessId(), zapret.GetOwnProcessId(), byeDpi.GetOwnProcessId(), zapret.GetUdpCompanionProcessId(), zapret2.GetOwnProcessId())));
 
         app.MapPost("/system-controls/kill-process", (KillProcessPayload payload) =>
         {

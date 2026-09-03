@@ -157,6 +157,28 @@
               <p class="sc-hint">Bu setler otomatik taramada bir daha denenmeyecek.</p>
               <div id="rejected-args-list" class="sc-rejected-list"></div>
             </div>
+
+            <div class="sc-divider"></div>
+            <h2>Zapret2 Blockcheck Zamanaşımı</h2>
+            <p class="sc-hint">
+              Otomatik modda birden çok aşım yöntemi (Zapret2, Zapret, ByeDPI, GoodbyeDPI) sırayla
+              denenir — bu ayar yalnızca Zapret2'nin blockcheck2 ile HER BİR DNS protokolünü
+              (DoH/DNSCrypt/DoT/DoQ/DNS'siz) ne kadar süre tarayacağının üst sınırıdır, genel
+              tarama süresi değildir. Bu süre her protokol için ayrı ayrı geçerlidir — yani
+              Zapret2'nin toplam süresi bu değer × 5 (protokol sayısı) kadar olabilir. Otomatik ve
+              Manuel modun bağımsız değerleri var.
+            </p>
+            <label class="sc-field-label" for="slider-z2-timeout-auto-A">Otomatik mod (dakika, DNS protokolü başına)</label>
+            <div class="sc-slider-row">
+              <input type="range" id="slider-z2-timeout-auto-A" min="5" max="60" step="1" />
+              <span class="sc-slider-value" id="slider-z2-timeout-auto-A-value">5 dk</span>
+            </div>
+            <label class="sc-field-label" for="slider-z2-timeout-manual-A">Manuel mod (dakika, DNS protokolü başına)</label>
+            <div class="sc-slider-row">
+              <input type="range" id="slider-z2-timeout-manual-A" min="5" max="60" step="1" />
+              <span class="sc-slider-value" id="slider-z2-timeout-manual-A-value">10 dk</span>
+            </div>
+            <button id="btn-save-z2-timeout-A" class="sc-btn sc-btn--primary" hidden>Kaydet</button>
           </div>
         </div>
 
@@ -188,9 +210,44 @@
               <div class="sc-restart-search-spinner"></div>
             </div>
 
+            <label class="sc-field-label" for="select-manual-dns-protocol">DNS Protokolü</label>
+            <div class="sc-hint">
+              Otomatik'te (varsayılan) DoH→DNSCrypt→DoT→DoQ→DNS'siz sırayla dener. Belirli bir
+              protokolü sabitlerseniz yalnızca o protokol ile taranır. GoodbyeDPI için hiçbir
+              etkisi yoktur.
+            </div>
+            <select id="select-manual-dns-protocol" class="sc-select">
+              <option value="">Otomatik (DoH→DNSCrypt→DoT→DoQ→DNS'siz)</option>
+              <option value="doh">DNS-over-HTTPS</option>
+              <option value="dnscrypt">DNSCrypt</option>
+              <option value="dot">DNS-over-TLS</option>
+              <option value="doq">DNS-over-QUIC</option>
+              <option value="none">DNS'siz (şifreli DNS zorlanmaz)</option>
+            </select>
+
             <label class="sc-field-label" for="advanced-args">Seçili motor için komut satırı argümanları</label>
             <textarea id="advanced-args" class="sc-textarea" rows="2" placeholder="örn: --split 1+s --disorder 2 --auto=torst"></textarea>
             <button id="btn-save-args" class="sc-btn sc-btn--primary">Kaydet</button>
+
+            <div class="sc-divider"></div>
+            <h2>Zapret2 Tarama Süresi</h2>
+            <p class="sc-hint">
+              Zapret2'nin blockcheck2 ile HER BİR DNS protokolünü (DoH/DNSCrypt/DoT/DoQ/DNS'siz)
+              ne kadar süre tarayacağının üst sınırı — bu süre her protokol için ayrı ayrı
+              geçerlidir, yani toplam süre bu değer × 5 (protokol sayısı) kadar olabilir. Otomatik
+              ve Manuel modun bağımsız değerleri var.
+            </p>
+            <label class="sc-field-label" for="slider-z2-timeout-auto-M">Otomatik mod (dakika, DNS protokolü başına)</label>
+            <div class="sc-slider-row">
+              <input type="range" id="slider-z2-timeout-auto-M" min="5" max="60" step="1" />
+              <span class="sc-slider-value" id="slider-z2-timeout-auto-M-value">5 dk</span>
+            </div>
+            <label class="sc-field-label" for="slider-z2-timeout-manual-M">Manuel mod (dakika, DNS protokolü başına)</label>
+            <div class="sc-slider-row">
+              <input type="range" id="slider-z2-timeout-manual-M" min="5" max="60" step="1" />
+              <span class="sc-slider-value" id="slider-z2-timeout-manual-M-value">10 dk</span>
+            </div>
+            <button id="btn-save-z2-timeout-M" class="sc-btn sc-btn--primary" hidden>Kaydet</button>
           </div>
         </div>
 
@@ -203,15 +260,17 @@
 
           <div class="sc-divider"></div>
 
-          <h2>DNS (DoH)</h2>
+          <h2>Şifreli DNS (DoH / DoT / DoQ / DNSCrypt)</h2>
           <p class="sc-hint">
-            ByeDPI aktifken DNS sorguları, sistemin (ISP'nin) DNS'i yerine buradaki sunuculara HTTPS
-            üzerinden (DNS-over-HTTPS) gönderilir — sırayla denenir, ilki başarısız olursa bir sonrakine
-            geçilir. Bu, yalnızca SplitCord-Turkey'i etkiler, sistem geneli bir DNS değişikliği yapmaz.
+            DNS sorguları, sistemin (ISP'nin) DNS'i yerine aşağıdaki sunuculara şifreli olarak
+            gönderilir — sırayla denenir, ilki başarısız olursa bir sonrakine geçilir. Bu, yalnızca
+            SplitCord-Turkey'i etkiler, sistem geneli bir DNS değişikliği yapmaz.
           </p>
-          <label class="sc-field-label" for="doh-providers">Sunucu adresleri (satır başına bir tane, https:// ile başlamalı)</label>
-          <textarea id="doh-providers" class="sc-textarea" rows="3" placeholder="https://dns.google/dns-query"></textarea>
-          <button id="btn-save-doh" class="sc-btn sc-btn--primary">Kaydet</button>
+          <div id="dns-providers-list" class="sc-dns-providers-list"></div>
+          <div class="sc-dns-providers-actions">
+            <button id="btn-add-dns-provider" type="button" class="sc-btn sc-btn--secondary">+ Sağlayıcı Ekle</button>
+            <button id="btn-save-dns-providers" class="sc-btn sc-btn--primary">Kaydet</button>
+          </div>
         </div>
       </section>
 
@@ -373,7 +432,15 @@
         <button id="btn-install-update" class="sc-btn sc-btn--primary" hidden style="margin-top: 8px;">Güncellemeyi İndir</button>
 
         <div class="sc-divider" style="margin-top: 24px;"></div>
+        <p class="sc-hint">
+          Program ve hizmetin çalışması sırasında tuttuğu birleşik tanılama günlüğü (en fazla 50MB) —
+          sorun bildirirken bu dosyayı paylaşman yardımcı olur.
+        </p>
+        <button id="btn-open-diagnostic-log-location" class="sc-btn">Günlük Dosyası Konumunu Aç</button>
+
+        <div class="sc-divider" style="margin-top: 24px;"></div>
         <button id="btn-reset-all-settings" class="sc-btn sc-btn--danger" style="margin-top: 8px;">Tüm Ayarları Sıfırla</button>
+        <button id="btn-uninstall-app" class="sc-btn sc-btn--danger" style="margin-top: 8px;">SplitCord-Turkey'i Kaldır</button>
       </section>
     </main>
   </div>

@@ -1,6 +1,6 @@
 # Antivirüs Yazılımları ve WinDivert Çakışması
 
-SplitCord-Turkey'deki **GoodbyeDPI** ve **Zapret** motorları, Windows'ta ağ paketlerini müdahale etmek için [WinDivert](https://github.com/basil00/WinDivert) adlı açık kaynaklı bir sürücü kullanır. Bazı antivirüs yazılımları, WinDivert'i (veya onu kullanan araçları) "risk aracı" olarak sınıflandırıp engelliyor — bu durumda SplitCord-Turkey bu iki motoru hiç denemeden otomatik olarak atlayıp **ByeDPI**'ye yönlendirir (İzinler ve Kontroller ekranından bu tespiti görebilirsiniz).
+SplitCord-Turkey'deki **Zapret2**, **Zapret** ve **GoodbyeDPI** motorları, Windows'ta ağ paketlerini müdahale etmek için [WinDivert](https://github.com/basil00/WinDivert) adlı açık kaynaklı bir sürücü kullanır. Bazı antivirüs yazılımları, WinDivert'i (veya onu kullanan araçları) "risk aracı" olarak sınıflandırıp engelliyor — bu durumda SplitCord-Turkey bu üç motoru hiç denemeden otomatik olarak atlayıp **ByeDPI**'ye yönlendirir (İzinler ve Kontroller ekranından bu tespiti görebilir, ana ekranda çıkan uyarı penceresinden de bilgi alabilirsiniz).
 
 ---
 
@@ -8,7 +8,7 @@ SplitCord-Turkey'deki **GoodbyeDPI** ve **Zapret** motorları, Windows'ta ağ pa
 
 WinDivert, Windows işletim sisteminde ağ paketlerini okuyup değiştirmeye yarayan, açık kaynaklı, meşru bir kütüphanedir. Bu tür düşük seviyeli ağ müdahalesi yapabilen araçlar (proxy yazılımları, güvenlik duvarları, ağ izleme araçları dahil), kötüye kullanılabilme potansiyelleri nedeniyle bazı antivirüs motorları tarafından **"not-a-virus:HEUR:RiskTool"** gibi bir kategoriyle işaretlenir. Bu bir virüs tespiti DEĞİLDİR — yazılımın kendisinin kötü amaçlı olduğu anlamına gelmez, yalnızca "bu tür bir araç kötüye kullanılabilir" uyarısıdır.
 
-Kaspersky ve ESET gibi bazı antivirüs yazılımları, bu sınıflandırmayı kullanarak WinDivert'i etkin bir şekilde bloke eder ve bu iki motorun (GoodbyeDPI, Zapret) çalışmasını engeller. Rus hükümetinin internet özgürlüğü kısıtlamalarına yönelik baskıları nedeniyle Kaspersky'nin bu tür DPI aşım araçlarına karşı özellikle daha temkinli/agresif davrandığı biliniyor; bu, WinDivert'in veya SplitCord-Turkey'in kötü amaçlı olduğu anlamına gelmiyor.
+Kaspersky ve ESET gibi bazı antivirüs yazılımları, bu sınıflandırmayı kullanarak WinDivert'i etkin bir şekilde bloke eder ve bu üç motorun (Zapret2, Zapret, GoodbyeDPI) çalışmasını engeller. Rus hükümetinin internet özgürlüğü kısıtlamalarına yönelik baskıları nedeniyle Kaspersky'nin bu tür DPI aşım araçlarına karşı özellikle daha temkinli/agresif davrandığı biliniyor; bu, WinDivert'in veya SplitCord-Turkey'in kötü amaçlı olduğu anlamına gelmiyor.
 
 ---
 
@@ -33,13 +33,13 @@ Metin trafiğinin aksine sesli bağlantı için WinDivert'siz bir alternatif **y
 SplitCord-Turkey tamamen açık kaynak kodludur; tüm kaynak kod [GitHub deposundan](https://github.com/cagritaskn/SplitCord-Turkey) incelenebilir, tercih edilirse kendiniz de derleyebilirsiniz. Programı kullanmak istemeyen ve güvenmeyen kullanıcılar programı kullanmak zorunda değildir, kullanmak tamamen sizin inisiyatifinizdedir.
 
 > [!NOTE]
-> **[SplitCord-Turkey 0.5.7 kurulum dosyası VirusTotal sonuçlarında](https://www.virustotal.com/gui/file/e9039929fb15d3f6f4b1b385c0c47280f1a36f1bc0cfcaa473d42b18f895b803?nocache=1)** 66 antivirüs motorundan yalnızca 2 tanesi tespit veriyor (2/66). Bu tespitlerin sebebi de yukarıda anlatılan WinDivert sınıflandırmasıdır; kurulum dosyasının kendisi arka planda çalışacak bir Windows Service kaydettiği ve sistem üzerinde değişiklik yaptığı için bazı az kullanılan, güvenilirliği düşük antivirüs motorları tarafından hatalı (false positive) olarak işaretlenebilir.
+> **[SplitCord-Turkey 0.9.2 kurulum dosyası VirusTotal sonuçları](VIRUSTOTAL_LINK_BURAYA)** — bu tespitlerin sebebi de yukarıda anlatılan WinDivert sınıflandırmasıdır; kurulum dosyasının kendisi arka planda çalışacak bir Windows Service kaydettiği ve sistem üzerinde değişiklik yaptığı için bazı az kullanılan, güvenilirliği düşük antivirüs motorları tarafından hatalı (false positive) olarak işaretlenebilir.
 
 > [!NOTE]
 > **SmartScreen "Windows kişisel bilgisayarınızı korudu"** uyarısı, imzalanmamış yazılımların tamamında çalıştırmadan önce görünür. Bunun sebebi, yazılımların uluslararası kod imzalama sertifikasına tabi olma zorunluluğudur. Ancak bu imzalama işlemi döviz kuru üzerinden düzenli ödeme gerektirdiğinden ve bağımsız, gelir elde etmeyen bir geliştirici tarafından hazırlandığından dolayı yazılım imzalanamıyor.
 
 > [!IMPORTANT]
-> İndirme yapacağınız her zaman önce adres çubuğuna bakıp URL'ye dikkat edin. SplitCord-Turkey'i yalnızca **[resmi GitHub reposundan](https://github.com/cagritaskn/SplitCord-Turkey)** veya doğrudan **[en güncel kurulum dosyasından](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.5.7/SplitCord-Turkey-Setup-0.5.7.exe)** indirip kullanın.
+> İndirme yapacağınız her zaman önce adres çubuğuna bakıp URL'ye dikkat edin. SplitCord-Turkey'i yalnızca **[resmi GitHub reposundan](https://github.com/cagritaskn/SplitCord-Turkey)** veya doğrudan **[en güncel kurulum dosyasından](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.9.2/SplitCord-Turkey-Setup-0.9.2.exe)** indirip kullanın.
 
 ---
 
@@ -54,7 +54,7 @@ SplitCord-Turkey, Kaspersky veya ESET tespit ettiğinde otomatik olarak **ByeDPI
 
 ### Seçenek 2 — Antivirüs yazılımınıza istisna tanımlayın
 
-Kaspersky/ESET'in kendi ayarlarından, SplitCord-Turkey'in kurulu olduğu **klasörün tamamına** istisna tanımlayarak GoodbyeDPI ve Zapret'i de kullanabilirsiniz. Varsayılan kurulum yolu:
+Kaspersky/ESET'in kendi ayarlarından, SplitCord-Turkey'in kurulu olduğu **klasörün tamamına** istisna tanımlayarak Zapret2, Zapret ve GoodbyeDPI'yi de kullanabilirsiniz. Varsayılan kurulum yolu:
 
 - `C:\Program Files\SplitCord-Turkey\`
 
@@ -70,10 +70,10 @@ Kurulum sırasında farklı bir klasör seçtiyseniz, istisnayı o klasör için
 
 ### Seçenek 3 — Antivirüs yazılımını kaldırın
 
-Kaspersky/ESET'i sisteminizden tamamen kaldırırsanız, GoodbyeDPI ve Zapret motorları hiçbir kısıtlama olmadan çalışır. Yazılımları kaldırdıktan sonra kurulumu tekrar gerçekleştirmeniz gerekebilir.
+Kaspersky/ESET'i sisteminizden tamamen kaldırırsanız, Zapret2, Zapret ve GoodbyeDPI motorları hiçbir kısıtlama olmadan çalışır. Yazılımları kaldırdıktan sonra kurulumu tekrar gerçekleştirmeniz gerekebilir.
 
 ---
 
 ## Bu WinDivert'in güvenilir olmadığı anlamına mı geliyor
 
-Hayır. WinDivert açık kaynaklıdır ve kaynak kodu [buradan](https://github.com/basil00/WinDivert) incelenebilir. GoodbyeDPI ve Zapret de açık kaynaklıdır — SplitCord-Turkey'in [kaynak kodundan](https://github.com/cagritaskn/SplitCord-Turkey) bu araçları nasıl çalıştırdığımızı görebilirsiniz. "Risk aracı" sınıflandırması, aracın YAPABİLECEKLERİ hakkında genel bir uyarıdır, bu projenin veya WinDivert'in kötü amaçlı olduğu anlamına gelmez.
+Hayır. WinDivert açık kaynaklıdır ve kaynak kodu [buradan](https://github.com/basil00/WinDivert) incelenebilir. GoodbyeDPI, Zapret ve Zapret2 de açık kaynaklıdır — SplitCord-Turkey'in [kaynak kodundan](https://github.com/cagritaskn/SplitCord-Turkey) bu araçları nasıl çalıştırdığımızı görebilirsiniz. "Risk aracı" sınıflandırması, aracın YAPABİLECEKLERİ hakkında genel bir uyarıdır, bu projenin veya WinDivert'in kötü amaçlı olduğu anlamına gelmez.

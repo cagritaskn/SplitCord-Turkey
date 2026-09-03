@@ -78,8 +78,25 @@ const reportByeDpiFailure = () => request('POST', '/engines/byedpi/report-failur
 // yeniden denemeden sonra hâlâ kalıcı olarak çalışmıyorsa çağrılır (bkz. titlebar.js).
 const reportEngineFailure = (id, allowEscalation = true) =>
   request('POST', `/engines/${encodeURIComponent(id)}/report-engine-failure?allowEscalation=${allowEscalation}`, null, LONG_RUNNING_TIMEOUT_MS);
-const getDohProviders = () => request('GET', '/doh-providers');
-const setDohProviders = (providers) => request('POST', '/doh-providers', { providers });
+const getDnsProviders = () => request('GET', '/dns-providers');
+const setDnsProviders = (providers) => request('POST', '/dns-providers', { providers });
+
+// Manuel > Gelişmiş'ten sabitlenen tek DNS protokolü — protocol=null/undefined "Otomatik"
+// (5 tier'lik DoH→DNSCrypt→DoT→DoQ→DNS'siz döngüsü) anlamına gelir.
+const getManualDnsProtocol = () => request('GET', '/manual-dns-protocol');
+const setManualDnsProtocol = (protocol) => request('POST', '/manual-dns-protocol', { protocol: protocol || null });
+
+// Yalnızca Zapret2 için: DoH/DNSCrypt/DoT/DoQ/DNS'siz tier döngüsünde her bir protokolü
+// blockcheck2 ile tarama üst sınırı (dakika) — Otomatik ve Manuel modun bağımsız değerleri var.
+const getZapret2TierTimeout = () => request('GET', '/zapret2/tier-timeout');
+const setZapret2TierTimeout = (automaticMinutes, manualMinutes) =>
+  request('POST', '/zapret2/tier-timeout', { automaticMinutes: automaticMinutes ?? null, manualMinutes: manualMinutes ?? null });
+
+// İstemcinin kendi olay günlüğünü (bkz. ipc.js logEvent) servisin tuttuğu TEK birleşik
+// tanılama dosyasına iletmek için — en iyi çaba, servis kapalıysa/ulaşılamıyorsa sessizce
+// yok sayılır (çağıran taraf zaten catch ediyor).
+const postDiagnosticLog = (tag, level, message) => request('POST', '/diagnostic-log', { tag, level, message });
+const getDiagnosticLogLocation = () => request('GET', '/diagnostic-log/location');
 
 // Üç motor için de ortak (ByeDPI/GoodbyeDPI/Zapret).
 const getRejectedArgs = (id) => request('GET', `/engines/${encodeURIComponent(id)}/rejected-args`);
@@ -121,8 +138,14 @@ module.exports = {
   stopAllEngines,
   reportByeDpiFailure,
   reportEngineFailure,
-  getDohProviders,
-  setDohProviders,
+  getDnsProviders,
+  setDnsProviders,
+  getManualDnsProtocol,
+  setManualDnsProtocol,
+  getZapret2TierTimeout,
+  setZapret2TierTimeout,
+  postDiagnosticLog,
+  getDiagnosticLogLocation,
   getRejectedArgs,
   rejectCurrentArgs,
   unrejectArgs,

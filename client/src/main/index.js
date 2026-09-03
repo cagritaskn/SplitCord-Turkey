@@ -27,8 +27,24 @@ const serviceClient = require('./serviceClient');
 // bağımsız Windows Service) bundan etkilenmiyor/kapanmıyor — yalnızca bu istemcinin kendi
 // süreçleri/portları ve servisteki aktif motor süreçleri (ciadpi.exe/goodbyedpi.exe/
 // winws.exe) temizleniyor, servis kaydedilmiş ayarlarla ayakta kalmaya devam ediyor.
+// arRPC'nin dahili net/ws sunucusu, 1337 portu zaten kullanımdaysa (ör. aynı bilgisayarda
+// hâlâ tepside yaşayan ÖNCEKİ bir SplitCord-Turkey örneği) hatayı kendi 'error' event'i
+// üzerinden ASENKRON fırlatıyor — bu da richPresence.js'teki try/catch'in dışına düşüp
+// buraya (process seviyesindeki uncaughtException/unhandledRejection) kadar geliyor. Rich
+// Presence isteğe bağlı/kritik olmayan bir özellik olduğundan, SADECE bu bilinen hata
+// türünde tüm uygulamayı çökertmek yerine sessizce loglayıp devam ediyoruz.
+function isNonFatalRichPresencePortConflict(err) {
+  const text = `${err?.message ?? ''} ${err?.stack ?? ''}`;
+  return /EADDRINUSE/.test(text) && /richPresence|arrpc/i.test(text);
+}
+
 let handlingFatalError = false;
 async function handleFatalMainProcessError(err) {
+  if (isNonFatalRichPresencePortConflict(err)) {
+    logEvent('rich-presence-port-conflict-ignored', { error: err?.message });
+    return;
+  }
+
   if (handlingFatalError) return;
   handlingFatalError = true;
 
@@ -99,7 +115,7 @@ if (!gotSingleInstanceLock) {
       writeLocalSettings({ autostartDefaultApplied: true });
     }
 
-    configureSecureDns();
+    await configureSecureDns();
     registerPermissions();
     configureBrowserIdentity();
     registerScreenSharePicker();

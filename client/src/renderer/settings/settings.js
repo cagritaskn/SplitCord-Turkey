@@ -1,7 +1,8 @@
 'use strict';
 
 const ENGINE_DESCRIPTIONS = {
-  byedpi: 'Yalnızca bu uygulamanın trafiğini kapsayan yerel proxy. Admin gerektirmez. Varsayılan. Ses bağlantısına destek olması için arka planda ayrıca Zapret de (yalnızca UDP) devreye alınır.',
+  zapret2: 'Sistem geneli, Zapret\'in yeni nesil sürümü (WinDivert). blockcheck2 ile otomatik strateji bulur, hem metin hem ses (UDP/STUN) bağlantısını ayrıca doğrular. Varsayılan.',
+  byedpi: 'Yalnızca bu uygulamanın trafiğini kapsayan yerel proxy. Admin gerektirmez. Ses bağlantısına destek olması için arka planda ayrıca Zapret de (yalnızca UDP) devreye alınır.',
   goodbyedpi: 'Sistem geneli paket müdahalesi (WinDivert). Tüm uygulamaları etkiler.',
   zapret: "Sistem geneli, Discord/YouTube için hazır strateji (WinDivert). Tüm uygulamaları etkiler.",
 };
@@ -41,6 +42,24 @@ const restartSearchWrap = document.getElementById('restart-search-wrap');
 const btnRestartSearch = document.getElementById('btn-restart-search');
 const restartSearchManualWrap = document.getElementById('restart-search-manual-wrap');
 const btnRestartSearchManual = document.getElementById('btn-restart-search-manual');
+const manualDnsProtocolSelect = document.getElementById('select-manual-dns-protocol');
+// Zapret2 tier zaman aşımı slider'ları -- "A" (Otomatik+Gelişmiş) ve "M" (Manuel+Gelişmiş)
+// bölümlerinde birer kopya var, ikisi de AYNI iki değeri (Otomatik/Manuel mod süresi)
+// yansıtıp senkron kalıyor (bkz. initZapret2TierTimeout).
+const z2TimeoutSliders = {
+  autoA: document.getElementById('slider-z2-timeout-auto-A'),
+  manualA: document.getElementById('slider-z2-timeout-manual-A'),
+  autoM: document.getElementById('slider-z2-timeout-auto-M'),
+  manualM: document.getElementById('slider-z2-timeout-manual-M'),
+};
+const z2TimeoutValueEls = {
+  autoA: document.getElementById('slider-z2-timeout-auto-A-value'),
+  manualA: document.getElementById('slider-z2-timeout-manual-A-value'),
+  autoM: document.getElementById('slider-z2-timeout-auto-M-value'),
+  manualM: document.getElementById('slider-z2-timeout-manual-M-value'),
+};
+const btnSaveZ2TimeoutA = document.getElementById('btn-save-z2-timeout-A');
+const btnSaveZ2TimeoutM = document.getElementById('btn-save-z2-timeout-M');
 
 let dpiMode = 'automatic';
 let dpiAdvanced = false;
@@ -161,8 +180,8 @@ btnRestartSearch?.addEventListener('click', async () => {
   // bunu engeller, çift güvence olarak) canlı durumu burada da kontrol ediyoruz.
   if (currentStatus?.switching) return;
   window.splitcord.log('restart-search-click', {});
-  // Otomatik modun giriş noktası artık Zapret (bkz. DpiEngineManager.SwitchToAsync).
-  await activateEngine('zapret');
+  // Otomatik modun giriş noktası artık Zapret2 (bkz. DpiEngineManager.SwitchToAsync).
+  await activateEngine('zapret2');
 });
 
 btnRestartSearchManual?.addEventListener('click', async () => {
@@ -212,15 +231,28 @@ async function initDpiMode() {
       // aşağıdaki cancelScan + stopAllEngines çağrıları) ANCAK ONDAN SONRA mod geçişini
       // yapıyoruz.
       let scanInProgress = false;
+      let statusBeforeChange = null;
       try {
-        const status = await window.splitcord.dpi.getStatus();
-        scanInProgress = !!status?.switching;
+        statusBeforeChange = await window.splitcord.dpi.getStatus();
+        scanInProgress = !!statusBeforeChange?.switching;
       } catch (err) {
         window.splitcord.log('get-status-before-mode-change-error', { error: err.message });
       }
 
+      // Manuel'de zaten Zapret2 taranıyor/aktifken Otomatik'e geçiliyorsa: Otomatik modun
+      // giriş noktası da Zapret2 (bkz. ipc.js dpi:set-mode) — sürmekte olan taramayı iptal
+      // edip AYNI motor için sıfırdan yeniden başlatmak, kullanıcı gözünden hiçbir şey
+      // değişmeden spinner'ın kesintisiz sürmesine yol açıyordu (taramanın "durmadığı"
+      // izlenimi). Bu özel durumda taramayı hiç iptal etmiyoruz, kesintisiz sürmesine
+      // izin veriyoruz — ipc.js tarafı da bu durumda motoru yeniden başlatmıyor.
+      const carryOverZapret2Scan =
+        mode === 'automatic' &&
+        scanInProgress &&
+        statusBeforeChange &&
+        getDisplayActiveEngineId(statusBeforeChange) === 'zapret2';
+
       let detail = 'Mod değişikliği DPI motorunun yeniden başlatılmasına neden olabilir, bu da Discord bağlantısının kısa süreliğine kesilmesine yol açabilir.';
-      if (scanInProgress) {
+      if (scanInProgress && !carryOverZapret2Scan) {
         detail += ' Şuan aşım testleri yapıldığından bu ayarı değiştirmeniz halinde testler yarıda kalacaktır.';
       }
 
@@ -241,7 +273,7 @@ async function initDpiMode() {
       // göstersin — bir sonraki periyodik durumu beklemeden hemen uygula.
       renderEngineList();
       try {
-        if (scanInProgress) {
+        if (scanInProgress && !carryOverZapret2Scan) {
           window.splitcord.log('cancel-scan-click', {});
           try {
             await window.splitcord.dpi.cancelScan();
@@ -356,6 +388,186 @@ async function initByedpiExtendedCandidates() {
 
   byedpiExtendedAutomaticToggle?.addEventListener('change', () => handleToggle(byedpiExtendedAutomaticToggle));
   byedpiExtendedManualToggle?.addEventListener('change', () => handleToggle(byedpiExtendedManualToggle));
+}
+
+// Manuel > Gelişmiş'te sabitlenen tek DNS protokolü — yalnızca Manuel'de görünür (bkz.
+// settings.html'deki dpi-advanced-manual-section). Değiştirildiğinde HER ZAMAN onay
+// istenir (ByeDPI uzun liste anahtarıyla aynı desen): onaylanırsa hem servise kaydedilir
+// hem de o an Manuel'de seçili olan motorun taraması (blockcheck2 dahil) sıfırdan başlatılır;
+// "Hayır" denirse hem seçim hem de tarama eski hâlinde kalır.
+let manualDnsProtocol = '';
+let manualDnsProtocolChangeInFlight = false;
+
+async function initManualDnsProtocol() {
+  try {
+    const { protocol } = await window.splitcord.dpi.getManualDnsProtocol();
+    manualDnsProtocol = protocol || '';
+    if (manualDnsProtocolSelect) manualDnsProtocolSelect.value = manualDnsProtocol;
+  } catch (err) {
+    window.splitcord.log('get-manual-dns-protocol-error', { error: err.message });
+  }
+
+  manualDnsProtocolSelect?.addEventListener('change', async () => {
+    if (manualDnsProtocolChangeInFlight) {
+      manualDnsProtocolSelect.value = manualDnsProtocol;
+      return;
+    }
+    const newValue = manualDnsProtocolSelect.value;
+    if (newValue === manualDnsProtocol) return;
+
+    // Seçilen <option>'ın kendi metnini select'in değerini eski hâline döndürmeden ÖNCE
+    // okuyoruz -- DNS_PROTOCOL_LABELS yalnızca DNS sağlayıcı listesi (doh/dot/doq/dnscrypt)
+    // için, "Otomatik"/"DNS'siz" gibi bu açılır menüye özel seçenekleri içermiyor.
+    const newOption = Array.from(manualDnsProtocolSelect.options).find((o) => o.value === newValue);
+    const label = newOption?.textContent?.trim() || newValue;
+    manualDnsProtocolSelect.value = manualDnsProtocol;
+    const choice = await window.showConfirmModal({
+      title: 'DNS protokolünü değiştir',
+      message: `DNS protokolü "${escapeHtml(label)}" olarak sabitlensin mi?`,
+      detail: 'Bu değişiklik, halihazırda devam eden taramayı durdurup seçili motoru bu protokolle sıfırdan taramaya başlatır.',
+    });
+    if (choice !== 0) {
+      window.splitcord.log('manual-dns-protocol-change-cancelled', { newValue });
+      return;
+    }
+
+    manualDnsProtocolChangeInFlight = true;
+    manualDnsProtocolSelect.disabled = true;
+    try {
+      await window.splitcord.dpi.setManualDnsProtocol(newValue || null);
+      manualDnsProtocol = newValue;
+      manualDnsProtocolSelect.value = newValue;
+      window.splitcord.log('manual-dns-protocol-changed', { newValue });
+      if (selectedEngineId) {
+        await activateEngine(selectedEngineId);
+      }
+    } catch (err) {
+      window.splitcord.log('manual-dns-protocol-change-error', { error: err.message });
+    } finally {
+      manualDnsProtocolChangeInFlight = false;
+      manualDnsProtocolSelect.disabled = false;
+    }
+  });
+}
+
+// Yalnızca Zapret2 için: Otomatik/Manuel modun tier başına blockcheck2 üst sınırı (dakika,
+// bağımsız iki değer, 5-60 aralığı) — "A" (Otomatik+Gelişmiş) ve "M" (Manuel+Gelişmiş)
+// bölümlerinde birer kopyası var, ikisi de AYNI iki değeri yansıtıp senkron kalıyor (ByeDPI
+// uzun liste anahtarıyla aynı desen). Değiştirilince Kaydet butonu belirir; kaydedilince
+// onay istenip Zapret2'nin taraması (DNS protokolü sıralamasının başından, DoH'tan itibaren)
+// sıfırdan yeniden başlatılır.
+let z2TimeoutAutoMinutes = 5;
+let z2TimeoutManualMinutes = 10;
+let z2TimeoutChangeInFlight = false;
+
+function applyZ2TimeoutSliderValues() {
+  if (z2TimeoutSliders.autoA) z2TimeoutSliders.autoA.value = z2TimeoutAutoMinutes;
+  if (z2TimeoutSliders.autoM) z2TimeoutSliders.autoM.value = z2TimeoutAutoMinutes;
+  if (z2TimeoutSliders.manualA) z2TimeoutSliders.manualA.value = z2TimeoutManualMinutes;
+  if (z2TimeoutSliders.manualM) z2TimeoutSliders.manualM.value = z2TimeoutManualMinutes;
+  if (z2TimeoutValueEls.autoA) z2TimeoutValueEls.autoA.textContent = `${z2TimeoutAutoMinutes} dk`;
+  if (z2TimeoutValueEls.autoM) z2TimeoutValueEls.autoM.textContent = `${z2TimeoutAutoMinutes} dk`;
+  if (z2TimeoutValueEls.manualA) z2TimeoutValueEls.manualA.textContent = `${z2TimeoutManualMinutes} dk`;
+  if (z2TimeoutValueEls.manualM) z2TimeoutValueEls.manualM.textContent = `${z2TimeoutManualMinutes} dk`;
+}
+
+function updateZ2TimeoutSaveButtonsVisibility() {
+  const currentAuto = Number(z2TimeoutSliders.autoA?.value ?? z2TimeoutAutoMinutes);
+  const currentManual = Number(z2TimeoutSliders.manualA?.value ?? z2TimeoutManualMinutes);
+  const changed = currentAuto !== z2TimeoutAutoMinutes || currentManual !== z2TimeoutManualMinutes;
+  if (btnSaveZ2TimeoutA) btnSaveZ2TimeoutA.hidden = !changed;
+  if (btnSaveZ2TimeoutM) btnSaveZ2TimeoutM.hidden = !changed;
+}
+
+async function initZapret2TierTimeout() {
+  try {
+    const { automaticMinutes, manualMinutes } = await window.splitcord.dpi.getZapret2TierTimeout();
+    z2TimeoutAutoMinutes = automaticMinutes ?? 5;
+    z2TimeoutManualMinutes = manualMinutes ?? 10;
+    applyZ2TimeoutSliderValues();
+  } catch (err) {
+    window.splitcord.log('get-zapret2-tier-timeout-error', { error: err.message });
+  }
+
+  // "auto" slider'lardan biri hareket ettirildiğinde diğer bölümdeki kopyasını (ve tersi
+  // "manual" slider çifti) senkron tutuyoruz.
+  const syncPairs = [
+    [z2TimeoutSliders.autoA, z2TimeoutSliders.autoM, z2TimeoutValueEls.autoA, z2TimeoutValueEls.autoM],
+    [z2TimeoutSliders.manualA, z2TimeoutSliders.manualM, z2TimeoutValueEls.manualA, z2TimeoutValueEls.manualM],
+  ];
+  for (const [sliderX, sliderY, valueElX, valueElY] of syncPairs) {
+    if (!sliderX || !sliderY) continue;
+    const onInput = (source) => {
+      const value = source.value;
+      sliderX.value = value;
+      sliderY.value = value;
+      if (valueElX) valueElX.textContent = `${value} dk`;
+      if (valueElY) valueElY.textContent = `${value} dk`;
+      updateZ2TimeoutSaveButtonsVisibility();
+    };
+    sliderX.addEventListener('input', () => onInput(sliderX));
+    sliderY.addEventListener('input', () => onInput(sliderY));
+  }
+
+  const handleSave = async () => {
+    if (z2TimeoutChangeInFlight) return;
+    const newAuto = Number(z2TimeoutSliders.autoA?.value ?? z2TimeoutAutoMinutes);
+    const newManual = Number(z2TimeoutSliders.manualA?.value ?? z2TimeoutManualMinutes);
+    const choice = await window.showConfirmModal({
+      title: 'Zapret2 blockcheck zamanaşımını değiştir',
+      message: `Otomatik mod ${newAuto} dk, Manuel mod ${newManual} dk (DNS protokolü BAŞINA) olarak kaydedilsin mi?`,
+      detail: 'Zapret2 şu an aktif bir blockcheck2 taraması yapıyorsa bu tarama durdurulup DNS protokolü sıralamasının başından (DoH) itibaren yeni süreyle sıfırdan yeniden başlatılır. Zaten çalışan/doğrulanmış bir ayarınız varsa dokunulmaz, yeni süre yalnızca bir sonraki taramada geçerli olur.',
+    });
+    if (choice !== 0) {
+      // Kullanıcı "Hayır" dedi -- slider'ları görsel olarak eski konumuna döndürüyoruz,
+      // sürmekte olan bir taramaya (varsa) HİÇ dokunmuyoruz.
+      applyZ2TimeoutSliderValues();
+      updateZ2TimeoutSaveButtonsVisibility();
+      window.splitcord.log('zapret2-tier-timeout-change-cancelled', { newAuto, newManual });
+      return;
+    }
+
+    z2TimeoutChangeInFlight = true;
+    if (btnSaveZ2TimeoutA) btnSaveZ2TimeoutA.disabled = true;
+    if (btnSaveZ2TimeoutM) btnSaveZ2TimeoutM.disabled = true;
+    try {
+      await window.splitcord.dpi.setZapret2TierTimeout(newAuto, newManual);
+      z2TimeoutAutoMinutes = newAuto;
+      z2TimeoutManualMinutes = newManual;
+      applyZ2TimeoutSliderValues();
+      updateZ2TimeoutSaveButtonsVisibility();
+      window.splitcord.log('zapret2-tier-timeout-changed', { newAuto, newManual });
+
+      // Kullanıcı talebi: kayıtlı VE ÇALIŞAN (doğrulanmış) bir ayar varsa blockcheck2'yi
+      // yeniden başlatma -- yeni süre yalnızca BİR SONRAKİ gerçek taramada geçerli olsun.
+      // Yalnızca Zapret2 şu an GERÇEKTEN aktif bir blockcheck2 taraması yapıyorsa (henüz
+      // doğrulanmış/çalışan bir ayarı yoksa) sıfırdan yeniden başlatıyoruz.
+      let isZapret2StableAndVerified = false;
+      try {
+        const freshStatus = await window.splitcord.dpi.getStatus();
+        const z2 = freshStatus?.engines?.find((e) => e.id === 'zapret2');
+        isZapret2StableAndVerified = !!(z2?.verified && z2?.running);
+      } catch (statusErr) {
+        window.splitcord.log('zapret2-tier-timeout-status-check-error', { error: statusErr.message });
+      }
+
+      if (!isZapret2StableAndVerified) {
+        await activateEngine('zapret2');
+      } else {
+        window.splitcord.log('zapret2-tier-timeout-restart-skipped-stable', {});
+        await refreshStatus();
+      }
+    } catch (err) {
+      window.splitcord.log('zapret2-tier-timeout-change-error', { error: err.message });
+    } finally {
+      z2TimeoutChangeInFlight = false;
+      if (btnSaveZ2TimeoutA) btnSaveZ2TimeoutA.disabled = false;
+      if (btnSaveZ2TimeoutM) btnSaveZ2TimeoutM.disabled = false;
+    }
+  };
+
+  btnSaveZ2TimeoutA?.addEventListener('click', handleSave);
+  btnSaveZ2TimeoutM?.addEventListener('click', handleSave);
 }
 
 // Tarama sürerken (switching=true) sunucu activeEngineId'yi tarama bitene kadar hâlâ
@@ -592,7 +804,7 @@ const linkOpenerNewWindowToggle = document.getElementById('toggle-link-opener-ne
 const performanceModeToggle = document.getElementById('toggle-performance-mode');
 const notificationBadgeToggle = document.getElementById('toggle-notification-badge');
 const disableFalseVoiceWarningToggle = document.getElementById('toggle-disable-false-voice-warning');
-const dohTextarea = document.getElementById('doh-providers');
+const dnsProvidersListEl = document.getElementById('dns-providers-list');
 const unsavedBar = document.getElementById('unsaved-bar');
 const btnSaveChanges = document.getElementById('btn-save-changes');
 const btnDiscardChanges = document.getElementById('btn-discard-changes');
@@ -1107,29 +1319,83 @@ async function initShortcutsPanel() {
 
 initShortcutsPanel();
 
-async function initDohProviders() {
-  try {
-    const providers = await window.splitcord.dpi.getDohProviders();
-    dohTextarea.value = (providers ?? []).join('\n');
-  } catch (err) {
-    dohTextarea.value = '';
-    console.error(err);
-    window.splitcord.log('get-doh-providers-error', { error: err.message });
-  }
+const DNS_PROTOCOL_LABELS = {
+  doh: 'DNS-over-HTTPS',
+  dot: 'DNS-over-TLS',
+  doq: 'DNS-over-QUIC',
+  dnscrypt: 'DNSCrypt',
+};
+
+const DNS_PROTOCOL_PLACEHOLDERS = {
+  doh: 'https://dns.google/dns-query',
+  dot: '1.1.1.1:853',
+  doq: 'dns.adguard-dns.com:853',
+  dnscrypt: 'sdns://...',
+};
+
+// Sunucudan gelen/kaydedilecek çalışma kopyası -- her satır { protocol, address }.
+let dnsProviderRows = [];
+
+function renderDnsProviderRows() {
+  dnsProvidersListEl.innerHTML = '';
+  dnsProviderRows.forEach((row, index) => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'sc-dns-provider-row';
+    rowEl.innerHTML = `
+      <select class="sc-dns-provider-protocol">
+        ${Object.entries(DNS_PROTOCOL_LABELS)
+          .map(([value, label]) => `<option value="${value}"${row.protocol === value ? ' selected' : ''}>${escapeHtml(label)}</option>`)
+          .join('')}
+      </select>
+      <input type="text" class="sc-dns-provider-address" value="${escapeHtml(row.address ?? '')}" placeholder="${escapeHtml(DNS_PROTOCOL_PLACEHOLDERS[row.protocol] ?? '')}" />
+      <button type="button" class="sc-dns-provider-remove" title="Kaldır">✕</button>
+    `;
+
+    rowEl.querySelector('.sc-dns-provider-protocol').addEventListener('change', (e) => {
+      dnsProviderRows[index].protocol = e.target.value;
+      renderDnsProviderRows();
+    });
+    rowEl.querySelector('.sc-dns-provider-address').addEventListener('input', (e) => {
+      dnsProviderRows[index].address = e.target.value;
+    });
+    rowEl.querySelector('.sc-dns-provider-remove').addEventListener('click', () => {
+      dnsProviderRows.splice(index, 1);
+      renderDnsProviderRows();
+    });
+
+    dnsProvidersListEl.appendChild(rowEl);
+  });
 }
 
-document.getElementById('btn-save-doh').addEventListener('click', async () => {
-  const providers = dohTextarea.value
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  window.splitcord.log('save-doh-click', { providers });
+async function initDnsProviders() {
   try {
-    const saved = await window.splitcord.dpi.setDohProviders(providers);
-    dohTextarea.value = (saved ?? []).join('\n');
+    const providers = await window.splitcord.dpi.getDnsProviders();
+    dnsProviderRows = (providers ?? []).map((p) => ({ protocol: p.protocol, address: p.address }));
+  } catch (err) {
+    dnsProviderRows = [];
+    console.error(err);
+    window.splitcord.log('get-dns-providers-error', { error: err.message });
+  }
+  renderDnsProviderRows();
+}
+
+document.getElementById('btn-add-dns-provider').addEventListener('click', () => {
+  dnsProviderRows.push({ protocol: 'doh', address: '' });
+  renderDnsProviderRows();
+});
+
+document.getElementById('btn-save-dns-providers').addEventListener('click', async () => {
+  const providers = dnsProviderRows
+    .map((row) => ({ protocol: row.protocol, address: (row.address ?? '').trim() }))
+    .filter((row) => row.address.length > 0);
+  window.splitcord.log('save-dns-providers-click', { providers });
+  try {
+    const saved = await window.splitcord.dpi.setDnsProviders(providers);
+    dnsProviderRows = (saved ?? []).map((p) => ({ protocol: p.protocol, address: p.address }));
+    renderDnsProviderRows();
   } catch (err) {
     console.error(err);
-    window.splitcord.log('save-doh-error', { providers, error: err.message });
+    window.splitcord.log('save-dns-providers-error', { providers, error: err.message });
     showTemporaryError(err.message);
   }
 });
@@ -1217,7 +1483,7 @@ loadIgnoredControlIssues();
 // İzin eksikliği yüzünden Discord'a hiç erişilemiyor olabilir (çalışan/doğrulanmış bir
 // ayar yok) — bu durumda izin verildikten sonra kullanıcının ayrıca "Tekrar Arama
 // Başlat"a basmasına gerek kalmadan arama otomatik en baştan başlasın: Otomatik moddaysa
-// otomatik giriş noktasından (Zapret) sırayla, Manuel moddaysa yalnızca o an seçili olan
+// otomatik giriş noktasından (Zapret2) sırayla, Manuel moddaysa yalnızca o an seçili olan
 // hizmet içinde (bkz. btnRestartSearch/btnRestartSearchManual — aynı activateEngine yolu).
 async function restartSearchAfterFirewallGrantIfNeeded() {
   await refreshStatus();
@@ -1226,7 +1492,7 @@ async function restartSearchAfterFirewallGrantIfNeeded() {
     const active = currentStatus.engines.find((e) => e.id === getDisplayActiveEngineId(currentStatus));
     if (!active?.running) {
       window.splitcord.log('firewall-grant-restart-search', { mode: 'automatic' });
-      await activateEngine('zapret');
+      await activateEngine('zapret2');
     }
   } else if (dpiMode === 'manual' && selectedEngineId) {
     const active = currentStatus.engines.find((e) => e.id === selectedEngineId);
@@ -1595,6 +1861,19 @@ btnInstallUpdate?.addEventListener('click', async () => {
   btnInstallUpdate.disabled = false;
 });
 
+const btnOpenDiagnosticLogLocation = document.getElementById('btn-open-diagnostic-log-location');
+btnOpenDiagnosticLogLocation?.addEventListener('click', async () => {
+  window.splitcord.log('open-diagnostic-log-location-click', {});
+  btnOpenDiagnosticLogLocation.disabled = true;
+  try {
+    await window.splitcord.app.openDiagnosticLogLocation();
+  } catch (err) {
+    aboutUpdateStatus.textContent = `Günlük dosyası konumu açılamadı: ${err.message}`;
+    window.splitcord.log('open-diagnostic-log-location-click-error', { error: err.message });
+  }
+  btnOpenDiagnosticLogLocation.disabled = false;
+});
+
 const btnResetAllSettings = document.getElementById('btn-reset-all-settings');
 btnResetAllSettings?.addEventListener('click', async () => {
   const choice = await window.showConfirmModal({
@@ -1615,6 +1894,32 @@ btnResetAllSettings?.addEventListener('click', async () => {
     window.splitcord.log('reset-all-settings-error', { error: err.message });
     btnResetAllSettings.disabled = false;
     btnResetAllSettings.textContent = 'Tüm Ayarları Sıfırla';
+  }
+});
+
+const btnUninstallApp = document.getElementById('btn-uninstall-app');
+btnUninstallApp?.addEventListener('click', async () => {
+  const choice = await window.showConfirmModal({
+    title: 'SplitCord-Turkey kaldırılsın mı?',
+    message: 'Program, DPI aşım servisi ve ilgili tüm arka plan bileşenleri (WinDivert sürücü kaydı dahil) sistemden tamamen kaldırılacak.',
+    detail: 'Bu işlem geri alınamaz. Onayladığınızda program kapanacak ve resmi kaldırma sihirbazı açılacak — bir yönetici izni penceresi çıkabilir.',
+  });
+  if (choice !== 0) return;
+
+  btnUninstallApp.disabled = true;
+  btnUninstallApp.textContent = 'Kaldırılıyor…';
+  window.splitcord.log('uninstall-app-click', {});
+  try {
+    await window.splitcord.app.uninstallApp();
+  } catch (err) {
+    // Uygulama bu noktada zaten kapanıyor olmalı; yine de hata sızarsa (ör. kaldırıcı
+    // bulunamadı — kurulmamış/dev ortamda) butonu kullanılabilir hale geri getiriyoruz.
+    window.splitcord.log('uninstall-app-error', { error: err.message });
+    btnUninstallApp.disabled = false;
+    btnUninstallApp.textContent = `Kaldırılamadı: ${err.message}`;
+    setTimeout(() => {
+      btnUninstallApp.textContent = "SplitCord-Turkey'i Kaldır";
+    }, 5000);
   }
 });
 
@@ -1670,7 +1975,9 @@ Promise.all([
   initDisableFalseVoiceWarningToggle(),
 ]).then(() => updateUnsavedBar());
 initThemePicker();
-initDohProviders();
+initDnsProviders();
 initByedpiExtendedCandidates();
+initManualDnsProtocol();
+initZapret2TierTimeout();
 initDpiMode().then(() => refreshStatus());
 setInterval(refreshStatus, 5000);
