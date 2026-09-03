@@ -97,6 +97,10 @@ public sealed class ServiceSettings
         // bkz. DnsDefaultProviderPools.Doh'taki aynı not -- profilsiz/hesapsız, canlı
         // doğrulanmış bir yedek DoH sunucusu.
         new() { Protocol = DnsProtocol.Doh, Address = "https://dns.nextdns.io/" },
+        // bkz. DnsProtocolTiers.ApplyTier'daki aynı not -- yukarıdakiyle AYNI hedefe
+        // (dns.nextdns.io) bundled nextdns.exe üzerinden, farklı bir istemciyle ulaşan
+        // deneysel bir ek yol. Address kullanılmıyor (bkz. NextDnsUpstream).
+        new() { Protocol = DnsProtocol.NextDns, Address = "" },
     };
 
     /// <summary>true olduğunda DnsProtocolScanner'ın (bkz. Dns/DnsProtocolScanner.cs) bu ağda
@@ -190,28 +194,42 @@ public sealed class SettingsStore
         "https://unfiltered.adguard-dns.com/dns-query",
     };
 
-    // Kullanıcı talebiyle DnsProviders varsayılan SIRASI değişti (Quad9, Google, Cloudflare,
-    // OpenDNS, AdGuard) -- typed DnsProviders şemasındaki HEMEN ÖNCEKİ sıra, bkz. Load()'daki
-    // aynı desenle (OldDefaultDohProviders) çalışan yükseltme kontrolü.
-    private static readonly List<string> OldDefaultDnsProviderOrder = new()
+    // DnsProviders varsayılanının GEÇMİŞTEKİ her hâli -- UpgradeDefaultDnsProviderOrder,
+    // kullanıcının listesi bunlardan HERHANGİ biriyle birebir eşleşiyorsa (yani hiç elle
+    // özelleştirilmemişse) doğrudan GÜNCEL varsayılana yükseltiyor. Yeni bir varsayılan
+    // değişikliği yapıldığında buraya BİR ÖNCEKİ hâl (o değişiklikten hemen önceki) eklenmeli,
+    // eskiler silinmemeli -- aksi halde birden fazla sürüm atlayarak güncelleyen kullanıcılar
+    // yükseltmeyi kaçırır.
+    private static readonly List<List<(DnsProtocol Protocol, string Address)>> OldDefaultDnsProviderSnapshots = new()
     {
-        "https://cloudflare-dns.com/dns-query",
-        "https://dns.google/dns-query",
-        "https://dns.quad9.net/dns-query",
-        "https://doh.opendns.com/dns-query",
-        "https://unfiltered.adguard-dns.com/dns-query",
-    };
-
-    // Yukarıdaki sıra değişikliğinden HEMEN SONRA, dns.nextdns.io eklenmeden ÖNCEKİ 5'li liste
-    // (Quad9 önce) -- bu iki eski liste, UpgradeDefaultDnsProviderOrder'da AYRI AYRI kontrol
-    // edilip ikisi de doğrudan GÜNCEL (6'lı) varsayılana yükseltiliyor.
-    private static readonly List<string> PreNextDnsDohOrder = new()
-    {
-        "https://dns.quad9.net/dns-query",
-        "https://dns.google/dns-query",
-        "https://cloudflare-dns.com/dns-query",
-        "https://doh.opendns.com/dns-query",
-        "https://unfiltered.adguard-dns.com/dns-query",
+        // Cloudflare önce, typed şemaya geçildiğinde (dns.nextdns.io'dan ÖNCE).
+        new()
+        {
+            (DnsProtocol.Doh, "https://cloudflare-dns.com/dns-query"),
+            (DnsProtocol.Doh, "https://dns.google/dns-query"),
+            (DnsProtocol.Doh, "https://dns.quad9.net/dns-query"),
+            (DnsProtocol.Doh, "https://doh.opendns.com/dns-query"),
+            (DnsProtocol.Doh, "https://unfiltered.adguard-dns.com/dns-query"),
+        },
+        // Quad9 önce, dns.nextdns.io eklenmeden ÖNCE.
+        new()
+        {
+            (DnsProtocol.Doh, "https://dns.quad9.net/dns-query"),
+            (DnsProtocol.Doh, "https://dns.google/dns-query"),
+            (DnsProtocol.Doh, "https://cloudflare-dns.com/dns-query"),
+            (DnsProtocol.Doh, "https://doh.opendns.com/dns-query"),
+            (DnsProtocol.Doh, "https://unfiltered.adguard-dns.com/dns-query"),
+        },
+        // dns.nextdns.io eklendi, ama nextdns.exe (DnsProtocol.NextDns) girişi eklenmeden ÖNCE.
+        new()
+        {
+            (DnsProtocol.Doh, "https://dns.quad9.net/dns-query"),
+            (DnsProtocol.Doh, "https://dns.google/dns-query"),
+            (DnsProtocol.Doh, "https://cloudflare-dns.com/dns-query"),
+            (DnsProtocol.Doh, "https://doh.opendns.com/dns-query"),
+            (DnsProtocol.Doh, "https://unfiltered.adguard-dns.com/dns-query"),
+            (DnsProtocol.Doh, "https://dns.nextdns.io/"),
+        },
     };
 
     private static ServiceSettings Load()
@@ -277,14 +295,10 @@ public sealed class SettingsStore
     /// DOKUNULMAZ.</summary>
     private static void UpgradeDefaultDnsProviderOrder(ServiceSettings loaded)
     {
-        var addresses = loaded.DnsProviders
-            .Where(p => p.Protocol == DnsProtocol.Doh)
-            .Select(p => p.Address)
-            .ToList();
+        var current = loaded.DnsProviders.Select(p => (p.Protocol, p.Address)).ToList();
 
-        if (loaded.DnsProviders.Count != addresses.Count) return; // DoH dışı bir giriş var, elle özelleştirilmiş
-
-        if (addresses.SequenceEqual(OldDefaultDnsProviderOrder) || addresses.SequenceEqual(PreNextDnsDohOrder))
+        var isKnownOldDefault = OldDefaultDnsProviderSnapshots.Any(snapshot => current.SequenceEqual(snapshot));
+        if (isKnownOldDefault)
         {
             loaded.DnsProviders = new ServiceSettings().DnsProviders;
         }

@@ -86,6 +86,30 @@ const TARGETS = [
       return count;
     },
   },
+  {
+    // nextdns/nextdns (MIT lisanslı) -- Vodafone TR'de bizim 6 DoH sağlayıcımızın hiçbiri
+    // çalışmazken, resmi NextDNS uygulamasının (farklı bir istemci/ağ yığını, AYNI hedefe:
+    // dns.nextdns.io) çalıştığı gözlemlendi. Profilsiz/hesapsız modda ("nextdns run -listen",
+    // hiç -profile verilmeden) çalıştırılıyor -- bkz. Dns/NextDnsProxyProcess.cs. Kaynak kodu
+    // (run.go) incelenip canlı test edildi: profil olmadan sabit olarak
+    // "https://dns.nextdns.io/"e gidiyor, hesap/kayıt gerektirmiyor.
+    tool: 'nextdns',
+    url: 'https://github.com/nextdns/nextdns/releases/download/v1.47.3/nextdns_1.47.3_windows_amd64.zip',
+    extract(zip, destDir) {
+      const wanted = new Set(['nextdns.exe']);
+      let count = 0;
+      for (const entry of zip.getEntries()) {
+        const base = path.basename(entry.entryName);
+        if (!wanted.has(base.toLowerCase())) continue;
+        fs.writeFileSync(path.join(destDir, base), entry.getData());
+        count += 1;
+      }
+      if (count !== wanted.size) {
+        throw new Error(`nextdns: beklenen ${wanted.size} dosyadan ${count} tanesi bulundu (zip yapısı değişmiş olabilir)`);
+      }
+      return count;
+    },
+  },
 ];
 
 async function download(url) {

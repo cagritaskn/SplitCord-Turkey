@@ -31,9 +31,20 @@ public static class DnsProtocolTiers
     /// SelfTestResolver üzerinden yaptığı doğrulama dahil), ayrı bir mekanizma gerekmiyor.</summary>
     public static void ApplyTier(SettingsStore settings, DnsProtocol protocol)
     {
-        settings.Current.DnsProviders = DnsDefaultProviderPools.Get(protocol)
+        var providers = DnsDefaultProviderPools.Get(protocol)
             .Select(address => new DnsProvider { Protocol = protocol, Address = address })
             .ToList();
+
+        // DoH tier'ine kullanıcı talebiyle bir istisna: bundled nextdns.exe'yi (bkz.
+        // NextDnsProxyProcess) AYNI DoH hedefine (dns.nextdns.io) FARKLI bir istemciyle
+        // (Go tabanlı, bizim .NET HttpClient'ımızdan farklı TLS yığını) ulaşan deneysel bir
+        // ek yol olarak listenin sonuna ekliyoruz -- Doh girdisinin YERİNE değil, YANINA.
+        if (protocol == DnsProtocol.Doh)
+        {
+            providers.Add(new DnsProvider { Protocol = DnsProtocol.NextDns, Address = "" });
+        }
+
+        settings.Current.DnsProviders = providers;
         settings.Current.VerifiedDnsProtocol = protocol;
         settings.Save();
     }

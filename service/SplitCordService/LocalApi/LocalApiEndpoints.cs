@@ -136,8 +136,16 @@ public static class LocalApiEndpoints
         // DoQ/DNSCrypt sağlayıcılarını sırayla deneyeceği. Değişiklik anında etkili olur,
         // servis yeniden başlatmaya gerek yoktur (forwarder her sorguda güncel listeyi okur
         // -- DNSCrypt hariç, bkz. Faz 3'teki DnsCryptProxyProcess.ReconfigureAsync notu).
+        //
+        // DnsProtocol.NextDns girişi (bkz. DnsProtocolTiers.ApplyTier'daki not) BİLEREK hem
+        // GET'ten gizleniyor hem de POST'ta kullanıcının gönderdiği listeden bağımsız olarak
+        // korunuyor -- bu, kullanıcının Ayarlar'dan düzenlediği/silebildiği bir giriş değil,
+        // "Address" alanı boş olduğu için (aşağıdaki genel "boş adres = atla" kuralına takılıp)
+        // kullanıcı listesini kaydetmesi sırasında sessizce kaybolurdu.
         app.MapGet("/dns-providers", (SettingsStore settings) =>
-            Results.Ok(settings.Current.DnsProviders.Select(p => new DnsProviderPayload(p.Protocol.ToString().ToLowerInvariant(), p.Address))));
+            Results.Ok(settings.Current.DnsProviders
+                .Where(p => p.Protocol != DnsProtocol.NextDns)
+                .Select(p => new DnsProviderPayload(p.Protocol.ToString().ToLowerInvariant(), p.Address))));
 
         app.MapPost("/dns-providers", (SetDnsProvidersPayload payload, SettingsStore settings) =>
         {
@@ -158,6 +166,7 @@ public static class LocalApiEndpoints
                         => $"Geçersiz DoH adresi (https:// ile başlamalı): {address}",
                     DnsProtocol.DnsCrypt when !address.StartsWith("sdns://", StringComparison.OrdinalIgnoreCase)
                         => $"Geçersiz DNSCrypt adresi (sdns:// ile başlamalı): {address}",
+                    DnsProtocol.NextDns => "Bu protokol elle eklenemez.",
                     _ => null,
                 };
                 if (validationError is not null)
@@ -168,9 +177,13 @@ public static class LocalApiEndpoints
                 providers.Add(new DnsProvider { Protocol = protocol, Address = address });
             }
 
+            providers.AddRange(settings.Current.DnsProviders.Where(p => p.Protocol == DnsProtocol.NextDns));
+
             settings.Current.DnsProviders = providers;
             settings.Save();
-            return Results.Ok(settings.Current.DnsProviders.Select(p => new DnsProviderPayload(p.Protocol.ToString().ToLowerInvariant(), p.Address)));
+            return Results.Ok(settings.Current.DnsProviders
+                .Where(p => p.Protocol != DnsProtocol.NextDns)
+                .Select(p => new DnsProviderPayload(p.Protocol.ToString().ToLowerInvariant(), p.Address)));
         });
 
         // Manuel > Gelişmiş'ten sabitlenen tek DNS protokolü (bkz. SettingsStore.

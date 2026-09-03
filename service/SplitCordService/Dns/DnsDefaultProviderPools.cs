@@ -71,6 +71,10 @@ public static class DnsDefaultProviderPools
         DnsProtocol.Dot => Dot,
         DnsProtocol.Doq => Doq,
         DnsProtocol.DnsCrypt => DnsCrypt,
+        // NextDns'in kendi havuzu yok -- ApplyTier'da DoH tier'ine EK bir girdi olarak
+        // özel durum ile ekleniyor (bkz. DnsProtocolTiers.ApplyTier), "Address" alanı da
+        // kullanılmıyor (NextDnsUpstream sabit olarak profilsiz nextdns.exe'ye gidiyor).
+        DnsProtocol.NextDns => Array.Empty<string>(),
         // "No DNS" tier'inin havuzu yok -- bkz. DnsProtocolTiers.ApplyTier'daki özel durum.
         DnsProtocol.None => Array.Empty<string>(),
         _ => throw new ArgumentOutOfRangeException(nameof(protocol)),

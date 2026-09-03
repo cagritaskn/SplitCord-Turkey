@@ -41,6 +41,7 @@ public sealed class EncryptedDnsForwarder : IHostedService, IDisposable
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };
     private readonly DoqProxyProcess _doqProxyProcess;
     private readonly DnsCryptProxyProcess _dnsCryptProxyProcess;
+    private readonly NextDnsProxyProcess _nextDnsProxyProcess;
     private readonly IReadOnlyDictionary<DnsProtocol, IDnsUpstream> _upstreams;
     private UdpClient? _udp;
     private CancellationTokenSource? _cts;
@@ -50,18 +51,21 @@ public sealed class EncryptedDnsForwarder : IHostedService, IDisposable
         SettingsStore settings,
         ILogger<EncryptedDnsForwarder> logger,
         DoqProxyProcess doqProxyProcess,
-        DnsCryptProxyProcess dnsCryptProxyProcess)
+        DnsCryptProxyProcess dnsCryptProxyProcess,
+        NextDnsProxyProcess nextDnsProxyProcess)
     {
         _settings = settings;
         _logger = logger;
         _doqProxyProcess = doqProxyProcess;
         _dnsCryptProxyProcess = dnsCryptProxyProcess;
+        _nextDnsProxyProcess = nextDnsProxyProcess;
         _upstreams = new Dictionary<DnsProtocol, IDnsUpstream>
         {
             [DnsProtocol.Doh] = new DohUpstream(_http),
             [DnsProtocol.Dot] = new DotUpstream(),
             [DnsProtocol.Doq] = new DoqUpstream(_doqProxyProcess),
             [DnsProtocol.DnsCrypt] = new DnsCryptUpstream(_dnsCryptProxyProcess),
+            [DnsProtocol.NextDns] = new NextDnsUpstream(_nextDnsProxyProcess),
         };
     }
 
@@ -157,6 +161,7 @@ public sealed class EncryptedDnsForwarder : IHostedService, IDisposable
         _udp?.Close();
         _doqProxyProcess.Stop();
         _dnsCryptProxyProcess.Stop();
+        _nextDnsProxyProcess.Stop();
         _http.Dispose();
     }
 }
