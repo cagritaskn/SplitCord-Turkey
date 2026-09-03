@@ -13,6 +13,17 @@ public static class DnsDefaultProviderPools
         "https://cloudflare-dns.com/dns-query",
         "https://doh.opendns.com/dns-query",
         "https://unfiltered.adguard-dns.com/dns-query",
+        // Kullanıcı talebiyle eklendi: Vodafone TR'de yukarıdaki 5 sağlayıcının TAMAMI
+        // başarısız olurken NextDNS'in kendi altyapısı (kullanıcı NextDNS'i sistem geneli
+        // çalıştırdığında) çalışıyordu. Kaynak kodu incelendi (github.com/nextdns/nextdns,
+        // run.go) ve canlı olarak doğrulandı: profil ID GEREKMİYOR -- profilsiz istek
+        // "https://dns.nextdns.io/"e gidiyor ve düz, hesapsız/ücretsiz bir RFC 8484 DoH
+        // sunucusu gibi yanıt veriyor (curl ile ham DoH sorgusu gönderilip discord.com için
+        // gerçek A kayıtları alındı, HTTP 200). Ek bir binary/süreç GEREKMİYOR -- bizim
+        // DohUpstream'imiz zaten aynı protokolü konuşuyor, yalnızca listeye bir adres daha.
+        // Listenin SONUNA eklendi: mevcut 5 sağlayıcı zaten kanıtlanmış/varsayılan, bu yalnızca
+        // hepsi engellendiğinde devreye giren EK bir yedek.
+        "https://dns.nextdns.io/",
     };
 
     // NOT: cloudflare-dns.com (hostname) canlı testte DoT'ta zaman aşımına uğradı, ama aynı
