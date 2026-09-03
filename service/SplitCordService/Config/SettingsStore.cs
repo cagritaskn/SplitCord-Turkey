@@ -89,9 +89,9 @@ public sealed class ServiceSettings
     /// tarafından elle eklenebilir.</summary>
     public List<DnsProvider> DnsProviders { get; set; } = new()
     {
-        new() { Protocol = DnsProtocol.Doh, Address = "https://cloudflare-dns.com/dns-query" },
-        new() { Protocol = DnsProtocol.Doh, Address = "https://dns.google/dns-query" },
         new() { Protocol = DnsProtocol.Doh, Address = "https://dns.quad9.net/dns-query" },
+        new() { Protocol = DnsProtocol.Doh, Address = "https://dns.google/dns-query" },
+        new() { Protocol = DnsProtocol.Doh, Address = "https://cloudflare-dns.com/dns-query" },
         new() { Protocol = DnsProtocol.Doh, Address = "https://doh.opendns.com/dns-query" },
         new() { Protocol = DnsProtocol.Doh, Address = "https://unfiltered.adguard-dns.com/dns-query" },
     };
@@ -187,6 +187,18 @@ public sealed class SettingsStore
         "https://unfiltered.adguard-dns.com/dns-query",
     };
 
+    // Kullanıcı talebiyle DnsProviders varsayılan SIRASI değişti (Quad9, Google, Cloudflare,
+    // OpenDNS, AdGuard) -- typed DnsProviders şemasındaki HEMEN ÖNCEKİ sıra, bkz. Load()'daki
+    // aynı desenle (OldDefaultDohProviders) çalışan yükseltme kontrolü.
+    private static readonly List<string> OldDefaultDnsProviderOrder = new()
+    {
+        "https://cloudflare-dns.com/dns-query",
+        "https://dns.google/dns-query",
+        "https://dns.quad9.net/dns-query",
+        "https://doh.opendns.com/dns-query",
+        "https://unfiltered.adguard-dns.com/dns-query",
+    };
+
     private static ServiceSettings Load()
     {
         try
@@ -198,6 +210,7 @@ public sealed class SettingsStore
                 if (loaded is not null)
                 {
                     MigrateLegacyDohProviders(loaded, json);
+                    UpgradeDefaultDnsProviderOrder(loaded);
                     return loaded;
                 }
             }
@@ -240,6 +253,22 @@ public sealed class SettingsStore
             // (eski şema zaten yalnızca https:// URL'lerini kabul ediyordu, bkz.
             // LocalApiEndpoints'teki eski doğrulama).
             loaded.DnsProviders = legacyUrls.Select(u => new DnsProvider { Protocol = DnsProtocol.Doh, Address = u }).ToList();
+        }
+    }
+
+    /// <summary>MigrateLegacyDohProviders'daki AYNI desen, typed DnsProviders şeması için:
+    /// kullanıcı listeyi hiç özelleştirmemişse (hâlâ HEMEN ÖNCEKİ varsayılan sırada duruyorsa)
+    /// yeni varsayılan sıraya yükseltir. Kullanıcı sırayı/listeyi değiştirmişse DOKUNULMAZ.</summary>
+    private static void UpgradeDefaultDnsProviderOrder(ServiceSettings loaded)
+    {
+        var addresses = loaded.DnsProviders
+            .Where(p => p.Protocol == DnsProtocol.Doh)
+            .Select(p => p.Address)
+            .ToList();
+
+        if (loaded.DnsProviders.Count == addresses.Count && addresses.SequenceEqual(OldDefaultDnsProviderOrder))
+        {
+            loaded.DnsProviders = new ServiceSettings().DnsProviders;
         }
     }
 
