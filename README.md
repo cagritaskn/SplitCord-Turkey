@@ -126,6 +126,7 @@ SplitCord-Turkey, kaynak koddan da derlenerek çalıştırılabilir.
 
 ---
 ## Özel Teşekkürler
+- Yazılımın geliştirilmesine katkıda bulunan **[Techolay.net](https://techolay.net/sosyal/)** kurucusu **[Recep Baltaş](https://www.youtube.com/@Techolay/)**'a çok teşekkür ederim.
 
 ### Test Edenler:
 - [alperenkrpnr](https://github.com/alperenkrpnr) - Debugging
