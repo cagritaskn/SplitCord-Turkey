@@ -609,10 +609,15 @@ if (document.readyState === 'loading') {
     const container = anchor.closest('div')?.parentElement || anchor.parentElement;
     if (!container || container.querySelector('[data-splitcord-ban-args-btn]')) return;
 
+    const wrapper = document.createElement('div');
+    wrapper.setAttribute('data-splitcord-ban-args-wrapper', 'true');
+    wrapper.style.marginTop = '12px';
+    wrapper.style.textAlign = 'center';
+
     const warning = document.createElement('div');
     warning.setAttribute('data-splitcord-ban-args-warning', 'true');
-    warning.style.marginTop = '12px';
     warning.style.maxWidth = '360px';
+    warning.style.margin = '0 auto';
     warning.style.color = '#faa61a';
     warning.style.fontSize = '12px';
     warning.style.lineHeight = '1.4';
@@ -620,7 +625,7 @@ if (document.readyState === 'loading') {
       '⚠️ Lütfen biraz sabredin. SplitCord-Turkey\'in bağlantınızı hazırlaması biraz zaman ' +
       'alabilir. Eğer 5 dakikadan fazla süredir bekliyorsanız aşağıdaki butonla argüman ' +
       'setini yasaklamayı deneyebilirsiniz.';
-    container.appendChild(warning);
+    wrapper.appendChild(warning);
 
     const btn = document.createElement('button');
     btn.textContent = 'Kullanılan Argüman Setini Yasaklamayı Deneyin';
@@ -635,7 +640,9 @@ if (document.readyState === 'loading') {
     btn.style.fontSize = '13px';
     btn.style.fontFamily = 'inherit';
     btn.addEventListener('click', () => handleClick(btn));
-    container.appendChild(btn);
+    wrapper.appendChild(btn);
+
+    container.appendChild(wrapper);
   }
 
   function startObserving() {
