@@ -1828,6 +1828,19 @@ const btnInstallUpdate = document.getElementById('btn-install-update');
 const aboutUpdateStatus = document.getElementById('about-update-status');
 let lastUpdateInfo = null;
 let updateDownloaded = false;
+// bkz. titlebar.js'teki AYNI koruma ve oradaki not — openDownloadedUpdate() (shell.openPath)
+// kurucu penceresi görünene kadar bir-iki saniye geçebiliyor, bu sırada buton hemen tekrar
+// tıklanabilir hâle gelince kullanıcı sabırsızlanıp ikinci bir installer.exe (ve ikinci bir
+// UAC istemi) daha başlatabiliyordu — iki kurucu süreç aynı anda çakışınca kurulum
+// tamamlanmadan her şey kapanıyordu.
+let installerLaunchCooldownUntil = 0;
+const INSTALLER_LAUNCH_COOLDOWN_MS = 6000;
+
+async function openDownloadedUpdateGuarded() {
+  if (Date.now() < installerLaunchCooldownUntil) return;
+  installerLaunchCooldownUntil = Date.now() + INSTALLER_LAUNCH_COOLDOWN_MS;
+  await window.splitcord.app.openDownloadedUpdate();
+}
 
 window.splitcord.app
   .getVersion()
@@ -1869,7 +1882,7 @@ btnInstallUpdate?.addEventListener('click', async () => {
   if (updateDownloaded) {
     window.splitcord.log('open-update-click', { version: lastUpdateInfo.latestVersion });
     try {
-      await window.splitcord.app.openDownloadedUpdate();
+      await openDownloadedUpdateGuarded();
     } catch (err) {
       aboutUpdateStatus.textContent = `Güncelleme açılamadı: ${err.message}`;
       window.splitcord.log('open-update-error', { error: err.message });
@@ -1889,7 +1902,7 @@ btnInstallUpdate?.addEventListener('click', async () => {
     // sessizce yut — buton zaten "Güncellemeyi Kur" durumunda kalıyor, kullanıcı tıklayarak
     // tekrar deneyebilir.
     window.splitcord.log('update-auto-open', { version: lastUpdateInfo.latestVersion });
-    window.splitcord.app.openDownloadedUpdate().catch((err) => {
+    openDownloadedUpdateGuarded().catch((err) => {
       window.splitcord.log('update-auto-open-error', { error: err.message });
     });
   } catch (err) {
