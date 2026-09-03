@@ -6,6 +6,15 @@ public enum DnsProtocol
     Dot,
     Doq,
     DnsCrypt,
+    /// <summary>Aslında DoH (RFC 8484), ama bizim kendi DohUpstream/HttpClient'ımız yerine
+    /// bundled nextdns.exe'nin (bkz. NextDnsProxyProcess) KENDİ ağ yığınından geçiyor —
+    /// profilsiz/hesapsız, sabit olarak dns.nextdns.io'ya. Kullanıcı talebiyle eklendi:
+    /// Vodafone TR'de bizim 6 DoH adresimizin (dns.nextdns.io dahil) HİÇBİRİ çalışmadığında,
+    /// resmi NextDNS uygulamasının (farklı/Go tabanlı bir istemci) AYNI sunucuya başarıyla
+    /// bağlanabildiği gözlemlendi — bunun istemcinin TLS parmak izinden mi yoksa başka bir
+    /// nedenden mi kaynaklandığı kesin değil, bu yüzden deneysel bir ek katman olarak
+    /// (Doh girdisinin YANINDA, onun YERİNE değil) tutuluyor.</summary>
+    NextDns,
     /// <summary>DoH/DoT/DoQ/DNSCrypt'in dördü de başarısız olursa denenen son "tier" —
     /// EncryptedDnsForwarder'ı hiç zorlamadan (DnsProviders boş bırakılıp) motorun/sistemin
     /// kendi normal DNS çözümlemesine bırakılması (kullanıcı talebi: "No DNS" — bazı

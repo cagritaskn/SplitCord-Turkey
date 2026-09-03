@@ -24,6 +24,7 @@ builder.Logging.AddProvider(new DiagnosticFileLoggerProvider(diagnosticLogWriter
 
 builder.Services.AddSingleton<DoqProxyProcess>();
 builder.Services.AddSingleton<DnsCryptProxyProcess>();
+builder.Services.AddSingleton<NextDnsProxyProcess>();
 builder.Services.AddSingleton<EncryptedDnsForwarder>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<EncryptedDnsForwarder>());
 
