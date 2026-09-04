@@ -7,8 +7,14 @@ client/node_modules/
 client/dist/
 client/out/
 
-# Indirilen/derlenen DPI araclari (fetch-binaries.js / build-byedpi.sh ile yeniden uretilir)
+# Indirilen/derlenen DPI araclari (fetch-binaries.js / build-*.sh ile yeniden uretilir)
 resources/bin/
+
+# build-zapret.sh / build-zapret2.sh gecici kaynak indirme/derleme calisma dizini
+.build-cache/
+
+# node_modules (linux/package.json icin, varsa)
+node_modules/
 
 # ByeDPI kaynagindan derlenen ikili
 vendor/byedpi-src/ciadpi

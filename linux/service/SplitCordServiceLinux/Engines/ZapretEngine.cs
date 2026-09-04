@@ -239,7 +239,7 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
 
         await AddNfQueueRulesAsync(UdpCompanionNfQueueNum, includeTcp: false, includeUdp: true);
 
-        var exePath = BinaryLocator.Resolve("zapret", Path.Combine("bin", "nfqws"));
+        var exePath = BinaryLocator.Resolve("zapret", Path.Combine("nfq", "nfqws"));
         var binDir = Path.GetDirectoryName(exePath)!;
 
         var psi = new ProcessStartInfo
@@ -309,7 +309,7 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
     {
         await AddNfQueueRulesAsync(NfQueueNum, includeTcp: true, includeUdp: true);
 
-        var exePath = BinaryLocator.Resolve("zapret", Path.Combine("bin", "nfqws"));
+        var exePath = BinaryLocator.Resolve("zapret", Path.Combine("nfq", "nfqws"));
         var binDir = Path.GetDirectoryName(exePath)!;
 
         var psi = new ProcessStartInfo

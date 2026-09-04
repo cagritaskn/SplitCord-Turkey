@@ -1,0 +1,8 @@
+{
+  "name": "splitcord-linux-scripts",
+  "private": true,
+  "description": "linux/scripts/fetch-binaries.js icin npm script kisayolu -- Windows tarafindaki repo koku package.json'a hic dokunmadan (bkz. PORTING_PLAN.md kesin kural 1).",
+  "scripts": {
+    "fetch-binaries": "node scripts/fetch-binaries.js"
+  }
+}
