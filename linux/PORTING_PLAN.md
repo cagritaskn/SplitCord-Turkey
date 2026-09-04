@@ -45,7 +45,7 @@ oturum yarıda kesilse bile.
 | 3 | ByeDPI motoru | **bitti** (kod yazıldı + derlendi; `linux/scripts/build-byedpi.sh` ile gerçek Linux derlemesi ve canlı test DOĞRULANMADI) | 1 |
 | 4 | Zapret motoru (nfqws + NFQUEUE) | **bitti** (kod yazıldı + derlendi; nfqws binary fetch script'i henüz yok — bkz. §6; NFQUEUE/iptables mantığı canlı DOĞRULANMADI) | 1 |
 | 5 | Zapret2 motoru (nfqws2 + native bash) + `fetch-binaries.js`/build script'leri | **bitti** (kod + fetch/build script'leri yazıldı, derlendi; blockcheck2'nin native çıktı formatı hâlâ en büyük açık soru, bkz. R-6) | 1 |
-| 6 | systemd paketleme + install/uninstall script'leri | başlanmadı | 0 |
+| 6 | systemd paketleme + install/uninstall script'leri | **bitti** (kod yazıldı; gerçek kurulum/systemctl davranışı DOĞRULANMADI) | 1 |
 | 7 | Electron istemci portu | başlanmadı | 0 |
 | 8 | Paketleme & release hattı | başlanmadı | 0 |
 | 9 | (opsiyonel) İyileştirmeler | başlanmadı | 0 |
@@ -116,6 +116,13 @@ oturum yarıda kesilse bile.
   `NFQWS=`/`NFQWS2=` ortam değişkeni varsayılanlarından doğrulandı): `nfq/nfqws` (zapret),
   `nfq2/nfqws2` (zapret2, KÖKTE — "blockcheck2" alt klasörü YOK). Düzeltildi, `dotnet build`
   yeniden başarılı.
+- **D-15** (2026-09-04, Faz 6 — D-6'nın SONUÇLANMASI): systemd birimi **root olarak** çalışacak
+  şekilde yazıldı (`User=root`) — R-4.3'teki `require_root()` bulgusuna dayanıyor. Capability-scoped
+  alternatif TEORİK olarak hâlâ mümkün olabilir ama ek araştırma/canlı test gerektiriyor, şimdilik
+  en güvenli/sürprizsiz varsayım root. Kurulum yolu `/opt/splitcord`, veri dizini `/var/lib/splitcord`
+  (ayrı tutuluyor, bkz. D-3) — `install.sh`/`uninstall.sh` bu ayrımı kullanıcı verisini
+  kurulum/kaldırmadan bağımsız korumak için kullanıyor (`uninstall.sh --purge` olmadan veri
+  dizinine hiç dokunmuyor).
 
 ## 5. Risk kaydı
 
@@ -131,8 +138,7 @@ oturum yarıda kesilse bile.
 
 ## 6. Şu anki durum / nereden devam edilir
 
-**Aktif faz:** 5 tamamlandı (fetch-binaries.js dahil). Sırada **Faz 6** (systemd paketleme +
-install/uninstall script'leri) — hiçbir engel/bekleyen karar yok, doğrudan başlanabilir.
+**Aktif faz:** 6 da tamamlandı. Sırada **Faz 7** (Electron istemci portu) — en büyük fazlardan biri.
 
 **Bu oturumda tamamlanan (Faz 0, 2, 3, 4, 5 — TAMAMI):**
 - `linux/` klasör iskeleti + bu takip dosyası + `README.md` + `.gitignore` + `.gitattributes`
@@ -164,13 +170,31 @@ install/uninstall script'leri) — hiçbir engel/bekleyen karar yok, doğrudan b
   — bu, R-4.1 ve R-7'yi ÇÖZDÜ, R-4.2/R-4.3'ü büyük ölçüde netleştirdi ve D-14'te belgelenen bir
   YANLIŞ dizin-yapısı varsayımını (bu oturumun kendi hatası) düzeltti. Detaylar §4/§5'te.
 
-**Sıradaki somut adım (Faz 6):** `linux/packaging/systemd/splitcord-dpi.service` yaz — D-6'nın son
-haline göre (root olarak çalışması GÜÇLÜ ihtimal, bkz. R-4.3) `User=root` (ya da net bir gerekçeyle
-capability-scoped bir kullanıcı, ama şu anki kanıt root'u destekliyor), `Restart=on-failure`,
-`ExecStart` self-contained publish çıktısına (`dotnet publish -r linux-x64 --self-contained`)
-işaret etmeli. Ardından `linux/packaging/install.sh`/`uninstall.sh` (Windows'un `install-service.ps1`/
-`uninstall-service.ps1`'inin ruhu: kurulum öncesi/sonrası kullanıcı verisi koruma dersi — bkz. Faz 8
-notundaki Windows installer.nsh veri-kaybı hatırlatması).
+**Bu oturumda tamamlanan (Faz 6):**
+- `linux/packaging/systemd/splitcord-dpi.service` — `User=root` (bkz. D-15/R-4.3),
+  `Restart=on-failure`, `ExecStart=/opt/splitcord/SplitCordServiceLinux`, `Type=notify`
+  (DOĞRULANMADI: `Microsoft.Extensions.Hosting.Systemd`'nin sd_notify entegrasyonu canlı
+  test edilmedi — sorun çıkarsa `Type=simple`'a düşülebilir).
+- `linux/packaging/install.sh` — yayınlanmış çıktıyı `/opt/splitcord`'a kopyalar, birimi kurup
+  `systemctl enable --now` yapar; `/var/lib/splitcord/` (kullanıcı verisi) AYRI bir dizin olduğu
+  için kurulum/güncelleme sırasında hiç dokunulmuyor (Windows'taki installer.nsh veri-kaybı
+  dersinin doğrudan karşılığı, bkz. D-15).
+- `linux/packaging/uninstall.sh` — servisi durdurur, DPI alt süreçlerini (nfqws/nfqws2/ciadpi/
+  dnsproxy/nextdns) zorla temizler, birimi ve `/opt/splitcord`'u kaldırır — VARSAYILAN OLARAK
+  `/var/lib/splitcord/`'a dokunmaz, yalnızca açık `--purge` bayrağıyla siler (apt purge deseni).
+- Windows'un `install-service.ps1`/`uninstall-service.ps1`'indeki savunmacı desenlerin (aktif
+  bekleme döngüsü, otomatik-yeniden-başlatma kaydını önceden sıfırlama, WinDivert sürücü kaydı
+  temizliği) ÇOĞU systemd'nin kendi senkron `stop`/`enable` davranışı ve NFQUEUE'nun kalıcı
+  sürücü kaydı gerektirmemesi sayesinde GEREKSİZ hale geldi — bilerek taşınmadı, gerekçesi
+  script yorumlarında.
+
+**Sıradaki somut adım (Faz 7 — Electron istemci portu):** `linux/client/` altına `client/`'ın
+kopyası başlatılacak. Onaylı plana göre (bkz. bu dosyanın üretildiği plan onayı) gerçek yeni kod
+gereken dosyalar: `autostart.js`, `updateChecker.js`, `protocolHandler.js`, `ipc.js`'nin
+`app:uninstall-app`'ı, motor seçim UI'ı (GoodbyeDPI YOK), `ms-settings:defaultapps` düşer,
+`electron-builder`'a `linux: {target: [AppImage, deb]}` config'i (`client/package.json`). Kalan
+dosyaların çoğu (`serviceClient.js`, `dpiLifecycle.js` vb.) birebir kopyalanabilir (Windows
+araştırması: hiçbir `process.platform` dallanması yok).
 
 **Bundan sonraki açık teknik sorular (canlı test gerektiriyor, kod yazarak çözülemez):**
 - R-1 / R-4.3'ün geri kalanı: gerçek NFQUEUE modül desteği ve capability/root gereksinimi.

@@ -1,0 +1,37 @@
+[Unit]
+Description=SplitCord DPI Bypass Service (Zapret/Zapret2/ByeDPI)
+Documentation=https://github.com/cagritaskn/SplitCord-Turkey
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+; DOĞRULANMADI (bkz. ../../PORTING_PLAN.md D-6, R-4.3): bol-van/zapret2'nin blockcheck2.sh'si
+; KENDİ İÇİNDE root istiyor (common/elevate.sh: require_root, id -u != 0 ise sudo/su ile
+; kendini yükseltiyor) -- bu yüzden servis şimdilik ROOT olarak çalışıyor. Ambient capability'li
+; (CAP_NET_ADMIN + CAP_NET_RAW) düşük yetkili bir kullanıcıya geçiş, blockcheck2.sh'nin bu
+; davranışı ATLATILABİLİRSE (ör. ZAPRET_BASE altında elle kurulmuş bir NFQUEUE kuralıyla) canlı
+; testte yeniden değerlendirilebilir -- şimdilik en güvenli/en az sürpriz veren varsayım root.
+User=root
+Group=root
+
+; linux/packaging/install.sh tarafından buraya kopyalanan self-contained publish çıktısı.
+ExecStart=/opt/splitcord/SplitCordServiceLinux
+WorkingDirectory=/opt/splitcord
+
+; Windows tarafındaki sc.exe failure ayarının (3 kez otomatik yeniden başlatma) systemd
+; karşılığı -- WinDivert'in "sürücü ilk denemede nadiren oturamayabiliyor" gerekçesiyle
+; AYNI ruhta: NFQUEUE/iptables kuralı ilk denemede oturmayabilir.
+Restart=on-failure
+RestartSec=5s
+StartLimitIntervalSec=300s
+StartLimitBurst=5
+
+; DOĞRULANMADI: Type=notify, Microsoft.Extensions.Hosting.Systemd paketinin sd_notify
+; entegrasyonuna dayanıyor (READY=1 sinyali) -- .NET tarafında bu paketin gerçekten
+; systemd'ye "hazırım" bildirdiği canlı testte doğrulanmadı. Sorun çıkarsa Type=simple'a
+; düşülebilir (READY sinyaline bağlı olmayan, daha basit/toleranslı bir mod).
+NotifyAccess=main
+
+[Install]
+WantedBy=multi-user.target
