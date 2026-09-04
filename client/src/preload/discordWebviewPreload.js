@@ -545,7 +545,7 @@ if (document.readyState === 'loading') {
  * bağlantıları) kullanıcı talebiyle "Kullanılan Argüman Setini Yasaklamayı Deneyin" butonu
  * ekleniyor — tıklanınca (onaydan sonra) o an aktif motorun kayıtlı argüman setini reddedip
  * Otomatik moda geçip sıfırdan bir tarama başlatıyor (btnStatusRetryAuto'nun — bkz.
- * titlebar.js — AYNI "mod zorla Otomatik + zapret2'den başlat" deseni, öncesine bir de
+ * titlebar.js — AYNI "mod zorla Otomatik + zapret'ten başlat" deseni, öncesine bir de
  * reddetme adımı eklenmiş hâli).
  *
  * DİL BAĞIMSIZ EŞLEŞTİRME: metne değil (Discord'un dili her neyse bu ekran ona göre
@@ -592,7 +592,7 @@ if (document.readyState === 'loading') {
       if (mode === 'manual') {
         await ipcRenderer.invoke('dpi:set-mode', 'automatic');
       }
-      await ipcRenderer.invoke('dpi:activate-engine', 'zapret2');
+      await ipcRenderer.invoke('dpi:activate-engine', 'zapret');
     } catch (err) {
       console.error('[SplitCord] Argüman seti yasaklanamadı:', err);
     } finally {

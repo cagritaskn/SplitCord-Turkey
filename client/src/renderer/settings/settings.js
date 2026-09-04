@@ -180,8 +180,8 @@ btnRestartSearch?.addEventListener('click', async () => {
   // bunu engeller, çift güvence olarak) canlı durumu burada da kontrol ediyoruz.
   if (currentStatus?.switching) return;
   window.splitcord.log('restart-search-click', {});
-  // Otomatik modun giriş noktası artık Zapret2 (bkz. DpiEngineManager.SwitchToAsync).
-  await activateEngine('zapret2');
+  // Otomatik modun giriş noktası artık Zapret (bkz. DpiEngineManager.SwitchToAsync).
+  await activateEngine('zapret');
 });
 
 btnRestartSearchManual?.addEventListener('click', async () => {
@@ -239,8 +239,8 @@ async function initDpiMode() {
         window.splitcord.log('get-status-before-mode-change-error', { error: err.message });
       }
 
-      // Manuel'de zaten Zapret2 taranıyor/aktifken Otomatik'e geçiliyorsa: Otomatik modun
-      // giriş noktası da Zapret2 (bkz. ipc.js dpi:set-mode) — sürmekte olan taramayı iptal
+      // Manuel'de zaten Zapret taranıyor/aktifken Otomatik'e geçiliyorsa: Otomatik modun
+      // giriş noktası da Zapret (bkz. ipc.js dpi:set-mode) — sürmekte olan taramayı iptal
       // edip AYNI motor için sıfırdan yeniden başlatmak, kullanıcı gözünden hiçbir şey
       // değişmeden spinner'ın kesintisiz sürmesine yol açıyordu (taramanın "durmadığı"
       // izlenimi). Bu özel durumda taramayı hiç iptal etmiyoruz, kesintisiz sürmesine
@@ -249,7 +249,7 @@ async function initDpiMode() {
         mode === 'automatic' &&
         scanInProgress &&
         statusBeforeChange &&
-        getDisplayActiveEngineId(statusBeforeChange) === 'zapret2';
+        getDisplayActiveEngineId(statusBeforeChange) === 'zapret';
 
       let detail = 'Mod değişikliği DPI motorunun yeniden başlatılmasına neden olabilir, bu da Discord bağlantısının kısa süreliğine kesilmesine yol açabilir.';
       if (scanInProgress && !carryOverZapret2Scan) {
@@ -1521,7 +1521,7 @@ loadIgnoredControlIssues();
 // İzin eksikliği yüzünden Discord'a hiç erişilemiyor olabilir (çalışan/doğrulanmış bir
 // ayar yok) — bu durumda izin verildikten sonra kullanıcının ayrıca "Tekrar Arama
 // Başlat"a basmasına gerek kalmadan arama otomatik en baştan başlasın: Otomatik moddaysa
-// otomatik giriş noktasından (Zapret2) sırayla, Manuel moddaysa yalnızca o an seçili olan
+// otomatik giriş noktasından (Zapret) sırayla, Manuel moddaysa yalnızca o an seçili olan
 // hizmet içinde (bkz. btnRestartSearch/btnRestartSearchManual — aynı activateEngine yolu).
 async function restartSearchAfterFirewallGrantIfNeeded() {
   await refreshStatus();
@@ -1530,7 +1530,7 @@ async function restartSearchAfterFirewallGrantIfNeeded() {
     const active = currentStatus.engines.find((e) => e.id === getDisplayActiveEngineId(currentStatus));
     if (!active?.running) {
       window.splitcord.log('firewall-grant-restart-search', { mode: 'automatic' });
-      await activateEngine('zapret2');
+      await activateEngine('zapret');
     }
   } else if (dpiMode === 'manual' && selectedEngineId) {
     const active = currentStatus.engines.find((e) => e.id === selectedEngineId);
