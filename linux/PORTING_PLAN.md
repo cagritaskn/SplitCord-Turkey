@@ -13,6 +13,10 @@ tartışmaya açma, zaten karar verilmiş.
 Bu dosyaya dokunan HER oturum, bitmeden önce en az §3 (Faz kontrol listesi) ve §6'yı güncellemeli —
 oturum yarıda kesilse bile.
 
+**Gerçek bir Linux ortamında (dual-boot/VM) canlı test yapmak için buradan başlanıyorsan: doğrudan
+§8 "Test Başlangıç Rehberi"ne geç** — ön koşullar, adım adım komutlar ve her adımda hangi risk/karara
+(§4/§5) bakman gerektiği orada.
+
 ## 2. Değişmez kurallar
 
 1. **Yeni bir `linux/` üst klasörü** kullanılıyor. Mevcut `service/`, `client/`, `vendor/`,
@@ -246,7 +250,11 @@ plan onayının Faz 8 notu — bu hâlâ geçerli bir kısıtlama).
 - AppImage self-update akışı (dosya üzerine yazma + relaunch) ve `.desktop` autostart dosyasının
   gerçekten bir masaüstü ortamı tarafından okunduğu.
 
-Faz 7 (Electron istemci portu) ve Faz 8 (paketleme) hiç başlamadı.
+Faz 8 (paketleme) BİLİNÇLİ OLARAK ERTELENDİ — kullanıcı talebi: önce Faz 1-7'nin tamamı gerçek bir
+Linux'ta test edilip doğrulanacak, paketleme/release ondan SONRA yapılacak. Canlı test için bkz.
+**§8 Test Başlangıç Rehberi** — kullanıcı Linux kurup oradan (yeni bir Claude Code oturumuyla)
+başladığında ihtiyaç duyacağı HER ŞEY (paket bağımlılıkları, adım adım komutlar, risk/karar
+kimlikleriyle eşleştirilmiş bir kontrol listesi) orada.
 
 ## 7. Ortam notları
 
@@ -256,3 +264,164 @@ hedefiyle SORUNSUZ çalışıyor (cross-compile — IL üretimi platform bağım
 sistemine ayrı bir Linux boot kurup Claude Code'u oradan çalıştırdığında bu bölüm o oturumda
 doldurulacak: dağıtım/sürüm, `wsl.conf`/VM detayı, `systemd` durumu, `lsmod | grep nfnetlink_queue`
 sonucu, kullanılan capability seti.
+
+## 8. Test Başlangıç Rehberi (Linux'a geçince buradan başla)
+
+Bu bölüm, kullanıcı gerçek bir Linux ortamı kurup (dual-boot/VM) oradan yeni bir Claude Code
+oturumu başlattığında sıfırdan hiçbir şey aramadan teste geçebilmesi için var. **Sıra önemli** —
+her adım bir öncekinin üzerine kuruluyor. Faz 8 (paketleme/release) kullanıcı talebiyle BİLEREK
+buraya dahil değil — önce Faz 1-7'nin TAMAMI burada doğrulanacak.
+
+### 8.1 Ön koşullar (Ubuntu/Debian ailesi — bkz. D-12)
+
+```bash
+sudo apt update
+sudo apt install -y build-essential pkg-config git curl dnsutils \
+  libnetfilter-queue-dev libnfnetlink-dev libmnl-dev zlib1g-dev \
+  libluajit-5.1-dev iptables
+```
+
+DOĞRULANMADI: bu paket listesi (özellikle `libluajit-5.1-dev` — zapret2/nfq2/Makefile'daki
+`LUA_JIT=1` varsayılanı için) gerçek bir Debian/Ubuntu'da hiç denenmedi. `make systemd` bir
+"paket bulunamadı" (pkg-config) hatasıyla başarısız olursa, eksik `-dev` paketini hata
+mesajından bulup buraya (ve `build-zapret.sh`/`build-zapret2.sh`'nin başındaki yorum bloğuna)
+ekle.
+
+.NET 8 SDK (apt'ta yoksa/eskiyse resmi script):
+```bash
+curl -sSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
+chmod +x dotnet-install.sh
+./dotnet-install.sh --channel 8.0
+export PATH="$PATH:$HOME/.dotnet"   # kalıcı olması için ~/.bashrc'ye de ekle
+dotnet --version   # 8.x göstermeli
+```
+
+Node.js/npm (Electron istemcisi için — 20 LTS önerilir, [nodejs.org](https://nodejs.org) veya
+dağıtımın kendi paketi):
+```bash
+node --version   # varsa
+npm --version
+```
+
+Repo: aynı repoyu (`git clone` ya da zaten aynı diskte varsa mevcut checkout) kullan. **İlk iş her
+zaman**: bu dosyanın (`linux/PORTING_PLAN.md`) TAMAMINI oku, özellikle §2 (değişmez kurallar) ve
+§4 (karar günlüğü) — hiçbir kararı yeniden tartışma.
+
+### 8.2 Binary'leri indir/derle
+
+```bash
+cd linux
+node scripts/fetch-binaries.js
+```
+
+Bu tek komut dnsproxy+nextdns'i indirir, ardından `build-byedpi.sh`/`build-zapret.sh`/
+`build-zapret2.sh`'yi sırayla çalıştırır (hepsi kaynaktan derler — bkz. D-13). Herhangi biri
+başarısız olursa (muhtemelen eksik bir `-dev` paketi) burada durup önce onu çöz. Başarılı
+çıktı: `linux/resources/bin/{byedpi,zapret,zapret2,dnsproxy,nextdns}/` altında çalıştırılabilir
+dosyalar olmalı.
+
+### 8.3 Servisi ayrı (systemd'siz) çalıştırıp temel duman testi yap
+
+```bash
+cd linux/service/SplitCordServiceLinux
+dotnet build
+sudo dotnet run
+```
+
+(Şimdilik `sudo` ile — Zapret/Zapret2 zaten root istiyor, bkz. R-4.3/D-6; ayrı bir terminalde
+test komutlarını çalıştır.)
+
+```bash
+curl http://127.0.0.1:58271/status
+```
+
+Boş bir motor listesiyle (henüz hiçbiri aktive edilmedi) düzgün bir JSON dönmeli — **Faz 2'nin
+canlı doğrulaması budur.**
+
+### 8.4 Motorları TEK TEK aktive edip test et
+
+**ByeDPI (root gerektirmez, ilk denenecek — en basit motor):**
+```bash
+curl -X POST http://127.0.0.1:58271/engines/byedpi/activate
+curl http://127.0.0.1:58271/status
+```
+`running: true` ve bir `proxyAddress` (socks5://127.0.0.1:...) görülmeli. **Faz 3'ün canlı
+doğrulaması.**
+
+**DNS forwarder (ayrı bir terminalde):**
+```bash
+dig @127.0.0.1 -p 53535 discord.com
+```
+Gerçek A kayıtları dönmeli (EncryptedDnsForwarder'ın DoH ile çalıştığının kanıtı).
+
+**Zapret (root + NFQUEUE gerekiyor — R-1/R-4.3'ü burada ilk kez gerçekten test ediyorsun):**
+```bash
+curl -X POST http://127.0.0.1:58271/engines/zapret/activate
+sudo iptables -L OUTPUT -n | grep NFQUEUE   # kuralın gerçekten eklendiğini gör
+curl http://127.0.0.1:58271/engines/zapret/logs
+```
+Burada başarısız olursa (`iptables: command not found`, "Operation not permitted", ya da
+`nfqws` hiç paket görmüyor) **R-1/R-4.3 açık risklerine düş** — sonucu (tam hata mesajı) §5
+risk kaydına ve §7 ortam notlarına işle. **Faz 4'ün canlı doğrulaması.**
+
+**Zapret2 (blockcheck2 — R-6'nın kritik testi):**
+```bash
+curl -X POST http://127.0.0.1:58271/engines/zapret2/activate
+```
+Bu dakikalarca sürebilir (blockcheck2 gerçek bir tarama yapıyor). Sürerken:
+```bash
+tail -f /var/lib/splitcord/diagnostic.log   # ya da $SPLITCORD_DATA_DIR ayarlıysa o yol
+```
+çıktısında **"nfqws2" kelimesinin GERÇEKTEN geçip geçmediğine** (R-6, `CandidateLineRegex`/
+`WorkingStrategyRegex`'in beklediği) ve "AVAILABLE" satırlarının doğru ayrıştırılıp
+ayrıştırılmadığına (adayın gerçekten yakalanıp `TryCandidateAsync`'e geçtiğine) bak. Regex
+hiç eşleşmiyorsa `Zapret2Engine.cs`'teki `CandidateLineRegex`/`WorkingStrategyRegex`'i GERÇEK
+çıktı formatına göre güncellemek gerekecek — bu oturumda tahmin edilen en yüksek ihtimalli
+düzeltme noktası. **Faz 5'in canlı doğrulaması.**
+
+Her adımda `/status` ve `/engines/{id}/logs` uç noktalarını kontrol ederek ilerle; bir motor
+takılırsa `POST /stop-all` ile hepsini durdurup bir sonrakine geç.
+
+### 8.5 systemd kurulumu (Faz 6'nın canlı doğrulaması)
+
+```bash
+cd linux
+dotnet publish -c Release -r linux-x64 --self-contained \
+  -o service/SplitCordServiceLinux/bin/Release/net8.0/linux-x64/publish \
+  service/SplitCordServiceLinux/SplitCordServiceLinux.csproj
+sudo packaging/install.sh
+sudo systemctl status splitcord-dpi
+curl http://127.0.0.1:58271/status
+sudo systemctl reboot   # (isteğe bağlı) reboot sonrası hâlâ ayakta mı diye kontrol için
+```
+Sonra bir güncelleme/yeniden kurulum senaryosunu da dene (idempotency):
+```bash
+sudo packaging/install.sh   # ikinci kez çalıştır, hata vermemeli
+sudo packaging/uninstall.sh   # --purge OLMADAN -- /var/lib/splitcord korunmalı
+ls /var/lib/splitcord   # hâlâ orada olmalı
+```
+
+### 8.6 Electron istemcisi (Faz 7'nin canlı doğrulaması)
+
+```bash
+cd linux/client
+npm install
+npm start
+```
+Uygulama açılıp servise bağlanmalı, motor kartları (Zapret/Zapret2/ByeDPI — GoodbyeDPI GÖRÜNMEMELİ)
+Ayarlar > DPI Aşımı'nda listelenmeli. AppImage'a özgü autostart/güncelleme akışlarını test etmek
+için önce paketlemek gerekir (Faz 8) — bu aşamada `npm start` (dev modu) ile temel UI/motor
+etkileşimini doğrulamak yeterli.
+
+### 8.7 Her adımdan sonra
+
+Bulduğun her şeyi (başarı ya da başarısızlık) **hemen** şu dosyaya işle — bir sonraki oturum
+(hafızasız) senin bulduklarını buradan okuyacak:
+- §3 (faz durumu): "DOĞRULANMADI" → "DOĞRULANDI (tarih)" ya da bulunan gerçek soruna göre güncelle.
+- §5 (risk kaydı): R-1/R-4.2/R-4.3/R-5/R-6 satırlarını gerçek sonuçla doldur.
+- §7 (ortam notları): dağıtım/sürüm, `lsmod` çıktısı, kullanılan capability/root durumu.
+- §6 (nereden devam edilir): hangi adımda kaldığını, sıradaki somut adımı YENİDEN yaz (ekleme).
+
+Bir düzeltme gerekiyorsa (ör. R-6'daki regex yanlış çıkarsa) doğrudan ilgili dosyayı düzelt,
+`dotnet build`/`node --check` ile yeniden doğrula, commit'le, ve §4'e (karar günlüğü) YENİ bir
+madde (D-17, ...) olarak ekle — var olanları silme/değiştirme, yalnızca ekle.
