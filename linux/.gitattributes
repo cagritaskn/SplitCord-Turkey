@@ -1,5 +1,21 @@
 # linux/ altındaki dosyalar Linux'ta çalışacak/derlenecek — özellikle shell script'lerin
 # CRLF'e çevrilmesi (Windows'ta git'in core.autocrlf=true varsayılanı) shebang satırını
 # bozup "bash: ./script.sh: /bin/bash^M: bad interpreter" gibi hatalara yol açar.
-* text eol=lf
+#
+# DİKKAT: bu satırlar yalnızca METİN dosyalarını hedeflemeli — ilk sürümde "* text eol=lf"
+# (tüm dosyalar) kullanılmıştı ve bu, PNG gibi ikili dosyaların satır sonu normalizasyonuna
+# (dolayısıyla BOZULMASINA) sokulma riski taşıyordu; bu oturumda `git add` sırasında fark
+# edilip düzeltildi. Binary uzantılar aşağıda AÇIKÇA `-text` ile hariç tutuluyor.
 *.sh text eol=lf
+*.cs text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.service text eol=lf
+*.csproj text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+
+*.png -text
+*.ico -text
+*.icns -text
