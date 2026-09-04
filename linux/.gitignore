@@ -1,0 +1,20 @@
+# .NET build output
+service/**/bin/
+service/**/obj/
+
+# Node / Electron
+client/node_modules/
+client/dist/
+client/out/
+
+# Indirilen/derlenen DPI araclari (fetch-binaries.js / build-byedpi.sh ile yeniden uretilir)
+resources/bin/
+
+# ByeDPI kaynagindan derlenen ikili
+vendor/byedpi-src/ciadpi
+
+# Editor / OS
+.vs/
+.vscode/
+*.user
+Thumbs.db
