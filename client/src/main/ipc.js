@@ -371,7 +371,7 @@ function registerIpcHandlers() {
   });
 
   // DPI Aşımı ekranındaki Otomatik/Manuel toggle — yalnızca istemci tarafında (yerel
-  // ayar) hangi görünümün gösterileceğini belirler. Otomatik'e geçilince Zapret2'nin
+  // ayar) hangi görünümün gösterileceğini belirler. Otomatik'e geçilince Zapret'in
   // (Otomatik modun giriş noktası — bkz. DpiEngineManager.SwitchToAsync) gerçekten aktif
   // motor olduğundan emin olunur.
   ipcMain.handle('dpi:get-mode', () => readLocalSettings().dpiMode);
@@ -380,10 +380,9 @@ function registerIpcHandlers() {
     try {
       writeLocalSettings({ dpiMode: mode });
       if (mode === 'automatic') {
-        // Manuel'den gelirken zaten Zapret2 aktif/taranıyorsa (bkz. settings.js
-        // carryOverZapret2Scan) o tarama hiç iptal edilmeden burada da dokunmadan
-        // bırakılıyor — aksi hâlde zaten sürmekte olan aynı taramayı sıfırdan yeniden
-        // başlatıp kullanıcı gözünden hiçbir şey değişmemiş gibi görünürdü.
+        // Manuel'den gelirken zaten Zapret aktif/taranıyorsa o tarama hiç iptal edilmeden
+        // burada da dokunmadan bırakılıyor — aksi hâlde zaten sürmekte olan aynı taramayı
+        // sıfırdan yeniden başlatıp kullanıcı gözünden hiçbir şey değişmemiş gibi görünürdü.
         let status = null;
         try {
           status = await serviceClient.getDpiStatus();
@@ -391,8 +390,8 @@ function registerIpcHandlers() {
           logEvent('get-status-before-set-mode-error', { error: err.message });
         }
         const currentEngineId = status?.switching ? status.switchingToEngineId : status?.activeEngineId;
-        if (currentEngineId !== 'zapret2') {
-          await serviceClient.activateEngine('zapret2');
+        if (currentEngineId !== 'zapret') {
+          await serviceClient.activateEngine('zapret');
           await applyDpiProxy();
           getMainWindow()?.webContents.send('dpi:engine-changed');
         }

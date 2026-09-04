@@ -356,8 +356,8 @@ btnStatusRetryAuto?.addEventListener('click', async () => {
   // bunu burada beklemek yerine arkaplanda başlatıp refreshConnection()'ın kendi
   // switching-farkında yoklama döngüsüne (3 sn'de bir) ilerlemeyi göstermesine bırakıyoruz.
   showStatus('Bağlantı hazırlanıyor…');
-  // Otomatik modun giriş noktası artık Zapret2 (bkz. DpiEngineManager.SwitchToAsync).
-  window.splitcord.dpi.activateEngine('zapret2').catch((err) => {
+  // Otomatik modun giriş noktası artık Zapret (bkz. DpiEngineManager.SwitchToAsync).
+  window.splitcord.dpi.activateEngine('zapret').catch((err) => {
     window.splitcord.log?.('status-retry-auto-activate-error', { error: err.message });
   });
   btnStatusRetryAuto.disabled = false;

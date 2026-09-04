@@ -46,11 +46,12 @@ public sealed class DpiEngineManager : IHostedService
     // escalationOrder döngüsü).
     private volatile string? _switchingToEngineId;
 
-    // Otomatik modun tam eskalasyon zinciri: Zapret2 giriş noktası, sonra Zapret, sonra
+    // Otomatik modun tam eskalasyon zinciri: Zapret giriş noktası, sonra Zapret2, sonra
     // ByeDPI, son çare GoodbyeDPI (bkz. SwitchToAsync'teki AllCandidatesFailedException
     // yakalama bloğu — bir motorun tüm adayları/blockcheck2 taraması başarısız olursa
-    // zincirdeki bir SONRAKİ motora otomatik geçilir).
-    private static readonly string[] EscalationChain = { "zapret2", "zapret", "byedpi", "goodbyedpi" };
+    // zincirdeki bir SONRAKİ motora otomatik geçilir). Kullanıcı talebiyle Zapret,
+    // Zapret2'nin önüne alındı.
+    private static readonly string[] EscalationChain = { "zapret", "zapret2", "byedpi", "goodbyedpi" };
 
     // Zapret2/Zapret/GoodbyeDPI aynı WinDivert sürücüsünü kullanıyor — kendini koruyan bir
     // antivirüs (Kaspersky/ESET) varken hiçbiri denenmemeli (bkz. AntivirusConflictDetected
@@ -150,7 +151,7 @@ public sealed class DpiEngineManager : IHostedService
     /// "Otomatik Taramayı Tekrarla" butonu) escalation'a izin verir.</summary>
     public async Task SwitchToAsync(string engineId, bool allowEscalation = true)
     {
-        // Zapret2 Otomatik modun giriş noktası (bkz. EscalationChain: Zapret2 -> Zapret ->
+        // Zapret Otomatik modun giriş noktası (bkz. EscalationChain: Zapret -> Zapret2 ->
         // ByeDPI -> GoodbyeDPI) — Kaspersky ya da ESET kuruluysa WinDivert tabanlı Zapret2/
         // Zapret'i hiç denemeden doğrudan ByeDPI'ye yönlendiriyoruz. Aksi hâlde tüm
         // adayları/blockcheck2 taraması (muhtemelen hepsi bu yüzden başarısız) sırayla

@@ -5,12 +5,12 @@ namespace SplitCord.Service.Config;
 
 public sealed class ServiceSettings
 {
-    // Otomatik modun giriş noktası — Zapret2 (blockcheck2 ile otomatik strateji keşfi +
-    // ses/UDP doğrulaması, bkz. Zapret2Engine) hem TCP/TLS (metin) hem UDP (ses/WebRTC)
-    // trafiğini kapsayabildiği için ilk denenen motor (bkz. DpiEngineManager.SwitchToAsync'teki
-    // eskalasyon: Zapret2 -> Zapret -> ByeDPI -> GoodbyeDPI). Zapret, ByeDPI ve GoodbyeDPI
-    // sırasıyla ikinci, üçüncü ve son çare olarak devrede.
-    public string ActiveEngineId { get; set; } = "zapret2";
+    // Otomatik modun giriş noktası — kullanıcı talebiyle Zapret, Zapret2'nin önüne alındı
+    // (bkz. DpiEngineManager.SwitchToAsync'teki eskalasyon: Zapret -> Zapret2 -> ByeDPI ->
+    // GoodbyeDPI). Zapret2, ByeDPI ve GoodbyeDPI sırasıyla ikinci, üçüncü ve son çare
+    // olarak devrede. NOT: bu yalnızca settings.json HİÇ yoksa (gerçek fresh install)
+    // etkili — var olan kurulumlarda kayıtlı ActiveEngineId'ye dokunulmuyor.
+    public string ActiveEngineId { get; set; } = "zapret";
 
     /// <summary>Kapalıyken (varsayılan) ByeDPI yalnızca 9 kişilik kısa/varsayılan aday
     /// listesini tarar. Açıkken bunun ardından ~1000 ek topluluk/fuzzer kaynaklı strateji

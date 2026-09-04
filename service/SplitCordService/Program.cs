@@ -32,12 +32,12 @@ builder.Services.AddSingleton<ByeDpiEngine>();
 builder.Services.AddSingleton<GoodbyeDpiEngine>();
 builder.Services.AddSingleton<ZapretEngine>();
 builder.Services.AddSingleton<Zapret2Engine>();
-// Sıra Zapret2, Zapret, ByeDPI, GoodbyeDPI — Otomatik modun yeni giriş noktası/eskalasyon
+// Sıra Zapret, Zapret2, ByeDPI, GoodbyeDPI — Otomatik modun giriş noktası/eskalasyon
 // sırasıyla (bkz. DpiEngineManager.SwitchToAsync) ve Manuel moddaki motor kart sırasıyla
 // (bu liste sırası doğrudan DpiEngineManager._engines'e, oradan da GetStatus().engines'e
 // yansıyor) tutarlı olsun diye.
-builder.Services.AddSingleton<IDpiEngine>(sp => sp.GetRequiredService<Zapret2Engine>());
 builder.Services.AddSingleton<IDpiEngine>(sp => sp.GetRequiredService<ZapretEngine>());
+builder.Services.AddSingleton<IDpiEngine>(sp => sp.GetRequiredService<Zapret2Engine>());
 builder.Services.AddSingleton<IDpiEngine>(sp => sp.GetRequiredService<ByeDpiEngine>());
 builder.Services.AddSingleton<IDpiEngine>(sp => sp.GetRequiredService<GoodbyeDpiEngine>());
 
