@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ekran Paylaşımı</title>
+  <link rel="stylesheet" href="../theme/theme.css" />
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--sc-bg-secondary);
+      overflow: hidden;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+    #header {
+      padding: 16px 20px 8px;
+    }
+    #header h1 {
+      margin: 0 0 4px;
+      font-size: 16px;
+      color: var(--sc-text-normal);
+    }
+    #header p {
+      margin: 0;
+      font-size: 12px;
+      color: var(--sc-text-muted);
+    }
+    #scroll-area {
+      -webkit-app-region: no-drag;
+      overflow-y: auto;
+      overflow-x: hidden;
+      height: 320px;
+      box-sizing: border-box;
+      padding: 4px 20px 12px;
+    }
+    .section-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      color: var(--sc-text-muted);
+      margin: 12px 0 8px;
+    }
+    .section-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .source-card {
+      /* min-width:0 olmadan grid hücreleri, içindeki resmin doğal (intrinsic) genişliğinin
+         ALTINA küçülemiyor — bu da bir kaynağın kalın bir thumbnail'i olduğunda o sütunun
+         diğerlerinden daha geniş olup 3 sütunun EŞİT olmayan genişliklerde görünmesine
+         (çirkin, tutarsız kart boyutlarına) yol açıyordu. */
+      min-width: 0;
+      background: var(--sc-bg-tertiary);
+      border: 2px solid transparent;
+      border-radius: 8px;
+      padding: 8px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .source-card:hover {
+      border-color: var(--sc-brand-hover);
+    }
+    .source-card.selected {
+      border-color: var(--sc-brand);
+    }
+    .source-thumb {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      height: auto;
+      object-fit: cover;
+      object-position: center;
+      border-radius: 4px;
+      background: #000;
+    }
+    .source-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--sc-text-normal);
+      overflow: hidden;
+    }
+    .source-icon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+    .source-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #quality-bar {
+      -webkit-app-region: no-drag;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 20px;
+      border-top: 1px solid var(--sc-bg-tertiary);
+    }
+    .quality-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--sc-text-muted);
+    }
+    .quality-field select {
+      background: var(--sc-bg-tertiary);
+      color: var(--sc-text-normal);
+      border: none;
+      border-radius: 4px;
+      padding: 6px 8px;
+      font-size: 12px;
+    }
+    .quality-field input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--sc-brand);
+      cursor: pointer;
+    }
+    #footer {
+      -webkit-app-region: no-drag;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 20px;
+      border-top: 1px solid var(--sc-bg-tertiary);
+    }
+    #btn-cancel {
+      background: transparent;
+      border: 1px solid var(--sc-text-muted);
+      color: var(--sc-text-normal);
+      border-radius: 4px;
+      padding: 8px 16px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    #btn-cancel:hover {
+      background: var(--sc-bg-hover);
+    }
+    #btn-share {
+      background: var(--sc-brand);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 16px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    #btn-share:hover {
+      background: var(--sc-brand-hover);
+    }
+    #btn-share:disabled {
+      background: var(--sc-bg-tertiary);
+      color: var(--sc-text-muted);
+      cursor: not-allowed;
+    }
+    #empty-hint {
+      color: var(--sc-text-muted);
+      font-size: 13px;
+      text-align: center;
+      padding: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>Ekran veya pencere paylaş</h1>
+    <p>Discord'a göstermek istediğin ekranı ya da pencereyi seç.</p>
+  </div>
+  <div id="scroll-area">
+    <div id="empty-hint">Yükleniyor…</div>
+    <div id="section-screens" hidden>
+      <div class="section-title">Ekranlar</div>
+      <div id="grid-screens" class="section-grid"></div>
+    </div>
+    <div id="section-windows" hidden>
+      <div class="section-title">Pencereler</div>
+      <div id="grid-windows" class="section-grid"></div>
+    </div>
+  </div>
+  <div id="quality-bar">
+    <div class="quality-field">
+      <span>Kalite</span>
+      <select id="select-quality">
+        <option value="source" selected>Kaynak</option>
+        <option value="1080">1080p</option>
+        <option value="720">720p</option>
+        <option value="480">480p</option>
+      </select>
+    </div>
+    <div class="quality-field">
+      <span>FPS</span>
+      <select id="select-fps">
+        <option value="15">15</option>
+        <option value="20">20</option>
+        <option value="25">25</option>
+        <option value="30" selected>30</option>
+      </select>
+    </div>
+    <label class="quality-field">
+      <input type="checkbox" id="toggle-audio" checked />
+      <span>Sistem sesini paylaş</span>
+    </label>
+  </div>
+  <div id="footer">
+    <button id="btn-cancel">İptal</button>
+    <button id="btn-share" disabled>Paylaşımı Başlat</button>
+  </div>
+  <script src="picker.js"></script>
+</body>
+</html>

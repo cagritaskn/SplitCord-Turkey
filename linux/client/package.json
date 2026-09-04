@@ -1,0 +1,48 @@
+{
+  "name": "splitcord-client-linux",
+  "private": true,
+  "author": "SplitCord-Turkey",
+  "version": "0.9.8",
+  "description": "SplitCord-Turkey Linux Installer",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "predist": "dotnet publish ../service/SplitCordServiceLinux/SplitCordServiceLinux.csproj -c Release -r linux-x64 --self-contained -o ../service/SplitCordServiceLinux/bin/Release/net8.0/linux-x64/publish",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "arrpc": "^3.6.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.splitcord.turkey",
+    "productName": "SplitCord-Turkey",
+    "files": [
+      "src/**/*",
+      "resources/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../service/SplitCordServiceLinux/bin/Release/net8.0/linux-x64/publish",
+        "to": "service-installer"
+      },
+      {
+        "from": "../packaging",
+        "to": "service-installer",
+        "filter": ["*.sh", "systemd/*.service"]
+      }
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "build/icon.png",
+      "category": "Network",
+      "executableName": "splitcord-turkey"
+    }
+  },
+  "allowScripts": {
+    "electron@31.7.7": true
+  }
+}

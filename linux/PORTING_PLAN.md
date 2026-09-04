@@ -43,10 +43,10 @@ oturum yarıda kesilse bile.
 | 1 | Dev/test ortamı canlı doğrulaması (WSL2/VM NFQUEUE+systemd) | **ertelendi** (kullanıcı henüz Linux ortamı kurmadı) | 0 |
 | 2 | Servis iskeleti: Kestrel API + SettingsStore + DNS forwarder (motor yok) | **bitti** (kod yazıldı + `dotnet build` başarılı; canlı çalıştırma DOĞRULANMADI) | 1 |
 | 3 | ByeDPI motoru | **bitti** (kod yazıldı + derlendi; `linux/scripts/build-byedpi.sh` ile gerçek Linux derlemesi ve canlı test DOĞRULANMADI) | 1 |
-| 4 | Zapret motoru (nfqws + NFQUEUE) | **bitti** (kod yazıldı + derlendi; nfqws binary fetch script'i henüz yok — bkz. §6; NFQUEUE/iptables mantığı canlı DOĞRULANMADI) | 1 |
+| 4 | Zapret motoru (nfqws + NFQUEUE) | **bitti** (kod + `build-zapret.sh` yazıldı + derlendi; NFQUEUE/iptables mantığı canlı DOĞRULANMADI) | 1 |
 | 5 | Zapret2 motoru (nfqws2 + native bash) + `fetch-binaries.js`/build script'leri | **bitti** (kod + fetch/build script'leri yazıldı, derlendi; blockcheck2'nin native çıktı formatı hâlâ en büyük açık soru, bkz. R-6) | 1 |
 | 6 | systemd paketleme + install/uninstall script'leri | **bitti** (kod yazıldı; gerçek kurulum/systemctl davranışı DOĞRULANMADI) | 1 |
-| 7 | Electron istemci portu | başlanmadı | 0 |
+| 7 | Electron istemci portu | **büyük ölçüde bitti** (bkz. §6 — tüm dosyalar kopyalandı/uyarlandı, sözdizimi doğrulandı; canlı çalıştırma DOĞRULANMADI) | 1 |
 | 8 | Paketleme & release hattı | başlanmadı | 0 |
 | 9 | (opsiyonel) İyileştirmeler | başlanmadı | 0 |
 
@@ -123,6 +123,24 @@ oturum yarıda kesilse bile.
   (ayrı tutuluyor, bkz. D-3) — `install.sh`/`uninstall.sh` bu ayrımı kullanıcı verisini
   kurulum/kaldırmadan bağımsız korumak için kullanıyor (`uninstall.sh --purge` olmadan veri
   dizinine hiç dokunmuyor).
+- **D-16** (2026-09-04, Faz 7): `linux/client/` neredeyse tamamen `client/`'ın kopyası (serviceClient.js,
+  dpiLifecycle.js, permissions.js, window.js, tray.js'in çekirdeği vb. — araştırma bulgusu
+  doğrulandı, `process.platform` dallanması hiç yok, hepsi birebir kopyalandı). Gerçek yeni kod
+  gereken yerler: `autostart.js` (AppImage için elle `.desktop` dosyası, `.deb`/dev'de Electron'un
+  yerleşik API'sine güveniliyor), `updateChecker.js` (`.AppImage` asset tercihi, AppImage kendi
+  kendini üzerine kopyalayıp `app.relaunch()`, `.deb` için `shell.openPath` ile paket yöneticisine
+  yönlendirme), `protocolHandler.js` (resmi Discord tespiti/kaldırması BİLEREK inert — D-7 gibi
+  "düşür" seçeneği, tek güvenilir Linux kurulum izi yok), `ipc.js`'nin `app:uninstall-app`'ı
+  (otomatik kaldırma yok, kullanıcıya AppImage-sil/`apt remove`/`uninstall.sh --purge` talimatı).
+  `/firewall/*` ve `/system-controls/*`'a bağımlı TÜM kod (serviceClient.js, ipc.js, preload.js,
+  settings.js/html'deki firewall izin kartları + Kaspersky/ESET/harici-process kontrol listesi,
+  `antivirusInfo.js` — dosya TAMAMEN silindi) kaldırıldı (D-9'un doğal sonucu). `dpiProxy.js`/
+  `secureDns.js` sadeleştirildi: GoodbyeDPI'ye özgü "useSystemResolver" dalı TAMAMEN kalktı,
+  Chromium DoH'u artık HER ZAMAN zorlanıyor (Zapret/Zapret2'nin ikisi de kendi DNS mekanizmasına
+  sahip değil, ikisi de EncryptedDnsForwarder'a bağımlı — GoodbyeDPI'nin aksine). Motor sırası her
+  yerde (ENGINE_DESCRIPTIONS, escalation metinleri) Zapret→Zapret2→ByeDPI olarak güncellendi.
+  "Windows ile başlat" → "Sistem ile başlat". `electron-builder`'ın `linux` hedefi (AppImage+deb,
+  D-12) `linux/client/package.json`'a eklendi.
 
 ## 5. Risk kaydı
 
@@ -138,7 +156,8 @@ oturum yarıda kesilse bile.
 
 ## 6. Şu anki durum / nereden devam edilir
 
-**Aktif faz:** 6 da tamamlandı. Sırada **Faz 7** (Electron istemci portu) — en büyük fazlardan biri.
+**Aktif faz:** 7 büyük ölçüde tamamlandı. Sırada **Faz 8** (paketleme & release hattı) — ya da
+kullanıcı Linux ortamını kurup canlı doğrulamaya (Faz 1 + tüm DOĞRULANMADI notları) geçebilir.
 
 **Bu oturumda tamamlanan (Faz 0, 2, 3, 4, 5 — TAMAMI):**
 - `linux/` klasör iskeleti + bu takip dosyası + `README.md` + `.gitignore` + `.gitattributes`
@@ -188,18 +207,44 @@ oturum yarıda kesilse bile.
   sürücü kaydı gerektirmemesi sayesinde GEREKSİZ hale geldi — bilerek taşınmadı, gerekçesi
   script yorumlarında.
 
-**Sıradaki somut adım (Faz 7 — Electron istemci portu):** `linux/client/` altına `client/`'ın
-kopyası başlatılacak. Onaylı plana göre (bkz. bu dosyanın üretildiği plan onayı) gerçek yeni kod
-gereken dosyalar: `autostart.js`, `updateChecker.js`, `protocolHandler.js`, `ipc.js`'nin
-`app:uninstall-app`'ı, motor seçim UI'ı (GoodbyeDPI YOK), `ms-settings:defaultapps` düşer,
-`electron-builder`'a `linux: {target: [AppImage, deb]}` config'i (`client/package.json`). Kalan
-dosyaların çoğu (`serviceClient.js`, `dpiLifecycle.js` vb.) birebir kopyalanabilir (Windows
-araştırması: hiçbir `process.platform` dallanması yok).
+**Bu oturumda tamamlanan (Faz 7 — büyük ölçüde):**
+- `linux/client/` — `client/`'ın (neredeyse) tamamının kopyası: `src/{main,preload,renderer}/**`,
+  `resources/**`, `build/icon.png`, hepsi `linux/client/package.json` ile (bkz. D-16 detayları).
+- Gerçek yeni kod: `autostart.js` (AppImage `.desktop` elle yazımı), `updateChecker.js` (AppImage
+  kendi kendini üzerine kopyalayıp relaunch, `.deb` paket yöneticisine yönlendirme),
+  `protocolHandler.js` (resmi Discord tespiti inert), `ipc.js`'nin `app:uninstall-app`'ı (talimat
+  metni), `linux/client/package.json`'ın `linux: {target: [AppImage, deb]}` build config'i.
+- Kaldırılan (D-9'un doğal sonucu): `serviceClient.js`/`ipc.js`/`preload.js`'teki TÜM firewall/
+  system-controls fonksiyonları, `settings.js`/`settings.html`'deki firewall izin kartları +
+  Kaspersky/ESET/harici-process kontrol listesi UI'ı, `antivirusInfo.js` (dosya TAMAMEN silindi,
+  2 HTML'deki `<script>` etiketleri de kaldırıldı), `titlebar.js`'teki throttle/localStorage
+  antivirus-dialog mantığı (artık no-op).
+- Sadeleştirilen: `dpiProxy.js`/`secureDns.js` (GoodbyeDPI'ye özgü `useSystemResolver` dalı
+  TAMAMEN kalktı — Zapret/Zapret2'nin ikisi de EncryptedDnsForwarder'a bağımlı, GoodbyeDPI'nin
+  aksine kendi DNS mekanizmaları yok, bu yüzden Chromium DoH'u HER motor için zorlanıyor).
+- Motor sırası/isimleri her yerde (ENGINE_DESCRIPTIONS, escalation onay metinleri, "Windows ile
+  başlat"→"Sistem ile başlat") güncellendi.
+- **TÜM değiştirilen/yeni JS dosyaları `node --check` ile sözdizimi doğrulandı, hepsi geçti** —
+  ama hiçbiri gerçek Electron içinde ÇALIŞTIRILMADI (bkz. §2 madde 5).
+
+**Faz 7'de henüz yapılmayan/gözden geçirilmemiş küçük artıklar (canlı test öncesi göz atılabilir,
+bloklayıcı değil):** `window.js` hiç detaylı incelenmedi (muhtemelen sorunsuz — frameless pencere
+davranışı Electron'da platform bağımsız); `richPresence.js`/arrpc'nin native process-scanning
+kısmı (yalnızca Windows'ta implemente, Linux'ta IPC-socket yolu zaten çalışıyor — bkz. Windows
+araştırması) hiç dokunulmadı, gerekmiyor da; `resources/*.png` ikonları Windows'unkiyle AYNI
+kopyalandı, Linux'a özel bir ikon seti (ör. farklı boyutlar) hazırlanmadı.
+
+**Sıradaki somut adım (Faz 8 — Paketleme & release hattı):** `linux/scripts/build-release.sh`
+(dotnet publish → electron-builder → AppImage+deb, bkz. plan onayının Faz 8 tanımı). CI eklemek
+(`.github/workflows/`) `linux/` dışında bir ekleme olacağı için ÖNCE KULLANICIYA SORULMALI (bkz.
+plan onayının Faz 8 notu — bu hâlâ geçerli bir kısıtlama).
 
 **Bundan sonraki açık teknik sorular (canlı test gerektiriyor, kod yazarak çözülemez):**
 - R-1 / R-4.3'ün geri kalanı: gerçek NFQUEUE modül desteği ve capability/root gereksinimi.
 - R-5/R-6: blockcheck2.sh'nin native çıktı formatının regex'lerle tam eşleşip eşleşmediği.
 - Derleme bağımlılıklarının (`libnetfilter-queue-dev` vb.) gerçek paket adları/eksiksizliği.
+- AppImage self-update akışı (dosya üzerine yazma + relaunch) ve `.desktop` autostart dosyasının
+  gerçekten bir masaüstü ortamı tarafından okunduğu.
 
 Faz 7 (Electron istemci portu) ve Faz 8 (paketleme) hiç başlamadı.
 
