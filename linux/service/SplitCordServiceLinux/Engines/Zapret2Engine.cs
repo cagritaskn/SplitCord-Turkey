@@ -378,7 +378,12 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
     private async Task<List<string>> RunBlockcheck2Async(CancellationToken ct, bool forceDoh, HashSet<string> excludeCandidates)
     {
         const string BashCommand = "bash";
-        var blockcheck2Dir = Path.Combine(BinaryLocator.ToolDir("zapret2"), "blockcheck2");
+        // DOĞRULANDI (2026-09-04, gh api ile bol-van/zapret2 kaynağı incelendi): blockcheck2.sh
+        // repo KÖKÜNDE duruyor, "blockcheck2" adında bir alt klasör YOK — nfq2/, lua/, common/
+        // vb. hepsi doğrudan zapret2 kökünün altında kardeş dizinler. Önceki bir sürümde burada
+        // yanlışlıkla Windows bundle'ının (zapret-win-bundle) kendi sardığı "blockcheck2/" alt
+        // klasörü varsayılmıştı — düzeltildi.
+        var blockcheck2Dir = BinaryLocator.ToolDir("zapret2");
         if (!File.Exists(Path.Combine(blockcheck2Dir, "blockcheck2.sh")))
         {
             throw new FileNotFoundException("blockcheck2.sh bulunamadı", blockcheck2Dir);
@@ -828,7 +833,10 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
     /// zapret2 davranışı, Windows'a özgü bir workaround değil.</summary>
     private async Task SpawnAsync(string args, CancellationToken ct)
     {
-        var exePath = BinaryLocator.Resolve("zapret2", Path.Combine("blockcheck2", "nfq2", "nfqws2"));
+        // DOĞRULANDI: bol-van/zapret2'nin blockcheck2.sh'si NFQWS2 ortam değişkeninin
+        // varsayılanını "${ZAPRET_BASE}/nfq2/nfqws2" olarak tanımlıyor — "blockcheck2" alt
+        // klasörü YOK (bkz. RunBlockcheck2Async'teki aynı düzeltme).
+        var exePath = BinaryLocator.Resolve("zapret2", Path.Combine("nfq2", "nfqws2"));
         var binDir = Path.GetDirectoryName(exePath)!;
 
         // Bu adayı başlatmadan ÖNCE NFQUEUE kuyruğunu tutuyor olabilecek her türlü artık
