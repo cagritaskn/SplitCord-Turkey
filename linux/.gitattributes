@@ -1,0 +1,5 @@
+# linux/ altındaki dosyalar Linux'ta çalışacak/derlenecek — özellikle shell script'lerin
+# CRLF'e çevrilmesi (Windows'ta git'in core.autocrlf=true varsayılanı) shebang satırını
+# bozup "bash: ./script.sh: /bin/bash^M: bad interpreter" gibi hatalara yol açar.
+* text eol=lf
+*.sh text eol=lf
