@@ -25,13 +25,15 @@ Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'
 
 ## Linux Kullanımı
 
-SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint dahil) `.deb` paketi olarak sunulan bir Linux sürümü de bulunur. Motor seti Windows'tan biraz farklıdır: WinDivert yerine NFQUEUE/iptables kullanılır, GoodbyeDPI Linux'a özgü bir karşılığı olmadığı için bulunmaz — Otomatik modun motor sırası **Zapret → Zapret2 → ByeDPI**'dir.
+SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint'te test edildi) `.deb` paketi olarak sunulan bir Linux sürümü de bulunur. Motor seti Windows'tan biraz farklıdır: WinDivert yerine NFQUEUE/iptables kullanılır, GoodbyeDPI Linux'a özgü bir karşılığı olmadığı için bulunmaz — Otomatik modun motor sırası **Zapret → Zapret2 → ByeDPI**'dir.
 
 1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından ilgili `.deb` dosyasını indirin.
 2. Paketi kurun:
    ```bash
    sudo dpkg -i SplitCord-Turkey-Linux-*.deb
    ```
+   ya da 
+   Linux dağıtımınız destekliyorsa .deb dosyasına çift tıklayıp çalıştırarak kurun.
    Kurulum sırasında DPI aşım hizmeti (systemd birimi) otomatik olarak etkinleştirilip başlatılır, ekstra bir adım gerekmez.
 3. Kurulum bitince SplitCord-Turkey'i çalıştırın; ilk açılıştaki motor taraması Windows ile aynı şekilde işler (bkz. yukarıdaki Windows adımları 4-5).
 4. Kaldırmak için:
@@ -39,6 +41,8 @@ SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint dahil
    sudo apt remove splitcord-client-linux      # ayarları korur
    sudo apt purge splitcord-client-linux       # ayarları da siler
    ```
+   ya da 
+   SplitCord-Turkey ayarlarında Hakkında ve Güncelleme sayfasından SplitCord-Turkey'i kaldır butonu ile kaldırabilirsiniz.
 
 ---
 
@@ -64,7 +68,7 @@ SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint dahil
 
 SplitCord-Turkey iki ayrı bileşenden oluşur:
 
-- **SplitCordDpiService** — SYSTEM yetkisiyle arka planda çalışan bir Windows Service. Zapret/Zapret2/ByeDPI/GoodbyeDPI süreçlerini yönetir, yerel bir REST API (`127.0.0.1` üzerinde) sunar. Kurulum sırasında yalnızca **bir kez** yönetici izni ister; sonrasında hiçbir zaman tekrar UAC istemi çıkmaz. Ayrıca bu hizmet yalnızca SplitCord-Turkey çalışırken işlevini sürdürür.
+- **SplitCordDpiService** — SYSTEM yetkisiyle arka planda çalışan bir Windows Service. Zapret/Zapret2/ByeDPI/GoodbyeDPI (Linux'ta bulunmaz) süreçlerini yönetir, yerel bir REST API (`127.0.0.1` üzerinde) sunar. Kurulum sırasında yalnızca **bir kez** yönetici izni ister; sonrasında hiçbir zaman tekrar UAC istemi çıkmaz. Ayrıca bu hizmet yalnızca SplitCord-Turkey çalışırken işlevini sürdürür.
 - **SplitCord-Turkey İstemcisi** — Discord'u saran, hiçbir zaman yükseltilmiş yetkiyle çalışmayan Electron uygulaması. DPI motor seçimi ve durumu için yerel API üzerinden servisle konuşur, kendi başına yetkilendirme yapmaz ve hizmet düzeyinde çalışmaz.
 
 ByeDPI aktifken yalnızca bu uygulamanın trafiği, kendi başlattığı bir SOCKS5 proxy üzerinden yönlendirilir (sisteminizin geri kalanı etkilenmez). Zapret, Zapret2 ve GoodbyeDPI ise WinDivert sürücüsü ile sistem genelinde çalışır; bu üç motordan aynı anda yalnızca biri aktif olabilir.
@@ -80,7 +84,7 @@ Otomatik modun giriş noktası **Zapret**'tir: önceden bilinen, hızlıca denen
 - **Genel:** Otomatik başlatma, bildirim rozeti, performans modu, bağlantıları sistem tarayıcısında açma, QUIC devre dışı bırakma ve benzeri genel tercihler.
 - **Görünüm:** Discord temasından otomatik renk örnekleme veya sabit tema ön ayarları.
 - **Tuş Atamaları:** Sesi kapatma/açma, sağırlaştırma ve pencereyi öne getirme için genel (uygulama arka plandayken de çalışan) kısayollar.
-- **Hakkında:** Sürüm bilgisi, güncelleme kontrolü, tanılama günlüğü dosya konumunu açma ve tüm ayarları sıfırlama.
+- **Hakkında ve Güncelleme:** Sürüm bilgisi, güncelleme kontrolü, tanılama günlüğü dosya konumunu açma ve tüm ayarları sıfırlama.
 
 ---
 
