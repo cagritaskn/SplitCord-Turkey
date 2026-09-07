@@ -30,17 +30,29 @@ function isAllowedOrigin(origin) {
 /**
  * Mikrofon/kamera (sesli-görüntülü konuşma) ve native bildirim izinlerini yalnızca
  * discord.com kökenli içerik için otomatik onaylar. Başka hiçbir origin bu izinleri alamaz.
+ *
+ * GÜVENLİK (CVE-2026-70599, Electron <39.8.7/<40.9.0/<41.2.0 — kullandığımız 31.x de
+ * etkileniyor): `requestingUrl` (request handler) ve `requestingOrigin` (check handler)
+ * parametreleri, medya izinleri için ÇAPRAZ KÖKENLİ bir alt çerçeveden (ör. Discord
+ * "Activities"/oyun gömme ya da üçüncü taraf bir embed) gelen isteklerde YANLIŞLIKLA üst
+ * çerçevenin (discord.com) kökenini döndürebiliyor — yani sayfa içine gömülü, listemizde
+ * OLMAYAN bir köken, yalnızca üst çerçeve discord.com olduğu için `media`/`display-capture`
+ * (ekran paylaşımı) iznini haksız yere alabiliyordu. Electron'un kendi tavsiyesi: medya
+ * kontrollerinde `details.securityOrigin` bu hataya kapalı, gerçek isteği yapan çerçevenin
+ * kökenini veriyor — bu yüzden mevcutsa ÖNCELİKLE o kullanılıyor, yalnızca securityOrigin
+ * doldurulmamışsa (ör. clipboard/notifications gibi medya-dışı izinler) eski alanlara
+ * düşülüyor.
  */
 function registerPermissions() {
   const discordSession = session.fromPartition(DISCORD_PARTITION);
 
   discordSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
-    const origin = details.requestingUrl || webContents.getURL();
+    const origin = details.securityOrigin || details.requestingUrl || webContents.getURL();
     callback(ALLOWED_PERMISSIONS.has(permission) && isAllowedOrigin(origin));
   });
 
-  discordSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) =>
-    ALLOWED_PERMISSIONS.has(permission) && isAllowedOrigin(requestingOrigin),
+  discordSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin, details) =>
+    ALLOWED_PERMISSIONS.has(permission) && isAllowedOrigin(details?.securityOrigin || requestingOrigin),
   );
 }
 
@@ -60,4 +72,4 @@ function configureBrowserIdentity() {
   discordSession.setUserAgent(userAgent);
 }
 
-module.exports = { registerPermissions, configureBrowserIdentity, DISCORD_PARTITION };
+module.exports = { registerPermissions, configureBrowserIdentity, isAllowedOrigin, DISCORD_PARTITION };

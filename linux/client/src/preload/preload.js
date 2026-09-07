@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('splitcord', {
     unrejectArgs: (id, args) => ipcRenderer.invoke('dpi:unreject-args', id, args),
     getByeDpiUseExtendedCandidates: () => ipcRenderer.invoke('dpi:get-byedpi-use-extended-candidates'),
     setByeDpiUseExtendedCandidates: (enabled) => ipcRenderer.invoke('dpi:set-byedpi-use-extended-candidates', enabled),
+    isInstallerBundled: () => ipcRenderer.invoke('dpi:is-installer-bundled'),
+    installService: () => ipcRenderer.invoke('dpi:install-service'),
     // getFirewallStatus/grantFirewallPermission/getAppFirewallStatus/grantAppFirewallPermission/
     // getSystemControlsStatus/killProcess/removeConflictingService BİLEREK YOK (bkz.
     // PORTING_PLAN.md D-9 — ipc.js'te karşılık gelen handler'lar da yok).

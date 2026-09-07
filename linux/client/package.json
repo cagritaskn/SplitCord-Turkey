@@ -1,9 +1,13 @@
 {
   "name": "splitcord-client-linux",
   "private": true,
-  "author": "SplitCord-Turkey",
+  "author": {
+    "name": "SplitCord-Turkey",
+    "email": "cagritaskn@gmail.com"
+  },
+  "homepage": "https://github.com/cagritaskn/SplitCord-Turkey",
   "version": "0.9.8",
-  "description": "SplitCord-Turkey Linux Installer",
+  "description": "SplitCord-Turkey",
   "main": "src/main/index.js",
   "scripts": {
     "start": "electron .",
@@ -36,10 +40,15 @@
       }
     ],
     "linux": {
-      "target": ["AppImage", "deb"],
-      "icon": "build/icon.png",
+      "target": ["deb"],
+      "icon": "build/icons",
       "category": "Network",
       "executableName": "splitcord-turkey"
+    },
+    "deb": {
+      "artifactName": "SplitCord-Turkey-Linux-${version}-AMD64.${ext}",
+      "afterInstall": "../packaging/deb-postinst.sh",
+      "afterRemove": "../packaging/deb-postrm.sh"
     }
   },
   "allowScripts": {

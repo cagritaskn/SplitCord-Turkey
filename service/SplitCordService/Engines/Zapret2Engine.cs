@@ -68,6 +68,36 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
     // durduruyoruz) sonraki denemelerde çalışıyor — kullanıcı talebiyle 6'dan 20'ye çıkarıldı.
     private const int SavedArgsRetryAttempts = 20;
 
+    // KULLANICI TALEBİ: blockcheck2'nin dakikalarca sürebilen taramasına düşmeden ÖNCE, sabit
+    // ve elle seçilmiş bir aday listesi sırayla denenir. Gerekçe: Teknosanet (canlı testte
+    // Türkiye'deki en agresif engelleme yapan ISP'lerden biri olarak gözlemlendi) üzerinde
+    // 3 saatlik bir blockcheck2 taramasıyla bulunup GERÇEKTEN doğrulanan bir strateji + kullanıcının
+    // ayrıca derlediği ek adaylar — o ağda çalışan bir strateji, daha az agresif ISP'lerde de
+    // büyük olasılıkla çalışır, bu yüzden HERKES için varsayılan ilk deneme kümesi olarak
+    // eklendi. SIRA ÖNEMLİ ve KORUNMALI: kullanıcının verdiği sıra (Teknosanet'te doğrulanan
+    // strateji ilk sırada, diğerleri onun ardından kullanıcının gönderdiği sırayla). Bu liste
+    // blockcheck2'nin YERİNE değil, ÖNÜNE geçiyor — hiçbiri çalışmazsa (ya da hepsi kullanıcı
+    // tarafından Ayarlar'dan yasaklanmışsa) normal blockcheck2 taramasına (DNS protokolü
+    // tier döngüsü dahil) geçiliyor, hiçbir kapsam kaybı yok.
+    private static readonly string[] PreConfiguredCandidates =
+    {
+        "--wf-l3=ipv4 --wf-tcp-out=443 --in-range=-s1 --lua-desync=oob:urp=b",
+        "--wf-l3=ipv4 --wf-tcp-out=443 --in-range=-s1 --lua-desync=oob:urp=0",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --in-range=-s1 --lua-desync=oob:urp=0",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --in-range=-s1 --lua-desync=oob:urp=b",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=http_hostcase:spell=hoSt",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=multidisorder:pos=midsld:seqovl=midsld-1",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=multidisorder:pos=method+2,midsld",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=multidisorder:pos=method+2:seqovl=method+1",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=multidisorder:pos=method+2:seqovl=method+1:seqovl_pattern=fake_default_http",
+    };
+
+    // Her hazır önayar için, WinDivert'in ilk bağlanmada ara sıra başarısız olabilme
+    // gerçeğine karşı (bkz. SavedArgsRetryAttempts üstündeki not) küçük bir yeniden deneme
+    // payı -- kayıtlı/tek bir ayarınkiyle (20) aynı agresiflikte değil (9 aday × 20 çok yavaş
+    // olurdu), diğer motorların kayıtlı-ayar denemesiyle (3) aynı büyüklükte.
+    private const int PreConfiguredCandidateRetryAttempts = 3;
+
     // blockcheck2'nin kendisi (bkz. blockcheck2.sh dokümantasyonu/kaynağı) yalnızca TCP/TLS/
     // HTTP3 engellemesini test ediyor, UDP/ses için hiçbir doğrulama yapmıyor. Discord'un
     // GERÇEK ses/RTP medya sunucuları oturuma özel, bölgeye göre atanan ve her görüşmede
@@ -124,6 +154,12 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
     // öldürüyor) kullanıcıya yanlışlıkla "Durduruldu" göstermesin (kullanıcı talebi). 0 =
     // şu an bu aşamada değil.
     private volatile int _savedArgsAttempt;
+
+    // Hazır önayar döngüsünün (bkz. StartAsync üstündeki PreConfiguredCandidates notu) hangi
+    // aşamada olduğu — GetStatus() bunu _savedArgsAttempt ile AYNI mantıkla Detail'e yansıtıyor:
+    // bu aşamada da motor sık sık spawn+kill döngüsüne girdiği için "running" flaşlanabiliyor,
+    // GERÇEK durumu (hâlâ deneniyor) bunun önüne alıyoruz. null = şu an bu aşamada değil.
+    private volatile string? _preConfiguredCandidateStatus;
 
     public string Id => "zapret2";
     public string DisplayName => "Zapret2";
@@ -211,6 +247,55 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
                 "Zapret2 kayıtlı ayarı {Max} denemenin tamamında başarısız oldu, DNS protokolü tier taramasına geçiliyor: {Args}",
                 SavedArgsRetryAttempts, savedArgs);
             _logs.Add($"Kayıtlı ayar {SavedArgsRetryAttempts} denemenin tamamında başarısız oldu, DNS protokolü tier taramasına geçiliyor.");
+        }
+
+        // KULLANICI TALEBİ: blockcheck2'ye düşmeden önce sabit, elle seçilmiş aday listesi
+        // sırayla deneniyor (bkz. PreConfiguredCandidates üstündeki gerekçe notu). Zaten
+        // yukarıda denenmiş (kayıtlı ayarla aynı) ya da kullanıcı tarafından yasaklanmış
+        // adaylar atlanıyor; atlanan/başarısız olan HER aday triedAndFailed'a eklenip
+        // blockcheck2'nin erken-durdurma mekanizmasının bunları bir daha bulup boşuna
+        // denememesi sağlanıyor (bkz. bu HashSet'in üstündeki asıl gerekçe notu).
+        if (PreConfiguredCandidates.Length > 0)
+        {
+            _logger.LogInformation("Zapret2: blockcheck2'den önce {Count} hazır önayar deneniyor", PreConfiguredCandidates.Length);
+            _logs.Add($"Hazır önayarlar deneniyor ({PreConfiguredCandidates.Length} adet), başarısız olursa blockcheck2'ye geçilecek.");
+
+            try
+            {
+                for (var i = 0; i < PreConfiguredCandidates.Length; i++)
+                {
+                    var candidate = PreConfiguredCandidates[i];
+                    ct.ThrowIfCancellationRequested();
+
+                    if (candidate == savedArgs) continue; // yukarıda zaten denendi
+                    if (rejected.Contains(candidate))
+                    {
+                        _logger.LogInformation("Zapret2 hazır önayarı atlanıyor (daha önce reddedildi): {Args}", candidate);
+                        triedAndFailed.Add(candidate);
+                        continue;
+                    }
+
+                    var succeeded = false;
+                    for (var attempt = 1; attempt <= PreConfiguredCandidateRetryAttempts; attempt++)
+                    {
+                        _preConfiguredCandidateStatus = $"Hazır önayar deneniyor ({i + 1}/{PreConfiguredCandidates.Length}, deneme {attempt}/{PreConfiguredCandidateRetryAttempts})";
+                        if (await TryCandidateAsync(candidate, _preConfiguredCandidateStatus, ct, verifyVoice: true))
+                        {
+                            succeeded = true;
+                            break;
+                        }
+                    }
+                    if (succeeded) return;
+                    triedAndFailed.Add(candidate);
+                }
+            }
+            finally
+            {
+                _preConfiguredCandidateStatus = null;
+            }
+
+            _logger.LogInformation("Zapret2: hiçbir hazır önayar çalışmadı, blockcheck2 taramasına geçiliyor");
+            _logs.Add("Hiçbir hazır önayar çalışmadı, blockcheck2 taramasına geçiliyor.");
         }
 
         // Manuel > Gelişmiş'ten kullanıcı tek bir DNS protokolü sabitlediyse (bkz.
@@ -409,6 +494,18 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
         // strateji bulunur bulunmaz o gruptan çıkıyor — otomatik/ilk-açılış taraması için
         // kapsamlılıktan çok hız önemli olduğundan tercih edildi.
         psi.Environment["SCANLEVEL"] = "quick";
+        // DNSCHECK_DOM'a discord.com'u EKLİYORUZ (2026-09-04, bkz. linux/PORTING_PLAN.md D-30 —
+        // Linux portunda bulunup buraya da uygulanan bir iyileştirme): blockcheck2.sh'nin KENDİ
+        // "DNS hijack" tespiti (check_dns(), script kaynağı satır ~1830) HER çalıştırmada
+        // KOŞULSUZ çalışıyor — varsayılan kanarya listesi (`pornhub.com ej.ru rutracker.org
+        // www.torproject.org bbc.com`) Rusya'ya özgü, discord.com'u HİÇ İÇERMİYORDU. Böylece
+        // yalnızca kanarya alan adlarını değil, DOĞRUDAN discord.com'u hedefleyen SEÇİCİ bir DNS
+        // zehirlenmesi (Linux tarafındaki canlı testte GERÇEKTEN gözlemlendi: "discord.com :
+        // MISMATCH") bu sezgiyi hiç tetiklemeden kaçabiliyordu. discord.com'u listeye EKLEMEK (var
+        // olanı DEĞİŞTİRMEDEN) bu boşluğu KAPATIYOR — check_dns() zaten her çağrıda çalıştığından
+        // HİÇBİR EK MALİYET YOK; gerçek bir uyuşmazlık bulunursa blockcheck2 KENDİSİ SECURE_DNS=1
+        // yapıp kendi bulduğu bir DoH sunucusuyla devam ediyor.
+        psi.Environment["DNSCHECK_DOM"] = "discord.com pornhub.com ej.ru rutracker.org www.torproject.org bbc.com";
         // DOH_SERVERS/SECURE_DNS'e genel olarak BİLEREK müdahale ETMİYORUZ: blockcheck2.sh
         // kendi DNS zehirlenmesi tespitini/DoH aramasını (bkz. script çıktısındaki "searching
         // working DoH server") kendi özenle seçilmiş varsayılan sağlayıcı listesiyle ve kendi
@@ -778,6 +875,7 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
         // flaşlanabiliyor. Gerçek durumu ("hâlâ deneniyor", henüz vazgeçilmedi) her ikisinin
         // önüne alarak gösteriyoruz.
         if (_savedArgsAttempt > 0) detail = $"Kayıtlı ayar deneniyor ({_savedArgsAttempt}/{SavedArgsRetryAttempts})";
+        else if (_preConfiguredCandidateStatus is { } preConfiguredStatus) detail = preConfiguredStatus;
         else if (running) detail = "Aktif (sistem geneli)";
         else if (_lastProbeFailed) detail = "blockcheck2 çalışan bir strateji bulamadı veya doğrulayamadı";
         else detail = "Durduruldu";

@@ -8,7 +8,7 @@
 
 ---
 
-## Kurulum ve Çalıştırma
+## Windows Kullanımı
 
 Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'i kurup kullanmaya başlayabilirsiniz.
 
@@ -20,6 +20,25 @@ Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'
 
 > [!NOTE]
 > **Kaspersky** veya **ESET** isimli antivirüs yazılımları sisteminizde kuruluysa doğru ve çalışan bir ayar bulmakta, sesli sohbet kanallarına bağlanmakta ve çeşitli farklı işlevlerde sorunlar yaşarsınız. Kaspersky ve ESET hakkında daha fazla bilgi için [bu sayfayı](https://github.com/cagritaskn/SplitCord-Turkey/blob/main/resources/ANTIVIRUS.md) ziyaret edebilirsiniz.
+
+---
+
+## Linux Kullanımı
+
+SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint dahil) `.deb` paketi olarak sunulan bir Linux sürümü de bulunur. Motor seti Windows'tan biraz farklıdır: WinDivert yerine NFQUEUE/iptables kullanılır, GoodbyeDPI Linux'a özgü bir karşılığı olmadığı için bulunmaz — Otomatik modun motor sırası **Zapret → Zapret2 → ByeDPI**'dir.
+
+1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından ilgili `.deb` dosyasını indirin.
+2. Paketi kurun:
+   ```bash
+   sudo dpkg -i SplitCord-Turkey-Linux-*.deb
+   ```
+   Kurulum sırasında DPI aşım hizmeti (systemd birimi) otomatik olarak etkinleştirilip başlatılır, ekstra bir adım gerekmez.
+3. Kurulum bitince SplitCord-Turkey'i çalıştırın; ilk açılıştaki motor taraması Windows ile aynı şekilde işler (bkz. yukarıdaki Windows adımları 4-5).
+4. Kaldırmak için:
+   ```bash
+   sudo apt remove splitcord-client-linux      # ayarları korur
+   sudo apt purge splitcord-client-linux       # ayarları da siler
+   ```
 
 ---
 
@@ -78,7 +97,7 @@ Otomatik modun giriş noktası **Zapret**'tir: önceden bilinen, hızlıca denen
 
 ---
 
-## Sıfırdan Derleme
+## Windows İçin Derleme
 
 SplitCord-Turkey, kaynak koddan da derlenerek çalıştırılabilir.
 
@@ -110,6 +129,39 @@ SplitCord-Turkey, kaynak koddan da derlenerek çalıştırılabilir.
 
 > [!NOTE]
 > Yalnızca geliştirme amacıyla çalıştırmak isterseniz, servisi `service/installer/install-service.ps1` betiğiyle (yönetici olarak) kurduktan sonra `client` klasöründe `npm start` komutunu kullanabilirsiniz.
+
+---
+
+## Linux İçin Derleme
+
+Linux sürümü de aynı şekilde kaynak koddan derlenebilir; kaynak dosyalar `linux/` alt klasöründedir.
+
+### Gereksinimler
+
+- **.NET 8.0 SDK** veya üzeri
+- **Node.js 18** veya üzeri
+- Debian/Ubuntu tabanlı bir dağıtım (Linux Mint dahil)
+- Derleme bağımlılıkları: `build-essential`, `libnetfilter-queue-dev`, `libnfnetlink-dev`, `libmnl-dev`, `libcap-dev`, `libsystemd-dev`, `zlib1g-dev`, `libluajit-5.1-dev`
+
+### Derleme Adımları
+
+1. **Bağımlılıkları yükleyin**
+   ```bash
+   cd linux/client
+   npm install
+   ```
+
+2. **DPI araçlarının ikili dosyalarını indirip derleyin** (zapret/zapret2/ByeDPI kaynaktan derlenir, birkaç dakika sürebilir)
+   ```bash
+   node ../scripts/fetch-binaries.js
+   ```
+
+3. **`.deb` paketini oluşturun** (bu adım, .NET servisini de otomatik olarak derler)
+   ```bash
+   npm run dist
+   ```
+
+4. Oluşan `linux/client/dist/SplitCord-Turkey-Linux-*.deb` dosyasını `sudo dpkg -i` ile kurun.
 
 ---
 

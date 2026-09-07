@@ -238,6 +238,13 @@
             <label class="sc-field-label" for="advanced-args">Seçili motor için komut satırı argümanları</label>
             <textarea id="advanced-args" class="sc-textarea" rows="2" placeholder="örn: --split 1+s --disorder 2 --auto=torst"></textarea>
             <button id="btn-save-args" class="sc-btn sc-btn--primary">Kaydet</button>
+            <button id="btn-reject-current-manual" class="sc-btn sc-btn--danger" hidden>Argüman Setini Yasakla</button>
+
+            <div id="rejected-args-section-manual" hidden>
+              <h2>Yasaklı Argüman Setleri</h2>
+              <p class="sc-hint">Bu setler (Otomatik modda da) bir daha denenmeyecek.</p>
+              <div id="rejected-args-list-manual" class="sc-rejected-list"></div>
+            </div>
 
             <div class="sc-divider"></div>
             <h2>Zapret2 Tarama Süresi</h2>

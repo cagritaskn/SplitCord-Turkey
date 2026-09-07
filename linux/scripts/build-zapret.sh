@@ -27,7 +27,7 @@ mkdir -p "$WORK_DIR"
 curl -fsSL "$ZAPRET_URL" -o "$WORK_DIR/zapret.tar.gz"
 tar -xzf "$WORK_DIR/zapret.tar.gz" -C "$WORK_DIR"
 
-SRC_DIR="$WORK_DIR/zapret-${ZAPRET_VERSION}"
+SRC_DIR="$WORK_DIR/zapret-v${ZAPRET_VERSION}"
 if [ ! -d "$SRC_DIR" ]; then
   echo "HATA: beklenen kaynak dizini bulunamadi: $SRC_DIR (tarball'in ic yapisi degismis olabilir)" >&2
   exit 1

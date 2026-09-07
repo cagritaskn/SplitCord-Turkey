@@ -27,6 +27,9 @@ const automaticStatusEl = document.getElementById('automatic-status');
 const btnRejectCurrent = document.getElementById('btn-reject-current');
 const rejectedArgsSection = document.getElementById('rejected-args-section');
 const rejectedArgsList = document.getElementById('rejected-args-list');
+const btnRejectCurrentManual = document.getElementById('btn-reject-current-manual');
+const rejectedArgsSectionManual = document.getElementById('rejected-args-section-manual');
+const rejectedArgsListManual = document.getElementById('rejected-args-list-manual');
 const dpiAutomaticView = document.getElementById('dpi-automatic-view');
 const dpiManualView = document.getElementById('dpi-manual-view');
 const dpiAdvancedAutomaticSection = document.getElementById('dpi-advanced-automatic-section');
@@ -127,7 +130,9 @@ async function renderAutomaticStatus() {
   await renderRejectedArgsList(active?.id ?? null);
 }
 
-async function renderRejectedArgsList(engineId) {
+// sectionEl/listEl: Otomatik ve Manuel görünümlerinin AYRI DOM konteynerleri var (aynı anda
+// ikisi de gizli olmayacağı için içerik paylaşımına gerek yok) — bkz. renderManualRejectedArgsList.
+async function renderRejectedArgsList(engineId, sectionEl = rejectedArgsSection, listEl = rejectedArgsList) {
   let rejected = [];
   if (engineId) {
     try {
@@ -137,8 +142,8 @@ async function renderRejectedArgsList(engineId) {
     }
   }
 
-  rejectedArgsSection.hidden = rejected.length === 0;
-  rejectedArgsList.innerHTML = '';
+  sectionEl.hidden = rejected.length === 0;
+  listEl.innerHTML = '';
   for (const args of rejected) {
     const row = document.createElement('div');
     row.className = 'sc-rejected-item';
@@ -152,11 +157,18 @@ async function renderRejectedArgsList(engineId) {
       } catch (err) {
         window.splitcord.log('unreject-args-error', { id: engineId, args, error: err.message });
       }
-      await renderRejectedArgsList(engineId);
+      await renderRejectedArgsList(engineId, sectionEl, listEl);
     });
     row.appendChild(btn);
-    rejectedArgsList.appendChild(row);
+    listEl.appendChild(row);
   }
+}
+
+// Otomatik'teki renderAutomaticStatus'un manuel karşılığı -- yalnızca Manuel modda, o an
+// SEÇİLİ (aktif olması şart değil) motorun yasaklı argüman setlerini gösterir.
+async function renderManualRejectedArgsList() {
+  if (!rejectedArgsSectionManual || !rejectedArgsListManual) return;
+  await renderRejectedArgsList(selectedEngineId, rejectedArgsSectionManual, rejectedArgsListManual);
 }
 
 btnRejectCurrent.addEventListener('click', async () => {
@@ -171,6 +183,40 @@ btnRejectCurrent.addEventListener('click', async () => {
   }
   btnRejectCurrent.disabled = false;
   btnRejectCurrent.textContent = 'Argüman Setini Yasakla';
+  await refreshStatus();
+});
+
+// Manuel moddaki karşılığı -- sunucu tarafı (DpiEngineManager.RejectCurrentArgsAsync,
+// GetRejectedArgsList) zaten motordan bağımsız/genel; ipc.js'teki dpi:reject-current-args
+// handler'ı da allowEscalation'ı sabit değil, o an okunan dpiMode'a göre hesaplıyor (bkz.
+// oradaki not) -- yani bu SEÇİLİ motoru Manuel modda çağırdığımızda otomatik olarak
+// allowEscalation=false gidiyor, IsManualActivation=true kalıyor, Zapret2 blockcheck2'nin
+// erken-durdurma mekanizması yasaklanan adayı görmezden gelip AYNI çalıştırma içinde bir
+// SONRAKİ adaya geçiyor (bkz. Zapret2Engine.StartAsync'teki triedAndFailed notu) -- yani
+// tarama DURMUYOR, kaldığı yerden devam ediyor.
+btnRejectCurrentManual?.addEventListener('click', async () => {
+  if (!selectedEngineId) return;
+
+  const choice = await window.showConfirmModal({
+    title: 'Argüman seti yasaklansın mı?',
+    message: 'Bu motor için kayıtlı argüman seti yasaklanacak ve yeni bir arama başlatılacak.',
+    detail: 'Bu işlem birkaç dakika sürebilir (özellikle Zapret2 için).',
+  });
+  if (choice !== 0) {
+    window.splitcord.log('reject-current-args-manual-cancelled', { id: selectedEngineId });
+    return;
+  }
+
+  window.splitcord.log('reject-current-args-manual-click', { id: selectedEngineId });
+  btnRejectCurrentManual.disabled = true;
+  btnRejectCurrentManual.textContent = 'Yeni ayar aranıyor…';
+  try {
+    await window.splitcord.dpi.rejectCurrentArgs(selectedEngineId);
+  } catch (err) {
+    window.splitcord.log('reject-current-args-manual-error', { id: selectedEngineId, error: err.message });
+  }
+  btnRejectCurrentManual.disabled = false;
+  btnRejectCurrentManual.textContent = 'Argüman Setini Yasakla';
   await refreshStatus();
 });
 
@@ -593,6 +639,7 @@ async function refreshStatus() {
   selectedEngineId = selectedEngineId || getDisplayActiveEngineId(currentStatus);
   renderEngineList();
   await renderAutomaticStatus();
+  await renderManualRejectedArgsList();
   await refreshLogs();
 }
 
@@ -620,6 +667,11 @@ function renderEngineList() {
   }
   if (restartSearchManualWrap) {
     restartSearchManualWrap.classList.toggle('sc-restart-search--locked', currentStatus.switching);
+  }
+
+  if (btnRejectCurrentManual) {
+    btnRejectCurrentManual.hidden = !selectedEngineForRestart;
+    btnRejectCurrentManual.disabled = currentStatus.switching;
   }
 
   engineListEl.innerHTML = '';

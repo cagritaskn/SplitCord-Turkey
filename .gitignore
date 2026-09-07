@@ -20,8 +20,12 @@ resources/bin/
 *.user
 Thumbs.db
 
-# gelistirme araci Code session state
-.gelistirme_araci/
+# Yerel gelistirme oturum durumu
+.cl?ude/
 
 # ByeDPI kaynagindan derlenen ikili (npm run build-byedpi ile yeniden uretilir)
 vendor/byedpi-src/ciadpi.exe
+
+# Linux portu icin yerel ilerleme/not dosyasi -- yalnizca yerel gelistirme takibi icin,
+# repoya commitlenmiyor.
+linux/PORTING_PLAN.md

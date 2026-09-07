@@ -38,10 +38,30 @@ function isNonFatalRichPresencePortConflict(err) {
   return /EADDRINUSE/.test(text) && /richPresence|arrpc/i.test(text);
 }
 
+// GERÇEK BUG (GitHub issue: ekran paylaşımında "İptal"e basınca uygulama kapanıyor): kök
+// neden screenSharePicker.js'te `callback({})` yerine `callback(null)` kullanılarak
+// düzeltildi (bkz. o dosyadaki ayrıntılı not, electron/electron#45517 ve #47980). Bu, yalnızca
+// bilinen ekstra bir güvenlik katmanı -- Electron'un setDisplayMediaRequestHandler'ının
+// video/audio doğrulamasında (electron_browser_context.cc'deki ThrowTypeError çağrıları)
+// başka, henüz karşılaşılmamış bir kenar durum senkron try/catch'imizi atlayıp buraya
+// düşerse, ekran paylaşımı gibi tamamen kurtarılabilir bir hata yüzünden TÜM uygulamayı
+// kapatmak yerine sessizce loglayıp devam ediyoruz.
+function isNonFatalDisplayMediaError(err) {
+  const text = `${err?.message ?? ''} ${err?.stack ?? ''}`;
+  return /video was requested, but no video stream was provided|WebFrameMain or DesktopCapturerSource|audio must be a WebFrameMain/i.test(
+    text,
+  );
+}
+
 let handlingFatalError = false;
 async function handleFatalMainProcessError(err) {
   if (isNonFatalRichPresencePortConflict(err)) {
     logEvent('rich-presence-port-conflict-ignored', { error: err?.message });
+    return;
+  }
+
+  if (isNonFatalDisplayMediaError(err)) {
+    logEvent('display-media-error-ignored', { error: err?.message });
     return;
   }
 

@@ -6,17 +6,20 @@ const os = require('os');
 const { app } = require('electron');
 
 // Windows karşılığının (client/src/main/autostart.js) portu. Windows'ta getLoginItemSettings()
-// registry'deki kayıtlı komut satırını 'args' ile birebir karşılaştırıyordu — Linux'ta Electron
-// bunu bir masaüstü giriş dosyası (~/.config/autostart/*.desktop) yazarak/okuyarak simüle ediyor.
+// registry'deki kayıtlı komut satırını 'args' ile birebir karşılaştırıyordu.
 //
-// DOĞRULANMADI (bkz. ../../PORTING_PLAN.md §2 madde 5): Electron'un yerleşik setLoginItemSettings/
-// getLoginItemSettings'i .deb kurulumunda (gerçek, sabit bir /usr/bin/... yolu ve kurulu bir
-// .desktop girişi olduğu için) muhtemelen düzgün çalışıyor, ama AppImage'da GÜVENİLİR DEĞİL —
-// AppImage kendini geçici bir noktaya mount edip oradan çalıştığı için Electron'un varsayılan
-// mekanizması (kendi exe yolunu bulup bir .desktop yazma) yanlış/geçici bir yola işaret edebilir.
-// Bu yüzden AppImage'da (process.env.APPIMAGE — AppImage runtime'ının kendi ayarladığı, GERÇEK
-// .AppImage dosyasının yolunu içeren ortam değişkeni) ELLE bir .desktop dosyası yazıp okuyoruz;
-// .deb/dev modunda Electron'un yerleşik API'sine güveniyoruz.
+// CANLI TESTTE DOĞRULANAN GERÇEK BUG (2026-09-05, bkz. PORTING_PLAN.md §2 madde 5): Electron'un
+// app.setLoginItemSettings()/getLoginItemSettings() API'leri yalnızca Windows ve macOS'ta
+// implemente edilmiş (bkz. node_modules/electron/electron.d.ts -- ikisi de "@platform
+// darwin,win32" olarak işaretli). Linux'ta bu ikisi de SESSİZCE HİÇBİR ŞEY YAPMAYAN (no-op)
+// çağrılar: setLoginItemSettings hiçbir ".desktop" girişi oluşturmuyor, getLoginItemSettings
+// her zaman openAtLogin:false dönüyor. Önceki port bu no-op'lara (yalnızca AppImage için elle
+// yazılan bir .desktop dosyasına DEĞİL) güveniyordu -- bu yüzden .deb kurulumunda "sistemle
+// başlat" ayarı hem GERÇEKTE hiç uygulanmıyor (açılışta program başlamıyor) hem de her okunuşta
+// (Ayarlar ekranı, ya da index.js'teki "varsayılan olarak aç" mantığı) her zaman kapalı
+// görünüyordu. Düzeltme: paketleme türünden (deb/AppImage) BAĞIMSIZ olarak Linux'ta HER ZAMAN
+// ~/.config/autostart/*.desktop dosyasını elle yazıp okuyoruz -- XDG Autostart spesifikasyonu
+// masaüstü ortamından bağımsız çalışan tek güvenilir mekanizma.
 const HIDDEN_ARGS = ['--hidden'];
 const DESKTOP_FILE_NAME = 'com.splitcord.turkey.autostart.desktop';
 const AUTOSTART_DIR = path.join(os.homedir(), '.config', 'autostart');
@@ -26,7 +29,17 @@ function isAppImage() {
   return !!process.env.APPIMAGE;
 }
 
-function readAppImageAutostart() {
+// AppImage kendini geçici bir noktaya mount edip oradan çalıştığı için process.execPath
+// yanlış/geçici bir yola işaret ediyor -- APPIMAGE ortam değişkeni (AppImage runtime'ının
+// kendi ayarladığı, GERÇEK .AppImage dosyasının yolunu içeren değişken) kullanılmalı. .deb
+// kurulumunda ve dev modunda process.execPath (app.getPath('exe')) doğru/kalıcı yolu verir
+// (ör. /opt/SplitCord-Turkey/splitcord-turkey).
+function resolveExePath() {
+  if (isAppImage()) return process.env.APPIMAGE;
+  return app.getPath('exe');
+}
+
+function readAutostartFile() {
   try {
     const content = fs.readFileSync(AUTOSTART_FILE, 'utf8');
     return {
@@ -38,7 +51,7 @@ function readAppImageAutostart() {
   }
 }
 
-function writeAppImageAutostart(enabled, startInBackground) {
+function writeAutostartFile(enabled, startInBackground) {
   if (!enabled) {
     try {
       fs.unlinkSync(AUTOSTART_FILE);
@@ -48,7 +61,7 @@ function writeAppImageAutostart(enabled, startInBackground) {
     return;
   }
 
-  const exePath = process.env.APPIMAGE;
+  const exePath = resolveExePath();
   const args = startInBackground ? ` ${HIDDEN_ARGS.join(' ')}` : '';
   // Yol boşluk içerebilir -- tırnak içine alınıyor.
   const execLine = `"${exePath}"${args}`;
@@ -66,27 +79,16 @@ function writeAppImageAutostart(enabled, startInBackground) {
 }
 
 function isAutoStartEnabled() {
-  if (isAppImage()) return readAppImageAutostart().openAtLogin;
-  return app.getLoginItemSettings({ args: [] }).openAtLogin || app.getLoginItemSettings({ args: HIDDEN_ARGS }).openAtLogin;
+  return readAutostartFile().openAtLogin;
 }
 
 function isStartInBackgroundEnabled() {
-  if (isAppImage()) {
-    const state = readAppImageAutostart();
-    return state.openAtLogin && state.hidden;
-  }
-  return app.getLoginItemSettings({ args: HIDDEN_ARGS }).openAtLogin;
+  const state = readAutostartFile();
+  return state.openAtLogin && state.hidden;
 }
 
 function applyAutoStart(enabled, startInBackground) {
-  if (isAppImage()) {
-    writeAppImageAutostart(enabled, startInBackground);
-    return;
-  }
-  app.setLoginItemSettings({
-    openAtLogin: enabled,
-    args: enabled && startInBackground ? HIDDEN_ARGS : [],
-  });
+  writeAutostartFile(enabled, startInBackground);
 }
 
 module.exports = { isAutoStartEnabled, isStartInBackgroundEnabled, applyAutoStart };

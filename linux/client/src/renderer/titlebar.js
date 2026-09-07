@@ -204,6 +204,8 @@ const btnStatusRetryAuto = document.getElementById('btn-status-retry-auto');
 const btnStatusManualSetup = document.getElementById('btn-status-manual-setup');
 const btnStatusOpenPermissions = document.getElementById('btn-status-open-permissions');
 const btnStatusDisableQuic = document.getElementById('btn-status-disable-quic');
+const btnStatusInstallService = document.getElementById('btn-status-install-service');
+const btnStatusRejectUnstableArgs = document.getElementById('btn-status-reject-unstable-args');
 
 // isError=false (varsayılan): bir şey hâlâ deneniyor demektir, spinner döner.
 // isError=true: kesin/geçici olarak duraklamış bir durum (kullanıcı elle Yenile'ye
@@ -215,7 +217,14 @@ function showStatus(message, isError = false) {
   else statusOverlay.removeAttribute('data-error');
   if (isError) clearStatusScanLog();
   if (statusActions) statusActions.hidden = true;
-  [btnStatusRetryAuto, btnStatusManualSetup, btnStatusOpenPermissions, btnStatusDisableQuic].forEach((btn) => {
+  [
+    btnStatusRetryAuto,
+    btnStatusManualSetup,
+    btnStatusOpenPermissions,
+    btnStatusDisableQuic,
+    btnStatusInstallService,
+    btnStatusRejectUnstableArgs,
+  ].forEach((btn) => {
     if (btn) btn.hidden = true;
   });
   statusOverlay.hidden = false;
@@ -308,6 +317,34 @@ btnStatusOpenPermissions?.addEventListener('click', () => {
   window.splitcord.window.openSettings('panel-permissions');
 });
 
+// did-fail-load'ın vazgeçme dalının (aşağıda) gösterdiği "Argüman Setini Yasakla" düğmesi
+// hangi motoru hedefleyecek -- düğme tıklanana kadar bu değer korunuyor (bir sonraki
+// refreshConnection/did-fail-load turunda showStatus() zaten düğmeyi gizleyip bu bilgiyi
+// geçersiz kılıyor, bu yüzden ekstra bir temizliğe gerek yok).
+let rejectBannerEngineId = null;
+
+// KULLANICI TALEBİ (Windows istemcisinde bulundu, buraya da aynen uygulanıyor -- canlı
+// kullanıcıda gözlemlendi: Zapret2'nin kayıtlı ayarı bir saniyeliğine Discord'u yükleyip
+// sonra ERR_CONNECTION_RESET ile döngüye giriyordu): bu, ipc.js'teki dpi:reject-current-args
+// handler'ının ZATEN mod-farkında olan (bkz. oradaki not) genel "Argüman Setini Yasakla"
+// mekanizmasını kullanıyor -- Otomatik'te motor tükenirse zincirdeki bir sonrakine geçilir,
+// Manuel'de yalnızca SEÇİLİ/aktif motor için yeniden aranır.
+btnStatusRejectUnstableArgs?.addEventListener('click', async () => {
+  if (!rejectBannerEngineId) return;
+  window.splitcord.log?.('status-reject-unstable-args-click', { id: rejectBannerEngineId });
+  btnStatusRejectUnstableArgs.disabled = true;
+  btnStatusRejectUnstableArgs.textContent = 'Yeni ayar aranıyor…';
+  try {
+    await window.splitcord.dpi.rejectCurrentArgs(rejectBannerEngineId);
+  } catch (err) {
+    window.splitcord.log?.('status-reject-unstable-args-error', { id: rejectBannerEngineId, error: err.message });
+  }
+  btnStatusRejectUnstableArgs.disabled = false;
+  btnStatusRejectUnstableArgs.textContent = 'Argüman Setini Yasakla';
+  rejectBannerEngineId = null;
+  await refreshConnection();
+});
+
 // ipc.js'teki app:set-quic-disabled handler'ı KENDİ onay diyaloğunu (yeniden başlatma
 // gerektiği için) zaten gösteriyor -- burada AYRICA window.showConfirmModal ile önceden
 // sormuyoruz, aksi halde kullanıcı üst üste iki onay ekranı görürdü. Ayarlar > Genel'deki
@@ -364,6 +401,32 @@ btnStatusRetryAuto?.addEventListener('click', async () => {
   refreshConnection();
 });
 
+btnStatusInstallService?.addEventListener('click', async () => {
+  window.splitcord.log?.('status-install-service-click', {});
+  btnStatusInstallService.disabled = true;
+  showStatus('DPI servisi kuruluyor… (parola isteyen bir pencere açılabilir)');
+  try {
+    const result = await window.splitcord.dpi.installService();
+    if (result.ok) {
+      window.splitcord.log?.('status-install-service-succeeded', {});
+    } else if (result.cancelled) {
+      window.splitcord.log?.('status-install-service-cancelled', {});
+    } else {
+      window.splitcord.log?.('status-install-service-failed', { error: result.error });
+      showStatusWithActions(`DPI servisi kurulamadı.\n${result.error}`, [btnStatusInstallService]);
+      btnStatusInstallService.disabled = false;
+      return;
+    }
+  } catch (err) {
+    window.splitcord.log?.('status-install-service-error', { error: err.message });
+    showStatusWithActions(`DPI servisi kurulamadı.\n${err.message}`, [btnStatusInstallService]);
+    btnStatusInstallService.disabled = false;
+    return;
+  }
+  btnStatusInstallService.disabled = false;
+  refreshConnection();
+});
+
 // Windows karşılığı burada bir tarama sonuçlandığında Kaspersky/ESET tespitini kontrol edip
 // (15dk'da en fazla bir kez, localStorage ile throttle'lı) bir uyarı modalı gösteriyordu —
 // bu kavramın Linux karşılığı yok (bkz. PORTING_PLAN.md D-9, serviceClient.js/preload.js'te
@@ -392,8 +455,24 @@ async function refreshConnection() {
         timeout(STATUS_TIMEOUT_MS, 'getStatus zaman aşımına uğradı (renderer tarafı güvenlik zaman aşımı)'),
       ]);
     } catch (err) {
+      // ÖNEMLİ (canlı testte bulunan gerçek bug, 2026-09-04): bu dal, aşağıdaki DİĞER tüm ara/
+      // bekleme durumlarının (switching, startup-grace, exhausted) aksine HİÇBİR otomatik
+      // yeniden deneme İÇERMİYORDU — servis (ör. bir güncelleme/yeniden başlatma sırasında)
+      // GEÇİCİ olarak erişilemez olduğunda kullanıcı, servis tekrar ayağa kalksa BİLE, elle bir
+      // şey yapana kadar (uygulamayı yeniden başlatmak gibi) SÜRESİZ bu hata ekranında kalıyordu
+      // — burada gösterilecek bir "tekrar dene" butonu da YOK. "switching" dalıyla AYNI 3sn'lik
+      // sessiz yeniden deneme deseni buraya da uygulanıyor; servis geri gelince refreshConnection
+      // doğal olarak normal dallardan birine geçecek.
+      //
+      // "DPI Servisini Kur" butonu (2026-09-05, kullanıcı talebi): .deb kurulumunda DPI servisi
+      // artık postinst script'iyle (bkz. packaging/deb-postinst.sh, package.json build.deb.
+      // afterInstall) OTOMATİK kuruluyor — bu buton normal şartlarda GÖRÜNMEZ. Yalnızca o adım
+      // başarısız olduysa (ör. NFQUEUE modülleri yüklenemedi, install.sh hata verdi) elle kurtarma
+      // yolu olarak burada kalıyor; kullanıcı bir terminal açıp install.sh aramak zorunda kalmasın
+      // diye pkexec ile aynı script'i tekrar tetikliyor (bkz. serviceInstaller.js).
       window.splitcord.log?.('refresh-get-status-failed', { error: err.message });
-      showStatus(`DPI servisine ulaşılamıyor.\n${err.message}`, true);
+      showStatusWithActions(`DPI servisine ulaşılamıyor.\n${err.message}`, [btnStatusInstallService]);
+      setTimeout(refreshConnection, 3000);
       return;
     }
 
@@ -473,7 +552,9 @@ async function refreshConnection() {
 // kazanmaya yetecek kadar pay bırakıyor. ÖNEMLİ: bu eşik ve bekleme ByeDPI için de AYNI —
 // eskiden ByeDPI herhangi bir did-fail-load'da (tek bir geçici sıfırlanmada bile) hemen
 // argümanı reddedip yeniden tarıyordu, diğer motorlara hiç tanınmayan bir sabırsızlıkla;
-// artık hepsi aynı şekilde bekliyor.
+// artık hepsi aynı şekilde bekliyor. KULLANICI TALEBİ: eşik 5'e düşürülmüştü, GoodbyeDPI'nin
+// (Windows) 4-5 denemede istikrar kazanma riskiyle çelişiyordu — 8'de bırakılmasına karar
+// verildi (Windows istemcisiyle tutarlı kalması için burada da).
 let engineFailCount = 0;
 const ENGINE_MAX_AUTO_RETRIES = 8;
 const ENGINE_RETRY_DELAY_MS = 2000;
@@ -519,18 +600,23 @@ webview?.addEventListener('did-fail-load', async (event) => {
 
     engineFailCount += 1;
     if (engineFailCount > ENGINE_MAX_AUTO_RETRIES) {
-      // Birkaç yeniden deneme sonrası hâlâ başarısız — geçici bir sıfırlanma değil,
-      // kayıtlı ayar kalıcı olarak çalışmıyor gibi görünüyor. Motoru DEĞİŞTİRMİYORUZ,
-      // yalnızca AYNI motorun doğrulamasını sıfırlayıp yeniden aday taramasını tetikliyoruz
-      // (Manuel moddaysa BAŞKA bir motora geçmeden — bkz. ipc.js'teki allowEscalation).
+      // KULLANICI TALEBİ (Windows istemcisinde bulundu, buraya da aynen uygulanıyor -- canlı
+      // kullanıcıda gözlemlendi: Zapret2'nin kayıtlı ayarı bir saniyeliğine Discord'u yükleyip
+      // sonra ERR_CONNECTION_RESET ile bu döngüye giriyordu): eskiden burada SESSİZCE
+      // reportEngineFailure/reportByeDpiFailure çağrılıp otomatik yeniden tarama tetiklenir,
+      // sayfa da yeniden yüklenmeye (webview.reload) devam ederdi. Artık sayfayı BİR DAHA
+      // yeniden yüklemiyoruz ve kullanıcıya açıkça soruyoruz: argüman seti stabil değil,
+      // yasaklamak ister misin? (bkz. aşağıdaki btnStatusRejectUnstableArgs click handler'ı
+      // -- rejectCurrentArgs zaten mod-farkında, Otomatik'te motor tükenirse zincirdeki bir
+      // sonrakine geçer, Manuel'de yalnızca SEÇİLİ motor için yeniden arar).
       window.splitcord.log?.('did-fail-load-give-up', { activeEngineId: status?.activeEngineId, count: engineFailCount });
       engineFailCount = 0;
-      if (status?.activeEngineId === 'byedpi') {
-        showStatus(`Discord yüklenemedi (${event.errorDescription || event.errorCode}).\nFarklı bir ByeDPI stratejisi deneniyor…`);
-        await window.splitcord.dpi.reportByeDpiFailure();
-      } else if (status?.activeEngineId) {
-        showStatus(`Discord yüklenemedi (${event.errorDescription || event.errorCode}).\nKayıtlı ayar artık çalışmıyor gibi görünüyor, yeniden aranıyor…`);
-        await window.splitcord.dpi.reportEngineFailure(status.activeEngineId);
+      if (status?.activeEngineId && btnStatusRejectUnstableArgs) {
+        rejectBannerEngineId = status.activeEngineId;
+        showStatusWithActions(
+          `${ENGINE_MAX_AUTO_RETRIES} denemenin ardından kayıtlı ayar ile yine Discord'a erişilemedi.\nKullanılan argüman seti ile Discord'a erişim stabil değil. Argüman setini yasaklayarak farklı argüman setleri için kontrol başlatabilirsiniz.`,
+          [btnStatusRejectUnstableArgs],
+        );
       } else {
         showStatus(`Discord yüklenemedi (${event.errorDescription || event.errorCode}).\nYenile'ye tekrar basmayı deneyin.`, true);
       }
@@ -665,10 +751,14 @@ btnUpdateAvailable?.addEventListener('click', async () => {
       await openDownloadedUpdateGuarded();
     } catch (err) {
       window.splitcord.log?.('update-open-error', { error: err.message });
-      await window.showAlertModal({
-        title: 'Güncelleme açılamadı',
-        message: err.message,
-      });
+      // 'CANCELLED': kullanıcı pkexec parola isteminde kendisi vazgeçti -- bu bir HATA değil,
+      // buton sessizce "Güncellemeyi Kur" durumunda kalıp tekrar denemesine izin veriyor.
+      if (err.message !== 'CANCELLED') {
+        await window.showAlertModal({
+          title: 'Güncelleme kurulamadı',
+          message: err.message,
+        });
+      }
     }
     return;
   }
@@ -687,9 +777,9 @@ btnUpdateAvailable?.addEventListener('click', async () => {
     await window.splitcord.app.downloadUpdate(pendingUpdateInfo.downloadUrl);
     updateDownloaded = true;
     btnUpdateAvailable.textContent = 'Güncellemeyi Kur';
-    // İndirme biter bitmez kurulum sihirbazını bir kez otomatik aç — kullanıcı ikinci bir
-    // tıklamaya gerek kalmadan devam edebilsin. Açma başarısız olursa (ör. shell.openPath
-    // hatası) sessizce yut — buton zaten "Güncellemeyi Kur" durumunda kalıyor, kullanıcı
+    // İndirme biter bitmez kurulumu bir kez otomatik tetikle (pkexec parola istemi açılır) —
+    // kullanıcı ikinci bir tıklamaya gerek kalmadan devam edebilsin. Başarısız olursa (iptal
+    // dahil) sessizce yut — buton zaten "Güncellemeyi Kur" durumunda kalıyor, kullanıcı
     // tıklayarak tekrar deneyebilir.
     window.splitcord.log?.('update-auto-open', { version: pendingUpdateInfo.latestVersion });
     openDownloadedUpdateGuarded().catch((err) => {

@@ -1,5 +1,6 @@
 'use strict';
 
+const path = require('node:path');
 const { app } = require('electron');
 const { createMainWindow, getMainWindow } = require('./window');
 const { applyShortcutsFromSettings, unregisterGlobalShortcuts } = require('./shortcuts');
@@ -10,13 +11,33 @@ const { applyDpiProxy } = require('./dpiProxy');
 const { startConfiguredEngine, registerShutdownHook } = require('./dpiLifecycle');
 const { configureSecureDns } = require('./secureDns');
 const { readLocalSettings, writeLocalSettings } = require('./localSettings');
-const { applyAutoStart } = require('./autostart');
+const { applyAutoStart, isAutoStartEnabled } = require('./autostart');
 const { registerScreenSharePicker } = require('./screenSharePicker');
 const updateChecker = require('./updateChecker');
 const { logEvent } = require('./log');
 const { registerProtocolHandler, extractProtocolUrlFromArgv, parseDiscordUri } = require('./protocolHandler');
 const { startRichPresence } = require('./richPresence');
 const serviceClient = require('./serviceClient');
+
+// package.json'ın üst seviye "name" alanı ("splitcord-client-linux", npm paket adı) --
+// electron-builder'ın "productName"ıyla (build.productName: "SplitCord-Turkey") KARIŞTIRILMAMALI.
+// Electron, açıkça setName() çağrılmazsa uygulama adını (dolayısıyla Linux'ta X11 WM_CLASS'ı)
+// npm paket adından türetiyor -- bu da .desktop dosyasındaki StartupWMClass=SplitCord-Turkey
+// ile GERÇEKTEN eşleşmeyen bir WM_CLASS'a (canlı testte "splitcord-client-linux" olarak
+// doğrulandı) yol açıyordu; bu eşleşme taşınabilir dock/görev çubuğu gruplaması ve pencere
+// yöneticisinin uygulamaya özgü kararları (ör. bazı WM'lerde uygulama başına dekorasyon
+// istisnaları) için önemli.
+app.setName('SplitCord-Turkey');
+
+// ÖNEMLİ: app.setName() Electron'un userData yolunu (~/.config/<appName>) da bu YENİ isme
+// göre türetir -- setName() olmadan bu yol zaten "splitcord-client-linux" idi (var olan
+// kurulumlardaki tüm yerel ayarlar/loglar/tekil örnek kilidi hâlâ ORADA duruyor). setName()'i
+// düzelttikten SONRA burayı AÇIKÇA eski yola sabitlemezsek, uygulama sanki ilk kez
+// kuruluyormuş gibi "~/.config/SplitCord-Turkey" adında YENİ ve BOŞ bir dizine yazmaya
+// başlar -- var olan kullanıcılar ayarlarının/oturumlarının "kaybolduğunu" görür. Bu yüzden
+// userData'yı KASITLI olarak eski isimde sabit tutuyoruz; yalnızca WM_CLASS/görüntülenen ad
+// düzeliyor, veri konumu DEĞİŞMİYOR.
+app.setPath('userData', path.join(app.getPath('appData'), 'splitcord-client-linux'));
 
 // Ana süreçte yakalanmamış bir hata (ör. arRPC köprü portu çakışması, beklenmeyen bir
 // çökme) Electron'un varsayılan hata penceresini gösterse de süreci HER ZAMAN güvenilir
@@ -38,10 +59,31 @@ function isNonFatalRichPresencePortConflict(err) {
   return /EADDRINUSE/.test(text) && /richPresence|arrpc/i.test(text);
 }
 
+// GERÇEK BUG (Windows istemcisinde bulundu, buraya da aynen uygulanıyor — bkz.
+// client/src/main/index.js ve screenSharePicker.js'deki ayrıntılı not): kök neden
+// screenSharePicker.js'te `callback({})` yerine `callback(null)` kullanılarak düzeltildi
+// (electron/electron#45517, #47980). Bu, yalnızca bilinen ekstra bir güvenlik katmanı --
+// Electron'un setDisplayMediaRequestHandler'ının video/audio doğrulamasında
+// (electron_browser_context.cc'deki ThrowTypeError çağrıları) başka, henüz karşılaşılmamış
+// bir kenar durum senkron try/catch'imizi atlayıp buraya düşerse, ekran paylaşımı gibi
+// tamamen kurtarılabilir bir hata yüzünden TÜM uygulamayı kapatmak yerine sessizce loglayıp
+// devam ediyoruz.
+function isNonFatalDisplayMediaError(err) {
+  const text = `${err?.message ?? ''} ${err?.stack ?? ''}`;
+  return /video was requested, but no video stream was provided|WebFrameMain or DesktopCapturerSource|audio must be a WebFrameMain/i.test(
+    text,
+  );
+}
+
 let handlingFatalError = false;
 async function handleFatalMainProcessError(err) {
   if (isNonFatalRichPresencePortConflict(err)) {
     logEvent('rich-presence-port-conflict-ignored', { error: err?.message });
+    return;
+  }
+
+  if (isNonFatalDisplayMediaError(err)) {
+    logEvent('display-media-error-ignored', { error: err?.message });
     return;
   }
 
@@ -117,9 +159,21 @@ if (!gotSingleInstanceLock) {
     // Otomatik başlatma + arkaplanda başlatma varsayılan olarak açık gelsin, ama
     // yalnızca BİR KEZ — kullanıcı sonradan Ayarlar'dan kapatırsa bir sonraki açılışta
     // tekrar zorla açılmamalı (bkz. localSettings.js autostartDefaultApplied).
+    //
+    // ÖNEMLİ (canlı testte bulunan gerçek bug, 2026-09-04): applyAutoStart (.deb/dev modunda
+    // Electron'un app.setLoginItemSettings()'ine dayanıyor) SESSİZCE başarısız olabilir --
+    // hata fırlatmıyor, yalnızca hiçbir şey yapmıyor. Önceki hâlinde bu durumda bile
+    // autostartDefaultApplied HEMEN true yazılıyordu, bu yüzden asla yeniden denenmiyordu ve
+    // kullanıcı kalıcı olarak "kapalı" kalıyordu (ayarı elle açana kadar). Şimdi isAutoStartEnabled()
+    // ile GERÇEKTEN uygulanıp uygulanmadığı doğrulanıyor -- yalnızca başarılıysa bayrak yazılıyor,
+    // başarısızsa bir sonraki açılışta tekrar denenecek (applyAutoStart idempotent, zararsız).
     if (!readLocalSettings().autostartDefaultApplied) {
       applyAutoStart(true, true);
-      writeLocalSettings({ autostartDefaultApplied: true });
+      if (isAutoStartEnabled()) {
+        writeLocalSettings({ autostartDefaultApplied: true });
+      } else {
+        logEvent('autostart-default-apply-failed', {});
+      }
     }
 
     await configureSecureDns();

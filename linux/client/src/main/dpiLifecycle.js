@@ -2,6 +2,37 @@
 
 const { app } = require('electron');
 const serviceClient = require('./serviceClient');
+const { logEvent } = require('./log');
+
+// Sistem açılışında istemci (autostart ile artık GERÇEKTEN erken açılıyor, bkz. autostart.js
+// düzeltmesi) ile DPI Service'in systemd birimi (network-online.target'ı bekleyip kendi
+// Kestrel HTTP dinleyicisini ayağa kaldırması birkaç saniye sürebilir) arasında bir yarış
+// var -- CANLI TESTTE BULUNAN GERÇEK BUG (2026-09-07): startConfiguredEngine() servise TEK
+// seferlik bir getDpiStatus() çağrısı atıyordu; istemci servisten önce açılıp bu çağrı
+// ECONNREFUSED ile anında başarısız olursa (servis portu henüz dinlemiyor), motor HİÇ
+// aktive edilmiyordu ve bir daha da denenmiyordu -- yalnızca console.error'a düşüyordu,
+// kullanıcı elle Ayarlar'dan dokunana ya da uygulamayı yeniden açana kadar (o zaman servis
+// çoktan ayakta olduğu için çalışıyordu) sessizce böyle kalıyordu. Düzeltme: yalnızca servise
+// ulaşmanın kendisi (getDpiStatus) başarısız olduğu sürece artan aralıklarla yeniden dene --
+// servise bir kez ulaşılabildiğinde (durum ne olursa olsun) döngüden çıkılıyor, devamı zaten
+// eskisi gibi tek seferlik mantıkla ilerliyor.
+const SERVICE_WAIT_RETRY_DELAYS_MS = [1000, 2000, 3000, 5000, 5000, 5000, 5000, 5000];
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getDpiStatusWithRetry() {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await serviceClient.getDpiStatus();
+    } catch (err) {
+      if (attempt >= SERVICE_WAIT_RETRY_DELAYS_MS.length) throw err;
+      logEvent('dpi-service-not-ready-retry', { attempt: attempt + 1, error: err.message });
+      await delay(SERVICE_WAIT_RETRY_DELAYS_MS[attempt]);
+    }
+  }
+}
 
 /**
  * DPI motorunun (ByeDPI/Zapret/Zapret2) ömrünü bu Electron uygulamasının ömrüne bağlar:
@@ -12,7 +43,7 @@ const serviceClient = require('./serviceClient');
  */
 async function startConfiguredEngine() {
   try {
-    const status = await serviceClient.getDpiStatus();
+    const status = await getDpiStatusWithRetry();
     if (status?.switching) {
       // Servis tarafında zaten bir tarama sürüyor (ör. uygulama az önce kapanıp yeniden
       // açıldı, önceki oturumdan kalma bir tarama hâlâ devam ediyor). Yine de activate
@@ -45,6 +76,7 @@ async function startConfiguredEngine() {
     }
   } catch (err) {
     console.error('DPI motoru başlatılamadı (DPI Service kurulu ve çalışıyor mu?):', err.message);
+    logEvent('dpi-engine-autostart-failed', { error: err.message });
   }
 }
 

@@ -88,6 +88,7 @@ contextBridge.exposeInMainWorld('splitcord', {
     resetAllSettings: () => ipcRenderer.invoke('app:reset-all-settings'),
     uninstallApp: () => ipcRenderer.invoke('app:uninstall-app'),
     registerBadgedTrayIcon: (dataUrl) => ipcRenderer.invoke('tray:register-badged-icon', dataUrl),
+    addDefenderException: () => ipcRenderer.invoke('app:add-defender-exception'),
     registerNotificationOverlayIcon: (dataUrl) => ipcRenderer.invoke('window:register-notification-overlay-icon', dataUrl),
   },
   voice: {

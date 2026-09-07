@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using SplitCord.ServiceLinux.Config;
 using SplitCord.ServiceLinux.Dns;
@@ -89,6 +90,38 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
     // durduruyoruz) sonraki denemelerde çalışıyor — kullanıcı talebiyle 6'dan 20'ye çıkarıldı.
     private const int SavedArgsRetryAttempts = 20;
 
+    // KULLANICI TALEBİ: blockcheck2'nin dakikalarca sürebilen taramasına düşmeden ÖNCE, sabit
+    // ve elle seçilmiş bir aday listesi sırayla denenir (Windows istemcisinde bulundu, buraya
+    // da aynen uygulanıyor — bkz. client/src/main/../../../service/SplitCordService/Engines/
+    // Zapret2Engine.cs'teki asıl gerekçe notu). Gerekçe: Teknosanet (canlı testte Türkiye'deki
+    // en agresif engelleme yapan ISP'lerden biri olarak gözlemlendi) üzerinde 3 saatlik bir
+    // blockcheck2 taramasıyla bulunup GERÇEKTEN doğrulanan bir strateji + kullanıcının ayrıca
+    // derlediği ek adaylar — o ağda çalışan bir strateji, daha az agresif ISP'lerde de büyük
+    // olasılıkla çalışır, bu yüzden HERKES için varsayılan ilk deneme kümesi olarak eklendi.
+    // SIRA ÖNEMLİ ve KORUNMALI: kullanıcının verdiği sıra (Teknosanet'te doğrulanan strateji
+    // ilk sırada, diğerleri onun ardından kullanıcının gönderdiği sırayla). Bu liste
+    // blockcheck2'nin YERİNE değil, ÖNÜNE geçiyor — hiçbiri çalışmazsa (ya da hepsi kullanıcı
+    // tarafından Ayarlar'dan yasaklanmışsa) normal blockcheck2 taramasına (DNS protokolü tier
+    // döngüsü dahil) geçiliyor, hiçbir kapsam kaybı yok.
+    private static readonly string[] PreConfiguredCandidates =
+    {
+        "--wf-l3=ipv4 --wf-tcp-out=443 --in-range=-s1 --lua-desync=oob:urp=b",
+        "--wf-l3=ipv4 --wf-tcp-out=443 --in-range=-s1 --lua-desync=oob:urp=0",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --in-range=-s1 --lua-desync=oob:urp=0",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --in-range=-s1 --lua-desync=oob:urp=b",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=http_hostcase:spell=hoSt",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=multidisorder:pos=midsld:seqovl=midsld-1",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=multidisorder:pos=method+2,midsld",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=multidisorder:pos=method+2:seqovl=method+1",
+        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=multidisorder:pos=method+2:seqovl=method+1:seqovl_pattern=fake_default_http",
+    };
+
+    // Her hazır önayar için, WinDivert'in ilk bağlanmada ara sıra başarısız olabilme
+    // gerçeğine karşı (bkz. SavedArgsRetryAttempts üstündeki not) küçük bir yeniden deneme
+    // payı -- kayıtlı/tek bir ayarınkiyle (20) aynı agresiflikte değil (9 aday × 20 çok yavaş
+    // olurdu), diğer motorların kayıtlı-ayar denemesiyle (3) aynı büyüklükte.
+    private const int PreConfiguredCandidateRetryAttempts = 3;
+
     // blockcheck2'nin kendisi (bkz. blockcheck2.sh dokümantasyonu/kaynağı) yalnızca TCP/TLS/
     // HTTP3 engellemesini test ediyor, UDP/ses için hiçbir doğrulama yapmıyor. Discord'un
     // GERÇEK ses/RTP medya sunucuları oturuma özel, bölgeye göre atanan ve her görüşmede
@@ -150,6 +183,12 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
     // öldürüyor) kullanıcıya yanlışlıkla "Durduruldu" göstermesin (kullanıcı talebi). 0 =
     // şu an bu aşamada değil.
     private volatile int _savedArgsAttempt;
+
+    // Hazır önayar döngüsünün (bkz. StartAsync üstündeki PreConfiguredCandidates notu) hangi
+    // aşamada olduğu — GetStatus() bunu _savedArgsAttempt ile AYNI mantıkla Detail'e yansıtıyor:
+    // bu aşamada da motor sık sık spawn+kill döngüsüne girdiği için "running" flaşlanabiliyor,
+    // GERÇEK durumu (hâlâ deneniyor) bunun önüne alıyoruz. null = şu an bu aşamada değil.
+    private volatile string? _preConfiguredCandidateStatus;
 
     public string Id => "zapret2";
     public string DisplayName => "Zapret2";
@@ -239,6 +278,55 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
             _logs.Add($"Kayıtlı ayar {SavedArgsRetryAttempts} denemenin tamamında başarısız oldu, DNS protokolü tier taramasına geçiliyor.");
         }
 
+        // KULLANICI TALEBİ: blockcheck2'ye düşmeden önce sabit, elle seçilmiş aday listesi
+        // sırayla deneniyor (bkz. PreConfiguredCandidates üstündeki gerekçe notu). Zaten
+        // yukarıda denenmiş (kayıtlı ayarla aynı) ya da kullanıcı tarafından yasaklanmış
+        // adaylar atlanıyor; atlanan/başarısız olan HER aday triedAndFailed'a eklenip
+        // blockcheck2'nin erken-durdurma mekanizmasının bunları bir daha bulup boşuna
+        // denememesi sağlanıyor (bkz. bu HashSet'in üstündeki asıl gerekçe notu).
+        if (PreConfiguredCandidates.Length > 0)
+        {
+            _logger.LogInformation("Zapret2: blockcheck2'den önce {Count} hazır önayar deneniyor", PreConfiguredCandidates.Length);
+            _logs.Add($"Hazır önayarlar deneniyor ({PreConfiguredCandidates.Length} adet), başarısız olursa blockcheck2'ye geçilecek.");
+
+            try
+            {
+                for (var i = 0; i < PreConfiguredCandidates.Length; i++)
+                {
+                    var candidate = PreConfiguredCandidates[i];
+                    ct.ThrowIfCancellationRequested();
+
+                    if (candidate == savedArgs) continue; // yukarıda zaten denendi
+                    if (rejected.Contains(candidate))
+                    {
+                        _logger.LogInformation("Zapret2 hazır önayarı atlanıyor (daha önce reddedildi): {Args}", candidate);
+                        triedAndFailed.Add(candidate);
+                        continue;
+                    }
+
+                    var succeeded = false;
+                    for (var attempt = 1; attempt <= PreConfiguredCandidateRetryAttempts; attempt++)
+                    {
+                        _preConfiguredCandidateStatus = $"Hazır önayar deneniyor ({i + 1}/{PreConfiguredCandidates.Length}, deneme {attempt}/{PreConfiguredCandidateRetryAttempts})";
+                        if (await TryCandidateAsync(candidate, _preConfiguredCandidateStatus, ct, verifyVoice: true))
+                        {
+                            succeeded = true;
+                            break;
+                        }
+                    }
+                    if (succeeded) return;
+                    triedAndFailed.Add(candidate);
+                }
+            }
+            finally
+            {
+                _preConfiguredCandidateStatus = null;
+            }
+
+            _logger.LogInformation("Zapret2: hiçbir hazır önayar çalışmadı, blockcheck2 taramasına geçiliyor");
+            _logs.Add("Hiçbir hazır önayar çalışmadı, blockcheck2 taramasına geçiliyor.");
+        }
+
         // Manuel > Gelişmiş'ten kullanıcı tek bir DNS protokolü sabitlediyse (bkz.
         // SettingsStore.ManualDnsProtocol), 4 tier'lik döngüye hiç girmiyoruz — YALNIZCA o
         // protokolle, sabit 15 dakikalık bir üst sınır içinde blockcheck2 taranıyor (kullanıcı
@@ -314,10 +402,19 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
         {
             ct.ThrowIfCancellationRequested();
 
+            // Kalan bütçe RunBlockcheck2Async'e AKTARILIYOR ki tek bir çalıştırma bu tier'in
+            // bütçesini aşıp devam edemesin (bkz. RunBlockcheck2Async'teki budgetCts notu —
+            // canlı testte bulunan gerçek bug: önceden yalnızca bu while koşulu "bir sonraki
+            // deneme başlamadan önce" bakıyordu, çalışmakta olan TEK bir blockcheck2 süreci
+            // bu bütçeye hiç bağlı değildi, yalnızca çok daha büyük olan sabit
+            // BlockcheckTimeout'a (20dk) tabiydi).
+            var remainingBudget = deadline - DateTime.UtcNow;
+            if (remainingBudget <= TimeSpan.Zero) break;
+
             List<string> candidates;
             try
             {
-                candidates = await RunBlockcheck2Async(ct, forceDoh: protocol == DnsProtocol.Doh, excludeCandidates: triedAndFailed);
+                candidates = await RunBlockcheck2Async(ct, forceDoh: protocol == DnsProtocol.Doh, excludeCandidates: triedAndFailed, remainingBudget: remainingBudget);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -335,7 +432,22 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
 
             foreach (var candidate in candidates)
             {
-                if (candidate == savedArgs) continue; // az önce yukarıda 3 kez denendi
+                if (candidate == savedArgs)
+                {
+                    // DÜZELTİLDİ (2026-09-04, canlı testte bulunan GERÇEK BUG — bkz.
+                    // PORTING_PLAN.md D-34): bu adayı yukarıda ZATEN SavedArgsRetryAttempts
+                    // (20) kez deneyip başarısız olmuştuk -- ama triedAndFailed'a EKLEMEDEN
+                    // "continue" edince, RunBlockcheck2Async'in excludeCandidates'ı bunu hiç
+                    // görmüyordu ve blockcheck2 BİR SONRAKİ çağrıda YİNE AYNI (deterministik)
+                    // adayı bulup erken duruyordu -- bu da dış while döngüsünü, tüm bütçe
+                    // (5-15dk) tükenene kadar TEK bir (zaten bilinen-başarısız) adayı sonsuza
+                    // dek yeniden keşfedip atlayan bir DÖNGÜYE sokuyordu; asla FARKLI bir
+                    // aday denenmiyordu. Hemen altındaki `rejected.Contains` dalı BUNU ZATEN
+                    // doğru yapıyordu (triedAndFailed.Add + continue) -- aynı düzeltme burada
+                    // eksikti, şimdi eklendi.
+                    triedAndFailed.Add(candidate);
+                    continue;
+                }
                 if (rejected.Contains(candidate))
                 {
                     // Bu tarama BAŞLARKEN triedAndFailed zaten rejected'ın tamamıyla dolduruldu
@@ -375,7 +487,7 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
     /// eksik dizin (tmp/var/run/...) oluşturma iş yükü ve /cygdrive/ yol çevirisi TAMAMEN
     /// KALKTI — bunların hepsi yalnızca BUNDLED bir Cygwin dağıtımının eksikliklerini
     /// gidermek içindi, sistemin kendi bash'i bu sorunların hiçbirine sahip değil.</summary>
-    private async Task<List<string>> RunBlockcheck2Async(CancellationToken ct, bool forceDoh, HashSet<string> excludeCandidates)
+    private async Task<List<string>> RunBlockcheck2Async(CancellationToken ct, bool forceDoh, HashSet<string> excludeCandidates, TimeSpan remainingBudget)
     {
         const string BashCommand = "bash";
         // DOĞRULANDI (2026-09-04, gh api ile bol-van/zapret2 kaynağı incelendi): blockcheck2.sh
@@ -421,6 +533,20 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
         // strateji bulunur bulunmaz o gruptan çıkıyor — otomatik/ilk-açılış taraması için
         // kapsamlılıktan çok hız önemli olduğundan tercih edildi.
         psi.Environment["SCANLEVEL"] = "quick";
+        // DNSCHECK_DOM'a discord.com'u EKLİYORUZ (2026-09-04, bkz. PORTING_PLAN.md D-30 — D-25'in
+        // maliyetli/pahalı çözümüne göre çok daha ucuz bir alternatif): blockcheck2.sh KENDİ
+        // "DNS hijack" tespitini (check_dns(), bkz. script kaynağı satır ~1830) HER çalıştırmada
+        // KOŞULSUZ yapıyor — varsayılan kanarya listesi (`pornhub.com ej.ru rutracker.org
+        // www.torproject.org bbc.com`) Rusya'ya özgü, discord.com'u HİÇ İÇERMİYOR. D-22'de bulunan
+        // gerçek risk şuydu: SEÇİCİ/HEDEFLİ bir DNS zehirlenmesi (yalnızca discord.com'u etkileyen,
+        // bu kanaryaları ETKİLEMEYEN) bu sezgiyi hiç tetiklemeden kaçabilirdi. discord.com'u listeye
+        // EKLEMEK (var olanı DEĞİŞTİRMEDEN) bu boşluğu KAPATIYOR — check_dns() zaten HER çağrıda
+        // çalıştığından (D-25'in aksine) HİÇBİR EK AĞ MALİYETİ YOK, yalnızca zaten yapılan kontrolü
+        // asıl ilgilendiğimiz alan adına da genişletiyor. discord.com'da gerçek bir uyuşmazlık
+        // bulunursa blockcheck2 KENDİSİ SECURE_DNS=1 yapıp KENDİ bulduğu (yalnızca BİR kez aranan)
+        // DoH sunucusuyla devam ediyor — D-25'in "her çağrıda TÜM listeyi dene" maliyetine hiç
+        // girmeden aynı güvenliği sağlıyor.
+        psi.Environment["DNSCHECK_DOM"] = "discord.com pornhub.com ej.ru rutracker.org www.torproject.org bbc.com";
         // DOH_SERVERS/SECURE_DNS'e genel olarak BİLEREK müdahale ETMİYORUZ: blockcheck2.sh
         // kendi DNS zehirlenmesi tespitini/DoH aramasını (bkz. script çıktısındaki "searching
         // working DoH server") kendi özenle seçilmiş varsayılan sağlayıcı listesiyle ve kendi
@@ -435,6 +561,20 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
         // tier'lerinde blockcheck2 kendi varsayılan DNS'inde kalır (yalnızca bizim gerçek
         // doğrulama adımımız, bkz. Dns/SelfTestResolver.cs/TestConnectivityAsync, o protokolü
         // kullanır — blockcheck2 yine de baştan yeniden çalıştırılıyor, bkz. StartAsync'teki not).
+        //
+        // GERİ ALINDI (2026-09-04, bkz. PORTING_PLAN.md D-28): D-25'in "HER ÇAĞRIDA koşulsuz
+        // SECURE_DNS zorla" değişikliği kullanıcı tarafından BİLEREK geri alınmıştı (bu oturumun
+        // başında kayıp sanılıp yanlışlıkla yeniden uygulanmış, kullanıcı fark edip düzeltti) —
+        // gerekçe: blockcheck2 her çağrıda (while döngüsünün HER iterasyonunda, aynı tier içinde
+        // bile) baştan "çalışan bir DoH sunucusu bul" adımına (doh_find_working, birden çok
+        // sunucuyu sırayla dener) zorlanıyor, bu da özellikle DNS zehirlenmesi zaten tespit
+        // EDİLMEMİŞ (DNS_IS_SPOOFED=0) durumlarda GEREKSİZ bir gecikme ekleyip orijinal "blockcheck2
+        // çok uzun sürüyor/strateji bulamıyor" şikayetini GERİ GETİRDİ. D-25'in çözmeye çalıştığı
+        // teorik risk (seçici/hedefli DNS zehirlenmesi) hâlâ geçerli ama bu haliyle bedeli
+        // faydasından ağır bastı — daha iyi bir çözüm (ör. yalnızca tier döngüsünün İLK
+        // iterasyonunda bir kez zorlamak, ya da SADECE gerçekten DNS_IS_SPOOFED tespit edildiğinde
+        // zorlamak) ayrı bir işte ele alınmalı, şimdilik ÖNCEKİ (yalnızca forceDoh/Doh tier'inde
+        // zorlayan) davranışa dönüldü.
         if (forceDoh)
         {
             var dohAddresses = _settings.Current.DnsProviders
@@ -527,7 +667,13 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
 
         try
         {
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct, earlyStopCts.Token);
+            // budgetCts: bu ÇALIŞTIRMAYI ScanProtocolWithinBudgetAsync'in kalan tier bütçesine
+            // BAĞLIYOR (bkz. oradaki not) — BlockcheckTimeout (20dk) hâlâ ayrı, mutlak bir
+            // güvenlik ağı olarak kalıyor (remainingBudget normalde çok daha kısa olduğundan
+            // pratikte önce o tetiklenir, BlockcheckTimeout yalnızca beklenmedik şekilde uzun
+            // bir bütçe ayarlanırsa devreye girer).
+            using var budgetCts = new CancellationTokenSource(remainingBudget);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct, earlyStopCts.Token, budgetCts.Token);
             timeoutCts.CancelAfter(BlockcheckTimeout);
             try
             {
@@ -538,8 +684,10 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
                 // ct (gerçek kullanıcı iptali), earlyStopCts (ilk çalışan strateji bulundu) ya
                 // da yalnızca BlockcheckTimeout'umuz mu tetiklendi fark etmeksizin, süreç
                 // GERÇEKTEN sonlandırılmalı — aksi hâlde yukarıdaki yorumda anlatılan sızıntı oluşur.
-                try { process.Kill(entireProcessTree: true); } catch { /* zaten sonlanmış olabilir */ }
-                try { await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)); } catch { /* en iyi çaba */ }
+                // TerminateBlockcheck2GracefullyAsync KULLANILIYOR (Process.Kill DEĞİL) — bkz. o
+                // metodun üstündeki not, D-23: SIGKILL blockcheck2.sh'nin kendi nftables temizliğini
+                // atlayıp Discord IP'lerini port 80'de düşüren artık tablolar bırakıyordu.
+                await TerminateBlockcheck2GracefullyAsync(process);
 
                 if (ct.IsCancellationRequested)
                 {
@@ -554,6 +702,15 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
                 {
                     _logger.LogInformation("blockcheck2 ilk çalışan stratejiyi buldu, tarama erken durduruldu: {Strategy}", candidates.FirstOrDefault());
                     _logs.Add("İlk çalışan strateji bulundu, tarama erken durduruldu.");
+                }
+                else if (budgetCts.IsCancellationRequested)
+                {
+                    // Bu tier için ayrılan bütçe doldu (bkz. ScanProtocolWithinBudgetAsync) —
+                    // BlockcheckTimeout'un (20dk) mutlak zaman aşımından FARKLI, kasıtlı/normal
+                    // bir durdurma. Aday bulunamadan döndürülüyor, çağıran while döngüsü
+                    // deadline'ın geçtiğini görüp bu protokolü bırakıp sıradakine geçecek.
+                    _logger.LogInformation("blockcheck2: bu protokol için ayrılan süre ({Budget}) doldu, sonuçsuz sonlandırıldı", remainingBudget);
+                    _logs.Add("Bu protokol için ayrılan süre doldu, sonraki protokole geçiliyor.");
                 }
                 else
                 {
@@ -753,12 +910,7 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
         // alınması gerekiyor.
         if (_blockcheckProcess is { HasExited: false } blockcheckProcess)
         {
-            try
-            {
-                blockcheckProcess.Kill(entireProcessTree: true);
-                await blockcheckProcess.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
-            }
-            catch { /* süreç zaten sonlanmış olabilir veya bekleme zaman aşımına uğradı */ }
+            await TerminateBlockcheck2GracefullyAsync(blockcheckProcess);
         }
         _blockcheckProcess = null;
 
@@ -778,6 +930,7 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
         // flaşlanabiliyor. Gerçek durumu ("hâlâ deneniyor", henüz vazgeçilmedi) her ikisinin
         // önüne alarak gösteriyoruz.
         if (_savedArgsAttempt > 0) detail = $"Kayıtlı ayar deneniyor ({_savedArgsAttempt}/{SavedArgsRetryAttempts})";
+        else if (_preConfiguredCandidateStatus is { } preConfiguredStatus) detail = preConfiguredStatus;
         else if (running) detail = "Aktif (sistem geneli)";
         else if (_lastProbeFailed) detail = "blockcheck2 çalışan bir strateji bulamadı veya doğrulayamadı";
         else detail = "Durduruldu";
@@ -789,6 +942,88 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
     public void ClearLogs() => _logs.Clear();
 
     public int? GetOwnProcessId() => _process is { HasExited: false } ? _process.Id : null;
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern int kill(int pid, int sig);
+    private const int SIGTERM = 15;
+
+    /// <summary>blockcheck2.sh (bkz. script kaynağı satır 1908: "trap sigsilent PIPE HUP TERM QUIT")
+    /// SIGTERM'İ YAKALAYIP kendi nftables/iptables temizliğini (unprepare_all → ws_kill +
+    /// pktws_ipt_unprepare_tcp/udp → "nft delete table inet $NFT_TABLE") yapıyor — kendi PID-bazlı
+    /// port-block-test tablosunu (ör. "blockcheck14561") KENDİSİ siliyor. .NET'in Process.Kill()'ı
+    /// Linux'ta SIGKILL gönderiyor; SIGKILL YAKALANAMAZ, script'in trap'i HİÇ ÇALIŞMIYOR — canlı
+    /// testte DOĞRULANAN gerçek bug (bkz. PORTING_PLAN.md D-23): önceki oturumlarda blockcheck2.sh
+    /// SIGKILL ile öldürülünce geride Discord'un test edilen IP'lerini port 80'de (dinleyicisiz
+    /// kuyruğa yönlendirerek) DÜŞÜREN artık nftables tabloları kaldı — bu da "0 nfqws2 adayı
+    /// bulundu" sonucunun GERÇEK kök nedeniydi, blockcheck2'nin/regex'lerin kendisiyle ilgisi
+    /// yoktu. Düzeltme: önce SIGTERM gönderip script'in kendi temizliğini yapması için bir süre
+    /// bekleniyor, yalnızca script YANIT VERMEZSE (askıda kalırsa) SIGKILL'e (entireProcessTree)
+    /// düşülüyor.
+    ///
+    /// GÜNCELLEME (2026-09-04, canlı testte D-23'ün İLK düzeltmesi YETERSİZ bulundu — bkz.
+    /// PORTING_PLAN.md D-29): 5sn'lik bekleme bazı durumlarda YETERSİZ çıktı — blockcheck2.sh
+    /// SIGTERM aldığında MEVCUT bir curl çağrısının bitmesini bekleyip (curl --max-time 2, yani
+    /// ~2sn'ye kadar) ANCAK ONDAN SONRA trap'i işleyip unprepare_all()'ı (ws_kill + wait + 3 ayrı
+    /// nft/iptables temizlik çağrısı) çalıştırabiliyor — toplamda 5sn'yi bazen aşıyor, bu da SIGKILL'e
+    /// düşülüp AYNI tablo sızıntısının (artık "blockcheckPID" tablosu, Discord IP'lerini port 80'de
+    /// SESSİZCE düşürüyor) TEKRAR oluşmasına yol açtı. İKİ KATMANLI düzeltme: (1) bekleme süresi
+    /// 5sn'den 10sn'ye çıkarıldı (daha geniş güvenlik payı), (2) SIGKILL'e düşülürse (yani script
+    /// kendi temizliğini garantili tamamlayamadıysa) blockcheck2.sh'nin KENDİ deterministik PID-bazlı
+    /// isimlendirmesini (`NFT_TABLE=blockcheck$$`, `IPT_OUT_CHAIN=blockcheck_output_$$` — script
+    /// kaynağından doğrulandı, `$$` blockcheck2.sh'yi çalıştıran bash'in KENDİ PID'i, yani
+    /// `process.Id` ile AYNI) kullanarak KENDİMİZ de artık tabloyu/zinciri elle temizliyoruz — bu,
+    /// zamanlamaya bağlı olmayan KESİN bir güvenlik ağı, SIGTERM'in ne kadar sürede işlendiğinden
+    /// bağımsız olarak sızıntıyı garantili kapatıyor.</summary>
+    private static async Task TerminateBlockcheck2GracefullyAsync(Process process)
+    {
+        var pid = process.Id;
+        try
+        {
+            kill(pid, SIGTERM);
+            await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+            return;
+        }
+        catch { /* SIGTERM gönderilemedi ya da script 10sn içinde kendi kendini temizleyip çıkmadı */ }
+
+        try { process.Kill(entireProcessTree: true); } catch { /* zaten sonlanmış olabilir */ }
+        try { await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)); } catch { /* en iyi çaba */ }
+
+        // Buraya düşüldüyse script'in KENDİ temizliği garanti değil -- kendi PID-bazlı
+        // tablosunu/zincirini biz de elle (best-effort, sessizce) temizliyoruz.
+        await CleanupOrphanedBlockcheck2FirewallStateAsync(pid);
+    }
+
+    private static async Task CleanupOrphanedBlockcheck2FirewallStateAsync(int blockcheck2Pid)
+    {
+        await RunCommandAsync("nft", "delete", "table", "inet", $"blockcheck{blockcheck2Pid}");
+        var chain = $"blockcheck_output_{blockcheck2Pid}";
+        await RunCommandAsync("iptables", "-t", "mangle", "-D", "OUTPUT", "-j", chain);
+        await RunCommandAsync("iptables", "-t", "mangle", "-F", chain);
+        await RunCommandAsync("iptables", "-t", "mangle", "-X", chain);
+    }
+
+    private static async Task RunCommandAsync(string fileName, params string[] args)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = fileName,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        foreach (var arg in args) psi.ArgumentList.Add(arg);
+
+        try
+        {
+            using var process = Process.Start(psi);
+            if (process is null) return;
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            // Tablo/zincir zaten yoksa (script kendi temizliğini başarmışsa) bu komutlar
+            // sessizce başarısız olur -- bu BEKLENEN ve zararsız, ayrıca loglanmıyor.
+        }
+        catch { /* komut sistemde yoksa/PATH'te değilse -- sessizce geç. */ }
+    }
 
     /// <summary>Windows karşılığının (KillStrayWinws2Processes) portu. NFQUEUE, WinDivert'in
     /// "tek işleyici" kısıtlamasının benzerini taşıyor: aynı kuyruk numarasına aynı anda yalnızca

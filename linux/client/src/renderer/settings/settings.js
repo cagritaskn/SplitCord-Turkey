@@ -29,6 +29,9 @@ const automaticStatusEl = document.getElementById('automatic-status');
 const btnRejectCurrent = document.getElementById('btn-reject-current');
 const rejectedArgsSection = document.getElementById('rejected-args-section');
 const rejectedArgsList = document.getElementById('rejected-args-list');
+const btnRejectCurrentManual = document.getElementById('btn-reject-current-manual');
+const rejectedArgsSectionManual = document.getElementById('rejected-args-section-manual');
+const rejectedArgsListManual = document.getElementById('rejected-args-list-manual');
 const dpiAutomaticView = document.getElementById('dpi-automatic-view');
 const dpiManualView = document.getElementById('dpi-manual-view');
 const dpiAdvancedAutomaticSection = document.getElementById('dpi-advanced-automatic-section');
@@ -129,7 +132,9 @@ async function renderAutomaticStatus() {
   await renderRejectedArgsList(active?.id ?? null);
 }
 
-async function renderRejectedArgsList(engineId) {
+// sectionEl/listEl: Otomatik ve Manuel görünümlerinin AYRI DOM konteynerleri var (aynı anda
+// ikisi de gizli olmayacağı için içerik paylaşımına gerek yok) — bkz. renderManualRejectedArgsList.
+async function renderRejectedArgsList(engineId, sectionEl = rejectedArgsSection, listEl = rejectedArgsList) {
   let rejected = [];
   if (engineId) {
     try {
@@ -139,8 +144,8 @@ async function renderRejectedArgsList(engineId) {
     }
   }
 
-  rejectedArgsSection.hidden = rejected.length === 0;
-  rejectedArgsList.innerHTML = '';
+  sectionEl.hidden = rejected.length === 0;
+  listEl.innerHTML = '';
   for (const args of rejected) {
     const row = document.createElement('div');
     row.className = 'sc-rejected-item';
@@ -154,11 +159,18 @@ async function renderRejectedArgsList(engineId) {
       } catch (err) {
         window.splitcord.log('unreject-args-error', { id: engineId, args, error: err.message });
       }
-      await renderRejectedArgsList(engineId);
+      await renderRejectedArgsList(engineId, sectionEl, listEl);
     });
     row.appendChild(btn);
-    rejectedArgsList.appendChild(row);
+    listEl.appendChild(row);
   }
+}
+
+// Otomatik'teki renderAutomaticStatus'un manuel karşılığı -- yalnızca Manuel modda, o an
+// SEÇİLİ (aktif olması şart değil) motorun yasaklı argüman setlerini gösterir.
+async function renderManualRejectedArgsList() {
+  if (!rejectedArgsSectionManual || !rejectedArgsListManual) return;
+  await renderRejectedArgsList(selectedEngineId, rejectedArgsSectionManual, rejectedArgsListManual);
 }
 
 btnRejectCurrent.addEventListener('click', async () => {
@@ -173,6 +185,40 @@ btnRejectCurrent.addEventListener('click', async () => {
   }
   btnRejectCurrent.disabled = false;
   btnRejectCurrent.textContent = 'Argüman Setini Yasakla';
+  await refreshStatus();
+});
+
+// Manuel moddaki karşılığı -- sunucu tarafı (DpiEngineManager.RejectCurrentArgsAsync,
+// GetRejectedArgsList) zaten motordan bağımsız/genel; ipc.js'teki dpi:reject-current-args
+// handler'ı da allowEscalation'ı sabit değil, o an okunan dpiMode'a göre hesaplıyor (bkz.
+// oradaki not) -- yani bu SEÇİLİ motoru Manuel modda çağırdığımızda otomatik olarak
+// allowEscalation=false gidiyor, IsManualActivation=true kalıyor, Zapret2 blockcheck2'nin
+// erken-durdurma mekanizması yasaklanan adayı görmezden gelip AYNI çalıştırma içinde bir
+// SONRAKİ adaya geçiyor (bkz. Zapret2Engine.StartAsync'teki triedAndFailed notu) -- yani
+// tarama DURMUYOR, kaldığı yerden devam ediyor.
+btnRejectCurrentManual?.addEventListener('click', async () => {
+  if (!selectedEngineId) return;
+
+  const choice = await window.showConfirmModal({
+    title: 'Argüman seti yasaklansın mı?',
+    message: 'Bu motor için kayıtlı argüman seti yasaklanacak ve yeni bir arama başlatılacak.',
+    detail: 'Bu işlem birkaç dakika sürebilir (özellikle Zapret2 için).',
+  });
+  if (choice !== 0) {
+    window.splitcord.log('reject-current-args-manual-cancelled', { id: selectedEngineId });
+    return;
+  }
+
+  window.splitcord.log('reject-current-args-manual-click', { id: selectedEngineId });
+  btnRejectCurrentManual.disabled = true;
+  btnRejectCurrentManual.textContent = 'Yeni ayar aranıyor…';
+  try {
+    await window.splitcord.dpi.rejectCurrentArgs(selectedEngineId);
+  } catch (err) {
+    window.splitcord.log('reject-current-args-manual-error', { id: selectedEngineId, error: err.message });
+  }
+  btnRejectCurrentManual.disabled = false;
+  btnRejectCurrentManual.textContent = 'Argüman Setini Yasakla';
   await refreshStatus();
 });
 
@@ -595,6 +641,7 @@ async function refreshStatus() {
   selectedEngineId = selectedEngineId || getDisplayActiveEngineId(currentStatus);
   renderEngineList();
   await renderAutomaticStatus();
+  await renderManualRejectedArgsList();
   await refreshLogs();
 }
 
@@ -622,6 +669,11 @@ function renderEngineList() {
   }
   if (restartSearchManualWrap) {
     restartSearchManualWrap.classList.toggle('sc-restart-search--locked', currentStatus.switching);
+  }
+
+  if (btnRejectCurrentManual) {
+    btnRejectCurrentManual.hidden = !selectedEngineForRestart;
+    btnRejectCurrentManual.disabled = currentStatus.switching;
   }
 
   engineListEl.innerHTML = '';
@@ -1662,8 +1714,10 @@ btnInstallUpdate?.addEventListener('click', async () => {
     try {
       await openDownloadedUpdateGuarded();
     } catch (err) {
-      aboutUpdateStatus.textContent = `Güncelleme açılamadı: ${err.message}`;
       window.splitcord.log('open-update-error', { error: err.message });
+      // 'CANCELLED': kullanıcı pkexec parola isteminde kendisi vazgeçti -- HATA değil.
+      aboutUpdateStatus.textContent =
+        err.message === 'CANCELLED' ? 'Kurulum iptal edildi.' : `Güncelleme kurulamadı: ${err.message}`;
     }
     return;
   }
@@ -1726,28 +1780,38 @@ btnResetAllSettings?.addEventListener('click', async () => {
   }
 });
 
-// Windows karşılığı burada bir onay diyaloğundan sonra resmi kaldırma sihirbazını açıyordu —
-// Linux'ta TEKİL bir kaldırıcı yok (bkz. PORTING_PLAN.md D-7, ipc.js'teki app:uninstall-app
-// notu). Buton yine de motorları best-effort durdurup açıklayıcı bir bilgilendirme fırlatan
-// aynı IPC çağrısını yapıyor; burada onu bir onay diyaloğu yerine doğrudan bilgilendirme
-// modalıyla gösteriyoruz (ipc.js'in hata mesajı zaten AppImage/.deb talimatlarını içeriyor).
+// (bkz. PORTING_PLAN.md D-37) .deb postrm'i (D-36) DPI servisini de otomatik söktüğü için
+// artık burada GERÇEK bir kaldırma yapılabiliyor: pkexec ile "apt-get remove" (bkz.
+// appUninstaller.js) hem uygulamayı hem arkaplan servisini tek adımda kaldırıyor. Kullanıcı
+// verisi (/var/lib/splitcord) KORUNUYOR — Windows'un NSIS kaldırıcısıyla AYNI varsayılan
+// davranış (deleteAppDataOnUninstall ayarlanmamış).
 const btnUninstallApp = document.getElementById('btn-uninstall-app');
+const btnUninstallAppOriginalText = btnUninstallApp?.textContent;
 btnUninstallApp?.addEventListener('click', async () => {
+  const choice = await window.showConfirmModal({
+    title: 'SplitCord-Turkey kaldırılsın mı?',
+    message: 'Program ve arkaplan DPI servisi sistemden tamamen kaldırılacak.',
+    detail: 'Kullanıcı ayarlarınız (doğrulanmış DPI stratejisi, DNS sağlayıcıları) korunacak. ' +
+      'Parola isteyen bir pencere açılabilir.',
+  });
+  if (choice !== 0) return;
+
   window.splitcord.log('uninstall-app-click', {});
   btnUninstallApp.disabled = true;
+  btnUninstallApp.textContent = 'Kaldırılıyor…';
   try {
     await window.splitcord.app.uninstallApp();
+    // Başarılıysa ipc.js zaten app.quit() çağırıyor — normal şartlarda buraya hiç ulaşılmaz.
   } catch (err) {
     window.splitcord.log('uninstall-app-error', { error: err.message });
-    await window.showConfirmModal({
-      title: 'Elle kaldırma gerekiyor',
-      message: err.message,
-      buttons: ['Tamam'],
-      defaultId: 0,
-      cancelId: 0,
-    });
-  } finally {
+    if (err.message !== 'CANCELLED') {
+      await window.showAlertModal({
+        title: 'Kaldırma başarısız',
+        message: err.message,
+      });
+    }
     btnUninstallApp.disabled = false;
+    btnUninstallApp.textContent = btnUninstallAppOriginalText;
   }
 });
 

@@ -16,6 +16,7 @@ const { showThemedConfirm } = require('./themedDialog');
 const voiceState = require('./voiceState');
 const notificationBadge = require('./notificationBadge');
 const { applyShortcutsFromSettings } = require('./shortcuts');
+const { addDefenderException } = require('./defenderExclusion');
 
 let settingsWindow = null;
 // Ayarlar penceresindeki kaydedilmemiş değişiklik durumu, renderer'dan
@@ -423,8 +424,12 @@ function registerIpcHandlers() {
   // Yasakla" butonu, hangi motor o an aktifse onun id'sini gönderiyor.
   ipcMain.handle('dpi:get-rejected-args', (_event, id) => serviceClient.getRejectedArgs(id));
   ipcMain.handle('dpi:reject-current-args', async (_event, id) => {
-    // Bu buton yalnızca Otomatik modda göründüğü için allowEscalation=true her zaman
-    // doğru, ama yine de dpiMode'a göre hesaplıyoruz (diğer handler'larla tutarlı olsun diye).
+    // "Argüman Setini Yasakla" hem Otomatik hem Manuel modda var (bkz. settings.js
+    // btnRejectCurrent/btnRejectCurrentManual) -- allowEscalation'ı diğer handler'larla
+    // (activateEngine, reportEngineFailure) AYNI şekilde o an okunan dpiMode'a göre
+    // hesaplıyoruz: Manuel'den çağrılırsa false kalır (IsManualActivation=true olarak
+    // kalmaya devam eder, zincire otomatik eskalasyon YAPILMAZ, yalnızca SEÇİLİ motorun
+    // kendi adayları arasında yeniden aranır).
     const allowEscalation = readLocalSettings().dpiMode === 'automatic';
     logEvent('reject-current-args', { id, allowEscalation });
     getMainWindow()?.webContents.send('dpi:engine-changed');
@@ -687,6 +692,15 @@ function registerIpcHandlers() {
       logEvent('open-diagnostic-log-location-error', { error: err.message });
       throw err;
     }
+  });
+
+  // "DPI servisine ulaşılamıyor" (ECONNREFUSED) durumunda titlebar.js'in gösterdiği
+  // kurtarma düğmesi -- bkz. defenderExclusion.js'teki ayrıntılı kök neden/tasarım notu.
+  // Yalnızca kullanıcı düğmeye tıklarsa çalışır, UAC ister, sonucu (eklendi/zaten
+  // vardı/Tamper Protection tarafından engellendi/hata) doğrulayıp döner.
+  ipcMain.handle('app:add-defender-exception', async () => {
+    logEvent('add-defender-exception-requested', {});
+    return addDefenderException();
   });
 
   ipcMain.handle('app:get-protocol-handler-status', () => ({

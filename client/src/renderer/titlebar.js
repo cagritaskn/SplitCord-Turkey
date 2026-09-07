@@ -204,6 +204,8 @@ const btnStatusRetryAuto = document.getElementById('btn-status-retry-auto');
 const btnStatusManualSetup = document.getElementById('btn-status-manual-setup');
 const btnStatusOpenPermissions = document.getElementById('btn-status-open-permissions');
 const btnStatusDisableQuic = document.getElementById('btn-status-disable-quic');
+const btnStatusAddDefenderException = document.getElementById('btn-status-add-defender-exception');
+const btnStatusRejectUnstableArgs = document.getElementById('btn-status-reject-unstable-args');
 
 // isError=false (varsayılan): bir şey hâlâ deneniyor demektir, spinner döner.
 // isError=true: kesin/geçici olarak duraklamış bir durum (kullanıcı elle Yenile'ye
@@ -215,7 +217,14 @@ function showStatus(message, isError = false) {
   else statusOverlay.removeAttribute('data-error');
   if (isError) clearStatusScanLog();
   if (statusActions) statusActions.hidden = true;
-  [btnStatusRetryAuto, btnStatusManualSetup, btnStatusOpenPermissions, btnStatusDisableQuic].forEach((btn) => {
+  [
+    btnStatusRetryAuto,
+    btnStatusManualSetup,
+    btnStatusOpenPermissions,
+    btnStatusDisableQuic,
+    btnStatusAddDefenderException,
+    btnStatusRejectUnstableArgs,
+  ].forEach((btn) => {
     if (btn) btn.hidden = true;
   });
   statusOverlay.hidden = false;
@@ -306,6 +315,80 @@ function showStatusWithActions(message, buttonsToShow) {
 btnStatusOpenPermissions?.addEventListener('click', () => {
   window.splitcord.log?.('status-open-permissions-click', {});
   window.splitcord.window.openSettings('panel-permissions');
+});
+
+// did-fail-load'ın vazgeçme dalının (aşağıda) gösterdiği "Argüman Setini Yasakla" düğmesi
+// hangi motoru hedefleyecek -- düğme tıklanana kadar bu değer korunuyor (bir sonraki
+// refreshConnection/did-fail-load turunda showStatus() zaten düğmeyi gizleyip bu bilgiyi
+// geçersiz kılıyor, bu yüzden ekstra bir temizliğe gerek yok).
+let rejectBannerEngineId = null;
+
+// KULLANICI TALEBİ (canlı kullanıcıda gözlemlendi: Zapret2'nin kayıtlı ayarı bir saniyeliğine
+// Discord'u yükleyip sonra ERR_CONNECTION_RESET ile döngüye giriyordu): bu, ipc.js'teki
+// dpi:reject-current-args handler'ının ZATEN mod-farkında olan (bkz. oradaki not) genel
+// "Argüman Setini Yasakla" mekanizmasını kullanıyor -- Otomatik'te motor tükenirse zincirdeki
+// bir sonrakine geçilir, Manuel'de yalnızca SEÇİLİ/aktif motor için yeniden aranır.
+btnStatusRejectUnstableArgs?.addEventListener('click', async () => {
+  if (!rejectBannerEngineId) return;
+  window.splitcord.log?.('status-reject-unstable-args-click', { id: rejectBannerEngineId });
+  btnStatusRejectUnstableArgs.disabled = true;
+  btnStatusRejectUnstableArgs.textContent = 'Yeni ayar aranıyor…';
+  try {
+    await window.splitcord.dpi.rejectCurrentArgs(rejectBannerEngineId);
+  } catch (err) {
+    window.splitcord.log?.('status-reject-unstable-args-error', { id: rejectBannerEngineId, error: err.message });
+  }
+  btnStatusRejectUnstableArgs.disabled = false;
+  btnStatusRejectUnstableArgs.textContent = 'Argüman Setini Yasakla';
+  rejectBannerEngineId = null;
+  await refreshConnection();
+});
+
+// "DPI servisine ulaşılamıyor" (ECONNREFUSED) durumunun bilinen bir nedeni: Windows
+// Defender'ın servis .dll'ini yanlış-pozitif işaretleyip karantinaya alması (bkz.
+// defenderExclusion.js'teki ayrıntılı not). Bu, yalnızca o durumda gösterilen, kullanıcının
+// açıkça tetiklediği bir kurtarma eylemi -- bir UAC istemi tetikler.
+btnStatusAddDefenderException?.addEventListener('click', async () => {
+  window.splitcord.log?.('status-add-defender-exception-click', {});
+  const originalLabel = btnStatusAddDefenderException.textContent;
+  btnStatusAddDefenderException.disabled = true;
+  btnStatusAddDefenderException.textContent = 'Yönetici izni bekleniyor…';
+  try {
+    const result = await window.splitcord.app.addDefenderException();
+    if (result.ok && result.dllMissing) {
+      // İstisna eklemek, Defender'ın DAHA ÖNCE sildiği dosyayı geri getirmez -- yalnızca
+      // BUNDAN SONRA aynısının tekrarlanmasını önler. Dosya hâlâ eksikse kurulum onarımı
+      // (installer'ı tekrar çalıştırmak) gerekiyor.
+      await window.showAlertModal({
+        title: 'İstisna eklendi, ama bir adım daha gerekiyor',
+        message: 'Windows Defender istisnası eklendi, ancak servis dosyası daha önce silinmiş görünüyor.',
+        detail: 'SplitCord-Turkey kurulum dosyasını (indirdiğin .exe) tekrar çalıştır — istisna artık devrede olduğu için dosya bu sefer silinmeden geri yüklenecek.',
+      });
+    } else if (result.ok) {
+      await window.showAlertModal({
+        title: 'İstisna eklendi',
+        message: 'Windows Defender istisnası eklendi. Yeniden deneniyor…',
+      });
+    } else if (result.blocked) {
+      await window.showAlertModal({
+        title: 'İstisna eklenemedi',
+        message: result.message,
+        detail: 'Windows Güvenliği > Virüs ve tehdit koruması > Ayarları yönet altından "Kurcalamaya Karşı Koruma"yı geçici olarak kapatıp tekrar deneyebilir, ya da istisnayı doğrudan aynı ekrandaki "Dışlamalar" bölümünden elle ekleyebilirsin.',
+      });
+    } else {
+      await window.showAlertModal({
+        title: 'İstisna eklenemedi',
+        message: result.message || 'Bilinmeyen bir hata oluştu.',
+      });
+    }
+  } catch (err) {
+    window.splitcord.log?.('status-add-defender-exception-error', { error: err.message });
+    await window.showAlertModal({ title: 'İstisna eklenemedi', message: err.message });
+  } finally {
+    btnStatusAddDefenderException.disabled = false;
+    btnStatusAddDefenderException.textContent = originalLabel;
+    refreshConnection();
+  }
 });
 
 // ipc.js'teki app:set-quic-disabled handler'ı KENDİ onay diyaloğunu (yeniden başlatma
@@ -429,7 +512,16 @@ async function refreshConnection() {
       ]);
     } catch (err) {
       window.splitcord.log?.('refresh-get-status-failed', { error: err.message });
-      showStatus(`DPI servisine ulaşılamıyor.\n${err.message}`, true);
+      const message = `DPI servisine ulaşılamıyor.\n${err.message}`;
+      // ECONNREFUSED: servis hiç ayakta değil. Bunun bilinen bir nedeni Windows Defender'ın
+      // servis .dll'ini yanlış-pozitif işaretleyip karantinaya alması (bkz.
+      // defenderExclusion.js) -- yalnızca bu spesifik durumda kurtarma düğmesini
+      // gösteriyoruz, ör. zaman aşımı gibi alakasız hatalarda değil.
+      if (/ECONNREFUSED/.test(err.message) && btnStatusAddDefenderException) {
+        showStatusWithActions(message, [btnStatusAddDefenderException]);
+      } else {
+        showStatus(message, true);
+      }
       return;
     }
 
@@ -508,7 +600,8 @@ async function refreshConnection() {
 // kazanmaya yetecek kadar pay bırakıyor. ÖNEMLİ: bu eşik ve bekleme ByeDPI için de AYNI —
 // eskiden ByeDPI herhangi bir did-fail-load'da (tek bir geçici sıfırlanmada bile) hemen
 // argümanı reddedip yeniden tarıyordu, diğer motorlara hiç tanınmayan bir sabırsızlıkla;
-// artık hepsi aynı şekilde bekliyor.
+// artık hepsi aynı şekilde bekliyor. KULLANICI TALEBİ: eşik 5'e düşürülmüştü, GoodbyeDPI'nin
+// 4-5 denemede istikrar kazanma riskiyle çelişiyordu — 8'de bırakılmasına karar verildi.
 let engineFailCount = 0;
 const ENGINE_MAX_AUTO_RETRIES = 8;
 const ENGINE_RETRY_DELAY_MS = 2000;
@@ -552,18 +645,23 @@ webview?.addEventListener('did-fail-load', async (event) => {
 
     engineFailCount += 1;
     if (engineFailCount > ENGINE_MAX_AUTO_RETRIES) {
-      // Birkaç yeniden deneme sonrası hâlâ başarısız — geçici bir sıfırlanma değil,
-      // kayıtlı ayar kalıcı olarak çalışmıyor gibi görünüyor. Motoru DEĞİŞTİRMİYORUZ,
-      // yalnızca AYNI motorun doğrulamasını sıfırlayıp yeniden aday taramasını tetikliyoruz
-      // (Manuel moddaysa BAŞKA bir motora geçmeden — bkz. ipc.js'teki allowEscalation).
+      // KULLANICI TALEBİ (canlı kullanıcıda gözlemlendi: Zapret2'nin kayıtlı ayarı bir
+      // saniyeliğine Discord'u yükleyip sonra ERR_CONNECTION_RESET ile bu döngüye giriyordu):
+      // eskiden burada SESSİZCE reportEngineFailure/reportByeDpiFailure çağrılıp otomatik
+      // yeniden tarama tetiklenir, sayfa da yeniden yüklenmeye (webview.reload) devam
+      // ederdi. Artık sayfayı BİR DAHA yeniden yüklemiyoruz ve kullanıcıya açıkça soruyoruz:
+      // argüman seti stabil değil, yasaklamak ister misin? (bkz. aşağıdaki
+      // btnStatusRejectUnstableArgs click handler'ı -- rejectCurrentArgs zaten mod-farkında,
+      // Otomatik'te motor tükenirse zincirdeki bir sonrakine geçer, Manuel'de yalnızca
+      // SEÇİLİ motor için yeniden arar).
       window.splitcord.log?.('did-fail-load-give-up', { activeEngineId: status?.activeEngineId, count: engineFailCount });
       engineFailCount = 0;
-      if (status?.activeEngineId === 'byedpi') {
-        showStatus(`Discord yüklenemedi (${event.errorDescription || event.errorCode}).\nFarklı bir ByeDPI stratejisi deneniyor…`);
-        await window.splitcord.dpi.reportByeDpiFailure();
-      } else if (status?.activeEngineId) {
-        showStatus(`Discord yüklenemedi (${event.errorDescription || event.errorCode}).\nKayıtlı ayar artık çalışmıyor gibi görünüyor, yeniden aranıyor…`);
-        await window.splitcord.dpi.reportEngineFailure(status.activeEngineId);
+      if (status?.activeEngineId && btnStatusRejectUnstableArgs) {
+        rejectBannerEngineId = status.activeEngineId;
+        showStatusWithActions(
+          `${ENGINE_MAX_AUTO_RETRIES} denemenin ardından kayıtlı ayar ile yine Discord'a erişilemedi.\nKullanılan argüman seti ile Discord'a erişim stabil değil. Argüman setini yasaklayarak farklı argüman setleri için kontrol başlatabilirsiniz.`,
+          [btnStatusRejectUnstableArgs],
+        );
       } else {
         showStatus(`Discord yüklenemedi (${event.errorDescription || event.errorCode}).\nYenile'ye tekrar basmayı deneyin.`, true);
       }

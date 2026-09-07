@@ -4,7 +4,8 @@ const https = require('node:https');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { app, shell } = require('electron');
+const { spawn } = require('node:child_process');
+const { app } = require('electron');
 
 // Windows karşılığının (client/src/main/updateChecker.js) portu. checkForUpdate()'in GitHub
 // API mantığı (release/tag/sürüm karşılaştırma) BİREBİR aynı — tek fark asset seçimi ve
@@ -13,7 +14,7 @@ const REPO = 'cagritaskn/SplitCord-Turkey';
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
 const USER_AGENT = 'SplitCord-Turkey-UpdateChecker';
 
-const DOWNLOAD_PATH = path.join(os.tmpdir(), 'SplitCord-Turkey-Update.AppImage');
+const DOWNLOAD_PATH = path.join(os.tmpdir(), 'SplitCord-Turkey-Update.deb');
 
 function get(url, options = {}) {
   return new Promise((resolve, reject) => {
@@ -67,18 +68,20 @@ function isNewer(remote, local) {
   return false;
 }
 
-function isAppImage() {
-  return !!process.env.APPIMAGE;
-}
-
-/** Windows'ta ".exe" ile bitene bakıyordu; burada önce ".AppImage" (dağıtımdan bağımsız,
- * bkz. PORTING_PLAN.md D-12) tercih ediliyor, yoksa ".deb"ye düşülüyor. */
+/** Windows'ta ".exe" ile bitene bakıyordu; Linux'ta artık TEK dağıtım formatı ".deb" (bkz.
+ * PORTING_PLAN.md D-36 — AppImage kaldırıldı). Release'ler artık iki mimari için ayrı ayrı
+ * yayınlanıyor (bkz. PORTING_PLAN.md D-41), dosya adı deseni:
+ * "SplitCord-Turkey-Linux-<sürüm>-AMD64.deb" / "...-ARM64.deb" — bu yüzden yalnızca ".deb"
+ * ile bitene bakmak YETMEZ, çalışan sistemin mimarisiyle EŞLEŞEN dosyayı seçmemiz gerekiyor.
+ * Yanlış mimarideki bir .deb'i indirip `dpkg -i` ile kurmaya çalışmak (mimari uyuşmazlığı
+ * hatasıyla) başarısız olur — bu yüzden eşleşme bulunamazsa (desteklenmeyen bir mimaride
+ * çalışıyoruz ya da release'de o mimari için asset yok) BİLEREK `undefined` dönüyoruz,
+ * "ilk bulunan .deb'i al" gibi riskli bir varsayılana DÜŞMÜYORUZ. */
 function pickAsset(assets) {
   const lower = (name) => name.toLowerCase();
-  return (
-    assets.find((a) => lower(a.name).endsWith('.appimage')) ||
-    assets.find((a) => lower(a.name).endsWith('.deb'))
-  );
+  const archSuffix = process.arch === 'arm64' ? '-arm64.deb' : process.arch === 'x64' ? '-amd64.deb' : null;
+  if (!archSuffix) return undefined;
+  return assets.find((a) => lower(a.name).endsWith(archSuffix));
 }
 
 /** @returns {Promise<{available: boolean, latestVersion?: string, downloadUrl?: string, releaseNotes?: string, assetName?: string}>} */
@@ -110,51 +113,58 @@ async function checkForUpdate() {
 
 async function downloadUpdate(downloadUrl) {
   await downloadFile(downloadUrl, DOWNLOAD_PATH);
-  fs.chmodSync(DOWNLOAD_PATH, 0o755);
 }
 
 /** Windows'un "indirilen .exe'yi normal şekilde aç, Windows kurulum sihirbazını göstersin"
- * akışının burada tam karşılığı yok — iki farklı yol izleniyor:
+ * akışının burada karşılığı: `pkexec dpkg -i` ile indirilen `.deb`'i doğrudan kuruyoruz (bkz.
+ * serviceInstaller.js/appUninstaller.js'teki AYNI pkexec deseni) — bu, Windows'taki UAC'nin
+ * kavramsal karşılığı, kullanıcı yalnızca BİR KEZ parolasını/onayını veriyor.
  *
- * AppImage: kendi kendini güncelleyen bir ikili dosya olduğu için, indirilen YENİ AppImage
- * çalışmakta olan AppImage'in ÜZERİNE (process.env.APPIMAGE — AppImage runtime'ının kendi
- * ayarladığı, gerçek .AppImage dosyasının yolu) kopyalanıp uygulama aynı yoldan yeniden
- * başlatılıyor. Linux'ta çalışmakta olan bir dosyanın üzerine yazmak (Windows'un aksine)
- * SORUNSUZ çalışır -- eski süreç kendi açık dosya tanıtıcısını (inode) süreç sonlanana kadar
- * tutmaya devam eder, yeni içerik bir sonraki çalıştırmada devreye girer.
- *
- * .deb (ya da AppImage değilse, ör. dev modu): en güvenli/en az sürpriz veren yol kullanıcıyı
- * masaüstü ortamının kendi .deb işleyicisine (gdebi/GNOME Software vb.) yönlendirmek --
- * `shell.openPath` bunu tetikler, ama kurulum için kullanıcının kendi onayı/şifresi gerekir
- * (Windows'taki UAC'nin kavramsal karşılığı).
- *
- * DOĞRULANMADI (bkz. ../../PORTING_PLAN.md §2 madde 5): AppImage kendi kendini değiştirme
- * akışı hiç gerçek bir Linux'ta test edilmedi -- özellikle AppImage'in bulunduğu dizine yazma
- * izni olmayan bir kurulumda (ör. salt-okunur bir konum) bu adım başarısız olur, hata mesajı
- * kullanıcıya "elle indirip değiştirmesi" gerektiğini söylemeli. */
+ * DÜZELTİLDİ (2026-09-05, gerçek bir Linux'ta CANLI TESTTE bulunan KRİTİK BUG — bkz.
+ * PORTING_PLAN.md D-38): önceki tasarım `shell.openPath(DOWNLOAD_PATH)` ile masaüstü
+ * ortamının KENDİ `.deb` işleyicisine (gdebi/GNOME Software vb.) güveniyordu — bu ikili olarak
+ * İKİ SEBEPTEN çalışmıyordu: (1) `DOWNLOAD_PATH` hâlâ AppImage döneminden kalma ".AppImage"
+ * uzantısıyla oluşturuluyordu (dosyanın GERÇEK içeriği bir `.deb` olsa bile) — `xdg-mime query
+ * filetype` bunu içeriğe değil UZANTIYA bakarak `application/vnd.appimage` olarak yanlış
+ * tanıyordu, bu mimetype için kayıtlı bir varsayılan uygulama da olmadığından `xdg-open`
+ * SESSİZCE hiçbir şey yapmıyordu (gerçek testte doğrulandı: exit code 0, hiçbir pencere/işlem
+ * açılmadı). (2) Uzantı düzeltilse bile (`.deb`), doğru bir GUI paket kurucusunun (GDebi vb.)
+ * hedef sistemde kurulu olduğu GARANTİ DEĞİL (D-12'nin geniş Ubuntu/Debian ailesi hedefinde
+ * bazı dağıtımlarda hiç yok) — kurulu değilse yine sessizce hiçbir şey olmazdı. Artık dış bir
+ * GUI aracına bağımlı olmayan, zaten kanıtlanmış `pkexec` yoluna geçildi. */
+function installDownloadedUpdate() {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('pkexec', ['dpkg', '-i', DOWNLOAD_PATH], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stderr = '';
+    proc.stdout.on('data', () => {});
+    proc.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    proc.on('error', (err) => {
+      if (err.code === 'ENOENT') {
+        reject(new Error(`pkexec bulunamadı. Elle kurmak için bir terminalde: sudo dpkg -i "${DOWNLOAD_PATH}"`));
+      } else {
+        reject(new Error(`pkexec çalıştırılamadı: ${err.message}`));
+      }
+    });
+    proc.on('close', (code, signal) => {
+      if (code === 0) { resolve(); return; }
+      if (code === 126 || signal === 'SIGTERM') { reject(new Error('CANCELLED')); return; }
+      reject(new Error(`Kurulum başarısız (çıkış kodu ${code}): ${stderr.trim() || 'bilinmeyen hata'}`));
+    });
+  });
+}
+
 async function openDownloadedUpdate() {
   if (!fs.existsSync(DOWNLOAD_PATH)) {
     throw new Error('İndirilen güncelleme dosyası bulunamadı, tekrar indir.');
   }
 
-  if (isAppImage()) {
-    const currentAppImagePath = process.env.APPIMAGE;
-    try {
-      fs.copyFileSync(DOWNLOAD_PATH, currentAppImagePath);
-      fs.chmodSync(currentAppImagePath, 0o755);
-    } catch (err) {
-      throw new Error(
-        `Güncelleme dosyası "${currentAppImagePath}" konumuna kopyalanamadı (yazma izni olmayabilir): ${err.message}. ` +
-          `İndirilen dosyayı (${DOWNLOAD_PATH}) elle bu konuma taşımanız gerekebilir.`,
-      );
-    }
-    app.relaunch();
-    app.quit();
-    return;
-  }
+  await installDownloadedUpdate();
 
-  const err = await shell.openPath(DOWNLOAD_PATH);
-  if (err) throw new Error(err);
+  // dpkg -i ile ÇALIŞMAKTA OLAN bu uygulamanın kendi dosyaları üzerine yazıldı (Linux'ta bu
+  // sorunsuz — açık dosya tanıtıcıları eski inode'u tutmaya devam eder, bkz. D-31'in AYNI
+  // rename/inode mantığı). Yeni sürümün devreye girmesi için yeniden başlatmak gerekiyor.
+  app.relaunch();
+  app.quit();
 }
 
 function downloadFile(url, destPath) {

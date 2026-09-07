@@ -52,15 +52,35 @@ public sealed class DpiEngineManager : IHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        // bkz. StopAllAsync'teki AYNI D-33 notu -- systemd tam servis kapanışında da aktif bir
+        // tarama sürüyorsa onu önce iptal sinyaline sokuyoruz (tutarlılık/güvenlik için; bu yol
+        // zaten _switchLock'u BEKLEMİYOR, bu yüzden StopAllAsync'teki kadar kritik bir hang riski
+        // yoktu, ama aynı taramayla eşzamanlı çalışıp yarış durumu oluşturması yine de istenmez).
+        _scanCts?.Cancel();
         foreach (var engine in _engines)
             await engine.StopAsync(cancellationToken);
         await StopZapretUdpCompanionAsync();
     }
 
     /// <summary>Electron client gerçekten kapanırken çağırır: hangi motor aktifse durdurur,
-    /// tercih edilen motor kimliğini değiştirmeden bırakır.</summary>
+    /// tercih edilen motor kimliğini değiştirmeden bırakır.
+    ///
+    /// KRİTİK DÜZELTME (2026-09-04, canlı testte bulunan GERÇEK BUG — bkz. PORTING_PLAN.md D-33):
+    /// önceki hâlinde burada `_scanCts?.Cancel()` YOKTU — bir tarama (ör. Zapret2'nin dakikalarca
+    /// sürebilen DoH→DnsCrypt→None tier döngüsü) `_switchLock`'u tuttuğu sürece bu metot iptal
+    /// SİNYALİ hiç göndermeden doğrudan `_switchLock.WaitAsync()`'e düşüyordu — yani tarama DOĞAL
+    /// olarak bitene (ya da hiç bitmiyorsa SÜRESİZ) kadar `/stop-all` TAMAMEN TIKANIYORDU. Bu,
+    /// Electron istemcisinin kapanış kancasının (`dpiLifecycle.js`, `before-quit` → `stop-all`'ı
+    /// bekliyor) da SÜRESİZ askıda kalmasına yol açtı — kullanıcı hem tepsi menüsünden "Çıkış"a
+    /// hem pencereyi X ile kapatmaya çalıştı, uygulama arka planda ÇALIŞMAYA devam etti (canlı
+    /// testte doğrulandı: `/stop-all`'a doğrudan curl ile 20sn zaman aşımı, SIFIR byte). Düzeltme:
+    /// `SwitchToAsync`'in kendisinin BAŞINDA yaptığı AYNI şeyi (`_scanCts?.Cancel()`) burada da
+    /// kilidi beklemeden ÖNCE yapıyoruz — bu, aktif taramayı hemen iptal sinyaline sokup (motorlar
+    /// zaten `ct`'yi doğru dinliyor, bkz. TerminateBlockcheck2GracefullyAsync) `SwitchToAsync`'in
+    /// `finally`'sinde kilidi hızlıca serbest bırakmasını sağlıyor.</summary>
     public async Task StopAllAsync()
     {
+        _scanCts?.Cancel();
         await _switchLock.WaitAsync();
         try
         {

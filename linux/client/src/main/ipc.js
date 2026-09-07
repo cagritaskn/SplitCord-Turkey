@@ -15,6 +15,8 @@ const { showThemedConfirm } = require('./themedDialog');
 const voiceState = require('./voiceState');
 const notificationBadge = require('./notificationBadge');
 const { applyShortcutsFromSettings } = require('./shortcuts');
+const { installDpiService, isInstallerBundled } = require('./serviceInstaller');
+const { uninstallApp: uninstallAppPackage } = require('./appUninstaller');
 
 let settingsWindow = null;
 // Ayarlar penceresindeki kaydedilmemiş değişiklik durumu, renderer'dan
@@ -418,12 +420,32 @@ function registerIpcHandlers() {
     return result;
   });
 
+  // "DPI Servisini Kur" butonu (bkz. titlebar.js) VE ilk açılış otomatik kurulumu (bkz.
+  // index.js) için ortak -- ikisi de AYNI pkexec tabanlı install.sh çağrısını kullanıyor.
+  ipcMain.handle('dpi:is-installer-bundled', () => isInstallerBundled());
+  ipcMain.handle('dpi:install-service', async () => {
+    logEvent('dpi-install-service-requested', {});
+    try {
+      await installDpiService();
+      logEvent('dpi-install-service-succeeded', {});
+      return { ok: true };
+    } catch (err) {
+      const cancelled = err.message === 'CANCELLED';
+      logEvent('dpi-install-service-failed', { error: err.message, cancelled });
+      return { ok: false, cancelled, error: cancelled ? null : err.message };
+    }
+  });
+
   // Üç motor için de ortak (ByeDPI/Zapret/Zapret2) — Otomatik moddaki "Argüman Setini
   // Yasakla" butonu, hangi motor o an aktifse onun id'sini gönderiyor.
   ipcMain.handle('dpi:get-rejected-args', (_event, id) => serviceClient.getRejectedArgs(id));
   ipcMain.handle('dpi:reject-current-args', async (_event, id) => {
-    // Bu buton yalnızca Otomatik modda göründüğü için allowEscalation=true her zaman
-    // doğru, ama yine de dpiMode'a göre hesaplıyoruz (diğer handler'larla tutarlı olsun diye).
+    // "Argüman Setini Yasakla" hem Otomatik hem Manuel modda var (bkz. settings.js
+    // btnRejectCurrent/btnRejectCurrentManual) -- allowEscalation'ı diğer handler'larla
+    // (activateEngine, reportEngineFailure) AYNI şekilde o an okunan dpiMode'a göre
+    // hesaplıyoruz: Manuel'den çağrılırsa false kalır (IsManualActivation=true olarak
+    // kalmaya devam eder, zincire otomatik eskalasyon YAPILMAZ, yalnızca SEÇİLİ motorun
+    // kendi adayları arasında yeniden aranır).
     const allowEscalation = readLocalSettings().dpiMode === 'automatic';
     logEvent('reject-current-args', { id, allowEscalation });
     getMainWindow()?.webContents.send('dpi:engine-changed');
@@ -637,13 +659,11 @@ function registerIpcHandlers() {
       logEvent('open-downloaded-update-error', { error: err.message });
       throw err;
     }
-    // AppImage yolunda updateChecker.openDownloadedUpdate() zaten kendi app.relaunch()+
-    // app.quit()'ini çağırdı (bkz. updateChecker.js) -- buradaki ikinci quit çağrısı o durumda
-    // zararsız bir no-op. .deb yolunda ise (shell.openPath ile paket yöneticisi UI'ı tetiklendi,
-    // kurulum kullanıcının kendi onayını bekliyor) BU sürecin kendi kendine kapanması hâlâ
-    // doğru davranış -- Windows'taki "kurucuyla dosya kilidi yarışmasın diye kapan" mantığının
-    // Linux'taki daha basit karşılığı: kullanıcı paket yöneticisiyle işini bitirince uygulamayı
-    // kendisi yeniden açar.
+    // updateChecker.openDownloadedUpdate() (bkz. D-38) `pkexec dpkg -i` başarıyla bittiğinde
+    // zaten kendi app.relaunch()+app.quit()'ini çağırıyor -- buradaki ikinci quit çağrısı bu
+    // yüzden zararsız bir no-op, yalnızca eski (shell.openPath tabanlı, kurulumun kullanıcının
+    // ELİYLE bir paket yöneticisi sihirbazında tamamlanmasını beklediği) tasarımdan kalma bir
+    // güvenlik ağı olarak bırakıldı.
     logEvent('quit-for-update-install', {});
     const mw = getMainWindow();
     if (mw) mw.isQuitting = true; // pencere close handler'ı tray'e gizlemek yerine gerçekten kapatsın
@@ -803,13 +823,16 @@ function registerIpcHandlers() {
     app.quit();
   });
 
-  // Ayarlar > Hakkında'daki "SplitCord-Turkey'i Kaldır" — Windows karşılığı NSIS'in ürettiği
-  // tekil bir kaldırıcı .exe'yi ShellExecute ile (otomatik UAC) çalıştırıyordu. Linux'ta
-  // TEKİL bir kaldırıcı kavramı yok (bkz. PORTING_PLAN.md D-7): AppImage'da kullanıcı dosyayı
-  // silmesi yeterli, .deb'de paket yöneticisi kullanılıyor — ikisi de arkaplan servisi/systemd
-  // birimi için kök yetkisi gerektirebileceğinden burada otomatik bir pkexec akışı BİLEREK
-  // kurulmadı (D-7'nin "düşür" seçeneği). Motorları best-effort durdurup kullanıcıya net
-  // talimat veriyoruz.
+  // Ayarlar > Hakkında'daki "SplitCord-Turkey'i Kaldır" (bkz. PORTING_PLAN.md D-37) — .deb
+  // ARTIK TEK dağıtım formatı olduğu ve postrm (packaging/deb-postrm.sh) DPI servisini de
+  // otomatik söktüğü için (bkz. D-36), burada tek yapılması gereken paketi kaldırmak:
+  // `pkexec apt-get remove` (appUninstaller.js) hem uygulamayı hem servisi TEK ADIMDA temizler.
+  // Windows karşılığı NSIS kaldırıcısını ShellExecute ile (otomatik UAC) açıp HEMEN app.quit()
+  // çağırıyordu; burada FARK OLARAK pkexec'in kendi işlemi bitene (resolve/reject) kadar
+  // BEKLİYORUZ çünkü Linux'ta dosyaları o an çalışan bir process'ten silmek (Windows'un aksine)
+  // sorunsuz — kaldırma gerçekten TAMAMLANDIKTAN sonra uygulamayı kapatmak, kullanıcıya "başarılı
+  // oldu mu" belirsizliği bırakmıyor ve bir hata olursa (ör. apt kilidi) düzgün bir mesaj
+  // gösterebiliyoruz.
   ipcMain.handle('app:uninstall-app', async () => {
     logEvent('uninstall-app-click', {});
 
@@ -822,12 +845,18 @@ function registerIpcHandlers() {
       logEvent('uninstall-app-stop-engines-error', { error: err.message });
     }
 
-    logEvent('uninstall-app-manual-instructions-shown', {});
-    throw new Error(
-      'Linux\'ta otomatik kaldırma yok. AppImage kullanıyorsanız dosyayı silmeniz yeterli; ' +
-        '.deb ile kurduysanız "sudo apt remove splitcord-turkey" komutunu kullanın. Arkaplan ' +
-        'servisini de kaldırmak için: sudo linux/packaging/uninstall.sh --purge',
-    );
+    try {
+      await uninstallAppPackage();
+    } catch (err) {
+      const cancelled = err.message === 'CANCELLED';
+      logEvent('uninstall-app-failed', { error: err.message, cancelled });
+      throw cancelled ? err : new Error(`Kaldırma başarısız: ${err.message}`);
+    }
+
+    logEvent('uninstall-app-succeeded', {});
+    const mw = getMainWindow();
+    if (mw) mw.isQuitting = true; // gerçek çıkış: pencere close handler'ı artık engellemiyor
+    app.quit();
   });
 }
 

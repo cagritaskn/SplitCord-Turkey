@@ -2,7 +2,7 @@
 
 const { session, desktopCapturer, BrowserWindow, ipcMain } = require('electron');
 const path = require('node:path');
-const { DISCORD_PARTITION } = require('./permissions');
+const { DISCORD_PARTITION, isAllowedOrigin } = require('./permissions');
 const dynamicColor = require('./dynamicColor');
 
 // Seçici penceresinde en son seçilen kalite/FPS — discordWebviewPreload.js bunu
@@ -22,6 +22,35 @@ function registerScreenSharePicker() {
 
   discordSession.setDisplayMediaRequestHandler(async (request, callback) => {
     try {
+      // GERÇEK BUG (GitHub issue: "İptal"e basınca tüm uygulama kapanıyor): Electron'un
+      // kendi dokümantasyonu reddetmek için `callback({})` (video/audio alanı olmayan bir
+      // nesne) çağırmayı öneriyor, ama Electron'un C++ tarafındaki DisplayMediaDeviceChosen
+      // (electron_browser_context.cc), `video_requested` true iken (ekran paylaşımında HER
+      // ZAMAN true) ve callback'e verilen nesnede "video" alanı YOKSA
+      // `ThrowTypeError("Video was requested, but no video stream was provided")` fırlatıyor
+      // -- bu senkron try/catch'imizin YAKALAYAMADIĞI bir main-process hatası/reddi olarak
+      // yüzeye çıkıyor ve index.js'teki genel uncaughtException/unhandledRejection
+      // yakalayıcısı bunu app.exit(1) ile TÜM uygulamayı kapatarak "işliyor" (bkz.
+      // electron/electron#45517, #47980). AYNI dosyadaki `DisplayMediaDeviceChosen`'ın
+      // BAŞINDA ise `result->IsNullOrUndefined()` kontrolü var -- callback'e `null` (ya da
+      // hiç argüman) verilirse bu THROW'A HİÇ GİRMEDEN, sessizce
+      // INVALID_DISPLAY_CAPTURE_CONSTRAINTS ile erken dönüyor. Bu yüzden reddetmek için
+      // `callback({})` DEĞİL, `callback(null)` kullanılmalı.
+
+      // GÜVENLİK (CVE-2026-70599'a karşı ek savunma katmanı, bkz. permissions.js'teki
+      // ayrıntılı not): `display-capture` izni permissions.js'te zaten origin'e göre
+      // süzülüyor, ama setDisplayMediaRequestHandler AYRI bir Electron API'si -- izin
+      // katmanında (Electron'un kendi CVE'si ya da ileride başka bir sürüm hatası
+      // yüzünden) bir kaçak olsa bile, ekran paylaşımı seçicisinin KENDİSİ yalnızca
+      // discord.com kökenli isteklere açık olsun diye burada AYRICA doğruluyoruz. Sayfa
+      // içine gömülü çapraz kökenli bir iframe (ör. üçüncü taraf embed/activity) bu
+      // seçiciyi hiç göremeyecek.
+      if (!isAllowedOrigin(request.securityOrigin)) {
+        console.error('Ekran paylaşımı reddedildi: izin verilmeyen köken:', request.securityOrigin);
+        callback(null);
+        return;
+      }
+
       const sources = await desktopCapturer.getSources({
         types: ['screen', 'window'],
         // picker.html'deki .source-thumb ile aynı 16:9 oranı — kaynağın gerçek en/boy
@@ -34,13 +63,13 @@ function registerScreenSharePicker() {
 
       const picked = await pickSource(sources);
       if (!picked) {
-        callback({});
+        callback(null);
         return;
       }
 
       const chosen = sources.find((s) => s.id === picked.id);
       if (!chosen) {
-        callback({});
+        callback(null);
         return;
       }
 
@@ -58,7 +87,7 @@ function registerScreenSharePicker() {
       callback(callbackOptions);
     } catch (err) {
       console.error('Ekran paylaşımı seçici hatası:', err);
-      callback({});
+      callback(null);
     }
   });
 
@@ -77,8 +106,21 @@ function pickSource(sources) {
       if (!picker.isDestroyed()) picker.close();
     };
 
-    const onChoose = (_event, result) => finish(result);
-    const onCancel = () => finish(null);
+    // GÜVENLİK/DOĞRULUK: bu ipcMain.on dinleyicileri GLOBAL -- bir istek işlenirken (ör.
+    // Discord'un aynı anda birden fazla getDisplayMedia() çağrısı yapması gibi ender bir
+    // durumda) ikinci bir pickSource() çağrısı da AYNI kanal adlarına kendi dinleyicisini
+    // eklerdi; event.sender kontrolü olmadan HER iki dinleyici de ateşlenip birbirinin
+    // sonucunu çalardı (yanlış pencereden gelen bir seçim başka bir isteği yanlışlıkla
+    // sonuçlandırabilirdi). event.sender'ı bu pickSource() çağrısının KENDİ picker
+    // penceresiyle karşılaştırarak yalnızca kendi isteğimize ait mesajları işliyoruz.
+    const onChoose = (event, result) => {
+      if (event.sender !== picker.webContents) return;
+      finish(result);
+    };
+    const onCancel = (event) => {
+      if (event.sender !== picker.webContents) return;
+      finish(null);
+    };
     const cleanup = () => {
       ipcMain.removeListener('screen-share-picker:choose', onChoose);
       ipcMain.removeListener('screen-share-picker:cancel', onCancel);

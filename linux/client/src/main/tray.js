@@ -84,6 +84,7 @@ function createTray(mainWindow) {
     } catch {
       cachedStatusLabel = 'DPI servisi bulunamadı';
     }
+    refreshContextMenu();
   };
 
   // Ses kanalında/aramadayken sağ tık menüsüne mikrofon/sağırlaştırma/bağlantı kesme
@@ -133,15 +134,25 @@ function createTray(mainWindow) {
     return Menu.buildFromTemplate(items);
   };
 
+  // Linux'ta (libappindicator/Ayatana — Cinnamon/Mint dahil çoğu modern DE'nin kullandığı
+  // tray protokolü, bkz. GERÇEK CİHAZDA CANLI TESTTE BULUNDU 2026-09-04) Electron'un
+  // 'click'/'right-click' event'leri HİÇ ATEŞLENMİYOR — bu yalnızca Windows/macOS'un XEmbed
+  // tabanlı tray'inde çalışan bir varsayımdı, Windows'tan birebir kopyalanmıştı. AppIndicator
+  // protokolü tıklamaları uygulamaya iletmiyor, yalnızca setContextMenu ile ÖNCEDEN bağlanmış
+  // STATİK bir menüyü DE'nin kendisi gösteriyor — bu yüzden popUpContextMenu (on-demand/taze
+  // menü) yerine setContextMenu kullanılıp, menünün içeriği değiştiren her olayda
+  // (ses durumu, ana pencere görünürlüğü, DPI durum etiketi) yeniden ayarlanıyor.
   tray.on('click', () => {
     mainWindow.show();
     mainWindow.focus();
   });
 
-  // setContextMenu OS'a "sağ tıklayınca bu menüyü göster" der ve statik bir menüyü
-  // önceden bağlar — ama biz her seferinde tazesini istediğimiz için setContextMenu
-  // hiç kullanmıyoruz; sağ tıkta menüyü elle (popUpContextMenu ile) gösteriyoruz.
-  tray.on('right-click', () => tray.popUpContextMenu(buildMenu()));
+  const refreshContextMenu = () => tray.setContextMenu(buildMenu());
+  mainWindow.on('show', refreshContextMenu);
+  mainWindow.on('hide', refreshContextMenu);
+  // Aşağıdaki refreshStatusLabel() ilk (asenkron) çağrısı sonuçlanana kadar tray'in HİÇ
+  // menüsü olmasın istemiyoruz (cachedStatusLabel'ın varsayılan/geçici değeriyle de olsa).
+  refreshContextMenu();
 
   // Ses durumu (mute/deafen/bağlı) VE okunmamış bildirim rozeti aynı ikonu paylaşıyor —
   // ikisi de değişince aynı fonksiyonu tetikleyip son duruma göre tek bir yerden karar
@@ -180,7 +191,10 @@ function createTray(mainWindow) {
     mainWindow.setOverlayIcon(show ? overlayDotIcon : null, show ? 'Okunmamış bildirim' : '');
   }
 
-  voiceState.onVoiceStateChanged(() => refreshTrayIcon());
+  voiceState.onVoiceStateChanged(() => {
+    refreshTrayIcon();
+    refreshContextMenu();
+  });
   notificationBadge.setOnChanged(({ unreadCount }) => {
     // Rozetin GÖRSELİ (üzerindeki sayı dahil) main süreçte değil renderer'da (titlebar.js,
     // canvas ile) çiziliyor — bu yüzden burada yalnızca "yeniden çiz" isteği gönderiyoruz;
