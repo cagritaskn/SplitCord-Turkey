@@ -27,10 +27,10 @@ Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'
 
 SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint'te test edildi) `.deb` paketi olarak sunulan bir Linux sürümü de bulunur. Motor seti Windows'tan biraz farklıdır: WinDivert yerine NFQUEUE/iptables kullanılır, GoodbyeDPI Linux'a özgü bir karşılığı olmadığı için bulunmaz — Otomatik modun motor sırası **Zapret → Zapret2 → ByeDPI**'dir.
 
-1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından ilgili `.deb` dosyasını indirin.
+1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından [SplitCord-Turkey-Linux-0.9.9-AMD64.deb](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.9.9/SplitCord-Turkey-Linux-0.9.9-AMD64.deb) dosyasını indirin.
 2. Paketi kurun:
    ```bash
-   sudo dpkg -i SplitCord-Turkey-Linux-*.deb
+   sudo dpkg -i SplitCord-Turkey-Linux-0.9.9-AMD64.deb
    ```
    ya da 
    Linux dağıtımınız destekliyorsa .deb dosyasına çift tıklayıp çalıştırarak kurun.
