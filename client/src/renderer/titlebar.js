@@ -206,6 +206,7 @@ const btnStatusOpenPermissions = document.getElementById('btn-status-open-permis
 const btnStatusDisableQuic = document.getElementById('btn-status-disable-quic');
 const btnStatusAddDefenderException = document.getElementById('btn-status-add-defender-exception');
 const btnStatusRejectUnstableArgs = document.getElementById('btn-status-reject-unstable-args');
+const btnStatusRetryManual = document.getElementById('btn-status-retry-manual');
 
 // isError=false (varsayılan): bir şey hâlâ deneniyor demektir, spinner döner.
 // isError=true: kesin/geçici olarak duraklamış bir durum (kullanıcı elle Yenile'ye
@@ -224,6 +225,7 @@ function showStatus(message, isError = false) {
     btnStatusDisableQuic,
     btnStatusAddDefenderException,
     btnStatusRejectUnstableArgs,
+    btnStatusRetryManual,
   ].forEach((btn) => {
     if (btn) btn.hidden = true;
   });
@@ -364,6 +366,19 @@ btnStatusRejectUnstableArgs?.addEventListener('click', async () => {
   btnStatusRejectUnstableArgs.textContent = 'Argüman Setini Yasakla';
   rejectBannerEngineId = null;
   await refreshConnection();
+});
+
+// KULLANICI TALEBİ: ENGINE_MAX_AUTO_RETRIES tükenip "vazgeçildi" ekranı geldiğinde, kullanıcının
+// argüman setini yasaklamadan/mod değiştirmeden AYNI ayarla tam bir yeni denemelik döngüyü daha
+// başlatabilmesi için — özellikle önyükleme sonrası ağın geç oturması gibi geçici durumlarda
+// (bkz. ENGINE_MAX_AUTO_RETRIES üstündeki not) kullanıcının yalnızca birkaç saniye daha
+// beklemesi yeterli olabiliyor.
+btnStatusRetryManual?.addEventListener('click', async () => {
+  window.splitcord.log?.('status-retry-manual-click', {});
+  btnStatusRetryManual.disabled = true;
+  engineFailCount = 0;
+  await refreshConnection();
+  btnStatusRetryManual.disabled = false;
 });
 
 // "DPI servisine ulaşılamıyor" (ECONNREFUSED) durumunun bilinen bir nedeni: Windows
@@ -625,7 +640,14 @@ async function refreshConnection() {
 // artık hepsi aynı şekilde bekliyor. KULLANICI TALEBİ: eşik 5'e düşürülmüştü, GoodbyeDPI'nin
 // 4-5 denemede istikrar kazanma riskiyle çelişiyordu — 8'de bırakılmasına karar verildi.
 let engineFailCount = 0;
-const ENGINE_MAX_AUTO_RETRIES = 8;
+// KULLANICI TALEBİ (2026-09-07, Linux istemcisinde bulunan gerçek bir zamanlama sorununa
+// dayanarak, buraya da uygulandı): önyükleme sonrası bazı ağlarda genel bağlantının (muhtemelen
+// ISP/yönlendirici tarafındaki bağlantı izleme/DNS tablolarının) tam oturması ~20-25 saniye
+// sürebiliyor -- DPI motorunun KENDİSİ genelde 1-2 saniyede hazır oluyor, GECİKME motorda
+// değil. Eski eşik (8 deneme x 2sn = 16sn) bu pencereyi kapatmadan pes ediyordu; kullanıcı
+// "vazgeçti" ekranını görüp elle Yenile'ye bastığında ağ zaten oturmuş oluyor, bu yüzden hemen
+// çalışıyordu. 20'ye çıkarmak (20 x 2sn = 40sn) bu pencereyi rahat karşılıyor.
+const ENGINE_MAX_AUTO_RETRIES = 20;
 const ENGINE_RETRY_DELAY_MS = 2000;
 
 webview?.addEventListener('did-fail-load', async (event) => {
@@ -678,17 +700,23 @@ webview?.addEventListener('did-fail-load', async (event) => {
       // SEÇİLİ motor için yeniden arar).
       window.splitcord.log?.('did-fail-load-give-up', { activeEngineId: status?.activeEngineId, count: engineFailCount });
       engineFailCount = 0;
+      if (btnStatusRetryManual) btnStatusRetryManual.textContent = `Tekrar Dene (${ENGINE_MAX_AUTO_RETRIES} Kez)`;
       if (status?.activeEngineId && btnStatusRejectUnstableArgs) {
         rejectBannerEngineId = status.activeEngineId;
         showStatusWithActions(
           `${ENGINE_MAX_AUTO_RETRIES} denemenin ardından kayıtlı ayar ile yine Discord'a erişilemedi.\nKullanılan argüman seti ile Discord'a erişim stabil değil. Argüman setini yasaklayarak farklı argüman setleri için kontrol başlatabilirsiniz.`,
-          [btnStatusRejectUnstableArgs],
+          [btnStatusRejectUnstableArgs, btnStatusRetryManual],
         );
       } else {
-        showStatus(`Discord yüklenemedi (${event.errorDescription || event.errorCode}).\nYenile'ye tekrar basmayı deneyin.`, true);
+        showStatusWithActions(
+          `Discord yüklenemedi (${event.errorDescription || event.errorCode}).\nYenile'ye tekrar basmayı deneyin.`,
+          [btnStatusRetryManual],
+        );
       }
     } else {
-      showStatus(`Discord yüklenemedi (${event.errorDescription || event.errorCode}).\nTekrar deneniyor…`);
+      showStatus(
+        `Discord yüklenemedi (${event.errorDescription || event.errorCode}).\nDPI motorunun başlatılması zaman alabilir. Lütfen biraz bekleyin.\nTekrar deneniyor… (${engineFailCount}/${ENGINE_MAX_AUTO_RETRIES})`,
+      );
       await new Promise((resolve) => setTimeout(resolve, ENGINE_RETRY_DELAY_MS));
 
       // CANLI TESTTE BULUNAN GERÇEK BUG (2026-09-07, Linux istemcisinde bulunup buraya da
