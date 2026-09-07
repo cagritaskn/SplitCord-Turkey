@@ -773,7 +773,7 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
         }
         else
         {
-            var reachable = await TestConnectivityAsync(TimeSpan.FromSeconds(12), BuildConnectivityProbeUrl(candidate));
+            var reachable = await TestConnectivityAsync(TimeSpan.FromSeconds(12), BuildConnectivityProbeUrl(candidate), ct);
             if (!reachable)
             {
                 _logger.LogWarning("Zapret2 stratejisi Discord'a erişemedi: {Args}", candidate);
@@ -1177,7 +1177,13 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
     /// UDP sorgusu gönderiyor, bu yüzden kullanıcının yapılandırdığı HERHANGİ bir protokolü
     /// (DoH/DoT/DoQ/DNSCrypt) motor-özel kod yazmadan otomatik kullanır. nfqws2 sistem geneli
     /// çalıştığı için bu sürecin kendi DNS isteği de onun paket müdahalesine tabi oluyor.</summary>
-    private async Task<bool> TestConnectivityAsync(TimeSpan timeout, string probeUrl)
+    // CANLI TESTTE BULUNAN GERÇEK BUG (2026-09-07): bkz. ZapretEngine.cs'teki AYNI TestConnectivityAsync
+    // düzeltmesi -- bu metot da dışarıdan gelen `ct` iptal sinyalini hiç almıyordu, yalnızca
+    // kendi 12sn'lik HttpClient.Timeout'unu dinliyordu. Kullanıcı Manuel modda "Kaydet"e basıp
+    // yeni bir argüman girdiğinde SwitchToAsync'in _scanCts?.Cancel()'ı bu HTTP çağrısını hiç
+    // kesmiyordu -- eski deneme kendi zaman aşımını tam bekleyip BİTENE kadar yeni ayar
+    // denenmiyormuş gibi görünüyordu.
+    private async Task<bool> TestConnectivityAsync(TimeSpan timeout, string probeUrl, CancellationToken ct)
     {
         for (var attempt = 1; attempt <= ConnectivityTestAttempts; attempt++)
         {
@@ -1185,14 +1191,14 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
             {
                 using var handler = new SocketsHttpHandler
                 {
-                    ConnectCallback = async (context, ct) =>
+                    ConnectCallback = async (context, cct) =>
                     {
-                        var ip = await SelfTestResolver.ResolveAsync(context.DnsEndPoint.Host, ct)
+                        var ip = await SelfTestResolver.ResolveAsync(context.DnsEndPoint.Host, cct)
                             ?? throw new InvalidOperationException($"DNS ile {context.DnsEndPoint.Host} çözümlenemedi");
                         var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
                         try
                         {
-                            await socket.ConnectAsync(ip, context.DnsEndPoint.Port, ct);
+                            await socket.ConnectAsync(ip, context.DnsEndPoint.Port, cct);
                             return new NetworkStream(socket, ownsSocket: true);
                         }
                         catch
@@ -1216,14 +1222,15 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
                     AllowAutoRedirect = false,
                 };
                 using var client = new HttpClient(handler) { Timeout = timeout };
-                using var response = await client.GetAsync(probeUrl);
+                using var response = await client.GetAsync(probeUrl, ct);
                 return true;
             }
             catch (Exception ex)
             {
+                if (ct.IsCancellationRequested) throw;
                 _logger.LogWarning("Zapret2 bağlantı testi hatası (deneme {Attempt}/{Max}): {Error}", attempt, ConnectivityTestAttempts, ex.Message);
                 _logs.Add($"Bağlantı testi hatası (deneme {attempt}/{ConnectivityTestAttempts}): {ex.Message}");
-                if (attempt < ConnectivityTestAttempts) await Task.Delay(ConnectivityRetryDelay);
+                if (attempt < ConnectivityTestAttempts) await Task.Delay(ConnectivityRetryDelay, ct);
                 continue;
             }
         }

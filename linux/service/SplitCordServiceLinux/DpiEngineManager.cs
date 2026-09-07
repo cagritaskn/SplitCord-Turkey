@@ -283,6 +283,14 @@ public sealed class DpiEngineManager : IHostedService
         // sonra yeniden başlatmayı SwitchToAsync'e devret (kendi kilidini/switching/iptal
         // durumunu doğru yönetiyor) -- allowEscalation:false, ORİJİNAL davranışla AYNI
         // (başarısızlıkta başka bir motora otomatik geçilmiyor).
+        //
+        // DÜZELTMEDE KAÇIRILAN BİR AYRINTI (aynı gün, canlı testte yakalandı): diğer üç
+        // metottaki (RejectCurrentArgsAsync vb.) AYNI kalıp, ayar değişikliğini kaydetmeden
+        // ÖNCEKİ kilit beklemesinden de _scanCts?.Cancel() ile geçiyor -- burada ilk yazımda
+        // bu satır atlanmıştı, yani "Kaydet" ayarı kaydetmek için bile devam eden bir taramanın
+        // kendiliğinden bitmesini bekliyordu (D-33 ile AYNI sınıf hata, yalnızca bir satır
+        // aşağıda tekrar etti).
+        _scanCts?.Cancel();
         await _switchLock.WaitAsync();
         try
         {

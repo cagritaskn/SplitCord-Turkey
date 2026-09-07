@@ -181,7 +181,7 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
         }
 
         await Task.Delay(DriverAttachDelay, ct);
-        var reachable = await TestConnectivityAsync(TimeSpan.FromSeconds(12));
+        var reachable = await TestConnectivityAsync(TimeSpan.FromSeconds(12), ct);
 
         if (reachable)
         {
@@ -351,7 +351,17 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
     private const int ConnectivityTestAttempts = 2;
     private static readonly TimeSpan ConnectivityRetryDelay = TimeSpan.FromSeconds(1.5);
 
-    private async Task<bool> TestConnectivityAsync(TimeSpan timeout)
+    // CANLI TESTTE BULUNAN GERÇEK BUG (2026-09-07): bu metot `ct` (dışarıdan gelen iptal
+    // sinyali) hiç ALMIYORDU -- `client.GetAsync(...)` yalnızca kendi HttpClient.Timeout'unu
+    // (12sn) dinliyordu. Sonucu: kullanıcı Manuel modda "Kaydet"e basıp YENİ bir argüman
+    // girdiğinde, DpiEngineManager.UpdateArgsAsync -> SwitchToAsync `_scanCts?.Cancel()`
+    // çağırsa bile, o an sürmekte olan bağlantı testi bunu HİÇ görmüyor, kendi 12sn'lik (x2
+    // deneme) zaman aşımını tam olarak bekliyordu -- kullanıcıya "eski deneme durdurulmuyor,
+    // yeni ayar hemen denenmiyor" gibi görünüyordu. Düzeltme: `ct` parametre olarak alınıp
+    // hem GetAsync'e hem Task.Delay'e veriliyor; GERÇEK bir dış iptal (ct.IsCancellationRequested)
+    // durumunda döngüde SESSİZCE bir sonraki denemeye geçmek yerine YENİDEN FIRLATILIYOR ki
+    // çağıran (StartAsync) bunu "kullanıcı iptal etti" olarak doğru işleyebilsin.
+    private async Task<bool> TestConnectivityAsync(TimeSpan timeout, CancellationToken ct)
     {
         for (var attempt = 1; attempt <= ConnectivityTestAttempts; attempt++)
         {
@@ -359,14 +369,14 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
             {
                 using var handler = new SocketsHttpHandler
                 {
-                    ConnectCallback = async (context, ct) =>
+                    ConnectCallback = async (context, cct) =>
                     {
-                        var ip = await SelfTestResolver.ResolveAsync(context.DnsEndPoint.Host, ct)
+                        var ip = await SelfTestResolver.ResolveAsync(context.DnsEndPoint.Host, cct)
                             ?? throw new InvalidOperationException($"DNS ile {context.DnsEndPoint.Host} çözümlenemedi");
                         var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
                         try
                         {
-                            await socket.ConnectAsync(ip, context.DnsEndPoint.Port, ct);
+                            await socket.ConnectAsync(ip, context.DnsEndPoint.Port, cct);
                             return new NetworkStream(socket, ownsSocket: true);
                         }
                         catch
@@ -377,14 +387,15 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
                     },
                 };
                 using var client = new HttpClient(handler) { Timeout = timeout };
-                using var response = await client.GetAsync(ConnectivityProbeUrl);
+                using var response = await client.GetAsync(ConnectivityProbeUrl, ct);
                 return true;
             }
             catch (Exception ex)
             {
+                if (ct.IsCancellationRequested) throw;
                 _logger.LogWarning("Zapret bağlantı testi hatası (deneme {Attempt}/{Max}): {Error}", attempt, ConnectivityTestAttempts, ex.Message);
                 _logs.Add($"Bağlantı testi hatası (deneme {attempt}/{ConnectivityTestAttempts}): {ex.Message}");
-                if (attempt < ConnectivityTestAttempts) await Task.Delay(ConnectivityRetryDelay);
+                if (attempt < ConnectivityTestAttempts) await Task.Delay(ConnectivityRetryDelay, ct);
                 continue;
             }
         }

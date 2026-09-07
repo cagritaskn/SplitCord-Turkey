@@ -199,6 +199,18 @@ function registerIpcHandlers() {
       logEvent('set-engine-args-restart-choice', { id, restart });
     }
 
+    // KULLANICI TALEBİ (2026-09-07): restart=true olduğunda serviceClient.setEngineArgs()
+    // TAMAMLANMADAN (DpiEngineManager.UpdateArgsAsync -> SwitchToAsync, kayıtlı ayar
+    // denemesi/tam tarama yüzünden dakikalarca sürebilir) önce ana pencereye HABER VERMİYORDUK
+    // -- bu yüzden "Kaydet"e basınca, önceden yüklenmiş bir Discord sayfası varsa, arayüz
+    // TÜM işlem bitene kadar hiçbir şey olmuyormuş gibi (eski sayfa/duruma takılı) görünüyordu,
+    // yeni denemenin GERÇEKTEN başladığı hiç yansımıyordu. Şimdi restart tetiklenir tetiklenmez
+    // (asıl HTTP çağrısının sonucunu beklemeden) haber veriyoruz ki renderer'ın refreshConnection()'ı
+    // hemen "Bağlantı hazırlanıyor…" (switching=true) durumunu göstersin.
+    if (restart) {
+      getMainWindow()?.webContents.send('dpi:engine-changed');
+    }
+
     try {
       const result = await serviceClient.setEngineArgs(id, args, restart);
       if (restart) {
@@ -208,6 +220,7 @@ function registerIpcHandlers() {
       return result;
     } catch (err) {
       logEvent('set-engine-args-error', { id, error: err.message });
+      if (restart) getMainWindow()?.webContents.send('dpi:engine-changed');
       throw err;
     }
   });

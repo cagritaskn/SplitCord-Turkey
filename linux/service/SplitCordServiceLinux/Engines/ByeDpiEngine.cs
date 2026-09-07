@@ -1165,7 +1165,7 @@ public sealed class ByeDpiEngine : IDpiEngine, IDnsTierAware
                 _logs.Add($"Kayıtlı ayar deneniyor ({attempt}/{SavedArgsRetryAttempts}): {savedArgs}");
                 await SpawnAsync(savedArgs, ct);
                 var reachable = await WaitForPortAsync(_port, TimeSpan.FromSeconds(3))
-                    && await TestConnectivityAsync(TimeSpan.FromSeconds(12));
+                    && await TestConnectivityAsync(TimeSpan.FromSeconds(12), ct);
 
                 if (reachable)
                 {
@@ -1275,7 +1275,7 @@ public sealed class ByeDpiEngine : IDpiEngine, IDnsTierAware
             // aşımına uğrarsa, çalışabilecek bir sağlayıcıya hiç sıra gelmeden aday haksız yere
             // "başarısız" işaretlenirdi.
             var reachable = await WaitForPortAsync(_port, TimeSpan.FromSeconds(3))
-                && await TestConnectivityAsync(TimeSpan.FromSeconds(12));
+                && await TestConnectivityAsync(TimeSpan.FromSeconds(12), ct);
 
             if (reachable)
             {
@@ -1414,7 +1414,11 @@ public sealed class ByeDpiEngine : IDpiEngine, IDnsTierAware
     /// discord.com'a ulaşılabiliyor mu diye HTTP isteğiyle test eder. Herhangi bir HTTP
     /// yanıtı (hata durum kodu dahil) "erişilebilir" sayılır — bizi ilgilendiren DPI'nin
     /// bağlantıyı koparıp koparmadığı, Discord'un tam olarak ne döndürdüğü değil.</summary>
-    private async Task<bool> TestConnectivityAsync(TimeSpan timeout)
+    // CANLI TESTTE BULUNAN GERÇEK BUG (2026-09-07): bkz. ZapretEngine.cs/Zapret2Engine.cs'teki
+    // AYNI TestConnectivityAsync düzeltmesi -- bu metot da `ct`yi hiç almıyordu, yalnızca kendi
+    // HttpClient.Timeout'unu dinliyordu; bir dış iptal (ör. Manuel'de "Kaydet") bu HTTP çağrısını
+    // hiç kesemiyordu.
+    private async Task<bool> TestConnectivityAsync(TimeSpan timeout, CancellationToken ct)
     {
         try
         {
@@ -1424,11 +1428,12 @@ public sealed class ByeDpiEngine : IDpiEngine, IDnsTierAware
                 UseProxy = true,
             };
             using var client = new HttpClient(handler) { Timeout = timeout };
-            using var response = await client.GetAsync(ConnectivityProbeUrl);
+            using var response = await client.GetAsync(ConnectivityProbeUrl, ct);
             return true;
         }
         catch (Exception ex)
         {
+            if (ct.IsCancellationRequested) throw;
             _logger.LogWarning("ByeDPI bağlantı testi hatası: {Error}", ex.Message);
             _logs.Add($"Bağlantı testi hatası: {ex.Message}");
             return false;
