@@ -268,6 +268,10 @@ public sealed class DpiEngineManager : IHostedService
         var target = _engines.FirstOrDefault(e => e.Id == engineId)
             ?? throw new ArgumentException($"Bilinmeyen motor: {engineId}");
 
+        // bkz. ResetSettingsAsync'teki AYNI D-33 düzeltmesi — devam eden bir tarama varsa
+        // kilidi beklemeden önce iptal sinyaline sok, yoksa bu çağrı tarama kendiliğinden
+        // bitene kadar tıkanır.
+        _scanCts?.Cancel();
         await _switchLock.WaitAsync();
         try
         {
@@ -314,6 +318,8 @@ public sealed class DpiEngineManager : IHostedService
         var byeDpi = _engines.OfType<ByeDpiEngine>().FirstOrDefault()
             ?? throw new InvalidOperationException("ByeDPI motoru bulunamadı");
 
+        // bkz. ResetSettingsAsync'teki AYNI D-33 düzeltmesi.
+        _scanCts?.Cancel();
         await _switchLock.WaitAsync();
         try
         {
@@ -341,6 +347,8 @@ public sealed class DpiEngineManager : IHostedService
             return;
         }
 
+        // bkz. ResetSettingsAsync'teki AYNI D-33 düzeltmesi.
+        _scanCts?.Cancel();
         await _switchLock.WaitAsync();
         try
         {
@@ -370,6 +378,13 @@ public sealed class DpiEngineManager : IHostedService
     /// <summary>Ayarlar > Hakkında'daki "Tüm Ayarları Sıfırla" için.</summary>
     public async Task ResetSettingsAsync()
     {
+        // CANLI TESTTE BULUNAN GERÇEK BUG (2026-09-07): StopAllAsync/StopAsync'teki AYNI D-33
+        // düzeltmesi ("_scanCts?.Cancel() ile kilidi beklemeden ÖNCE aktif taramayı iptal
+        // sinyaline sok") buraya hiç uygulanmamıştı -- bir tarama (SavedArgsRetryAttempts +
+        // tüm CandidateStrategies x DnsProtocolTiers, dakikalarca sürebiliyor) _switchLock'u
+        // tuttuğu sürece "Tüm Ayarları Sıfırla" o tarama kendiliğinden bitene kadar (ya da hiç
+        // bitmiyorsa süresiz) tıkanıyordu -- kullanıcı "Sıfırlanıyor…" ekranında sıkışıp kalıyordu.
+        _scanCts?.Cancel();
         await _switchLock.WaitAsync();
         try
         {
@@ -416,6 +431,8 @@ public sealed class DpiEngineManager : IHostedService
         if (!_engines.Any(e => e.Id == engineId))
             throw new ArgumentException($"Bilinmeyen motor: {engineId}");
 
+        // bkz. ResetSettingsAsync'teki AYNI D-33 düzeltmesi.
+        _scanCts?.Cancel();
         await _switchLock.WaitAsync();
         try
         {

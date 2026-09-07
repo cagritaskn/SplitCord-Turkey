@@ -53,14 +53,15 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
     // DoH ile zaten aşıldığından, 443 bu stratejiye hiç ihtiyaç duymadan geçebiliyor.
     // Adayın GERÇEKTEN filtrelediği porta göre doğru test URL'ini seçiyoruz.
     //
-    // DOĞRULANMADI: "--wf-tcp-out=" WinDivert'e özgü bir filtre sözdizimi (winws2.exe'nin
-    // Windows'ta blockcheck2 çıktısına gömdüğü). Native Linux'ta blockcheck2.sh'nin "daemon
-    // argümanları" satırında port bilgisi HİÇ geçmeyebilir (port seçimi artık iptables kuralının
-    // işi, nfqws2'nin kendi argümanlarının değil) — bu durumda bu regex hiçbir zaman eşleşmez ve
-    // BuildConnectivityProbeUrl her zaman güvenli varsayılana (HTTPS, ConnectivityProbeUrl)
-    // düşer, ki bu zaten doğru/zararsız bir davranış (yalnızca "yalnızca port 80'i test et"
-    // optimizasyonu kaybolur, yanlış bir sonuç üretmez).
-    private static readonly Regex WfTcpOutRegex = new(@"--wf-tcp-out=(?<ports>\S+)", RegexOptions.Compiled);
+    // GÜNCELLENDİ (2026-09-07, bkz. PreConfiguredCandidates'teki AYNI D-xx düzeltmesi):
+    // "--wf-tcp-out=" WinDivert'e özgü bir filtre sözdizimiydi, native Linux nfqws2 bunu
+    // TANIMIYOR — gerçek karşılığı "--filter-tcp=" (nfqws2 --help ile doğrulandı). Native
+    // Linux'ta blockcheck2.sh'nin "daemon argümanları" satırında port bilgisi hiç geçmeyebilir
+    // (port seçimi iptables kuralının işi) — bu durumda bu regex eşleşmez ve
+    // BuildConnectivityProbeUrl güvenli varsayılana (HTTPS, ConnectivityProbeUrl) düşer, ki bu
+    // zaten doğru/zararsız bir davranış (yalnızca "yalnızca port 80'i test et" optimizasyonu
+    // kaybolur, yanlış bir sonuç üretmez).
+    private static readonly Regex WfTcpOutRegex = new(@"--filter-tcp=(?<ports>\S+)", RegexOptions.Compiled);
 
     private static string BuildConnectivityProbeUrl(string candidate)
     {
@@ -103,17 +104,25 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
     // blockcheck2'nin YERİNE değil, ÖNÜNE geçiyor — hiçbiri çalışmazsa (ya da hepsi kullanıcı
     // tarafından Ayarlar'dan yasaklanmışsa) normal blockcheck2 taramasına (DNS protokolü tier
     // döngüsü dahil) geçiliyor, hiçbir kapsam kaybı yok.
+    // CANLI TESTTE BULUNAN GERÇEK BUG (2026-09-07): bu liste Windows istemcisinden BİREBİR
+    // kopyalanmıştı (yukarıdaki not) ama "--wf-l3="/"--wf-tcp-out=" WinDivert'e (winws2.exe)
+    // özgü bir filtre sözdizimi -- native Linux nfqws2 binary'si bunu TANIMIYOR. Canlı testte
+    // doğrulandı: nfqws2 `--wf-l3=ipv4` görünce "unrecognized option" basıp ANINDA (ExitCode=1)
+    // çöküyordu -- 9 önayarın TAMAMI, argümanlarından bağımsız olarak, aynı şekilde başarısız
+    // oluyordu (bağlantı testi hatası bunun SONUCUYDU, gerçek sebep hiç nfqws2'nin başlamamasıydı).
+    // Düzeltme: nfqws2'nin KENDİ (`--help` çıktısıyla doğrulanan) filtre sözdizimine çevrildi:
+    // "--wf-l3=" -> "--filter-l3=", "--wf-tcp-out=" -> "--filter-tcp=".
     private static readonly string[] PreConfiguredCandidates =
     {
-        "--wf-l3=ipv4 --wf-tcp-out=443 --in-range=-s1 --lua-desync=oob:urp=b",
-        "--wf-l3=ipv4 --wf-tcp-out=443 --in-range=-s1 --lua-desync=oob:urp=0",
-        "--wf-l3=ipv4 --wf-tcp-out=80 --in-range=-s1 --lua-desync=oob:urp=0",
-        "--wf-l3=ipv4 --wf-tcp-out=80 --in-range=-s1 --lua-desync=oob:urp=b",
-        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=http_hostcase:spell=hoSt",
-        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=multidisorder:pos=midsld:seqovl=midsld-1",
-        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=multidisorder:pos=method+2,midsld",
-        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=multidisorder:pos=method+2:seqovl=method+1",
-        "--wf-l3=ipv4 --wf-tcp-out=80 --payload=http_req --lua-desync=multidisorder:pos=method+2:seqovl=method+1:seqovl_pattern=fake_default_http",
+        "--filter-l3=ipv4 --filter-tcp=443 --in-range=-s1 --lua-desync=oob:urp=b",
+        "--filter-l3=ipv4 --filter-tcp=443 --in-range=-s1 --lua-desync=oob:urp=0",
+        "--filter-l3=ipv4 --filter-tcp=80 --in-range=-s1 --lua-desync=oob:urp=0",
+        "--filter-l3=ipv4 --filter-tcp=80 --in-range=-s1 --lua-desync=oob:urp=b",
+        "--filter-l3=ipv4 --filter-tcp=80 --payload=http_req --lua-desync=http_hostcase:spell=hoSt",
+        "--filter-l3=ipv4 --filter-tcp=80 --payload=http_req --lua-desync=multidisorder:pos=midsld:seqovl=midsld-1",
+        "--filter-l3=ipv4 --filter-tcp=80 --payload=http_req --lua-desync=multidisorder:pos=method+2,midsld",
+        "--filter-l3=ipv4 --filter-tcp=80 --payload=http_req --lua-desync=multidisorder:pos=method+2:seqovl=method+1",
+        "--filter-l3=ipv4 --filter-tcp=80 --payload=http_req --lua-desync=multidisorder:pos=method+2:seqovl=method+1:seqovl_pattern=fake_default_http",
     };
 
     // Her hazır önayar için, WinDivert'in ilk bağlanmada ara sıra başarısız olabilme
