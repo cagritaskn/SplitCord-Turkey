@@ -14,6 +14,21 @@
 # (bkz. package.json "productName": "SplitCord-Turkey").
 set -euo pipefail
 
+# CANLI TESTTE BULUNAN GERÇEK BUG (2026-09-07): electron-builder'ın deb hedefi chrome-sandbox'ı
+# doğru izinlerle (root:root, setuid 4755) paketlemiyor -- kurulumdan sonra 0777/root:root olarak
+# kalıyor, yani SUID sandbox çalışmıyor. Bunun görünmeyen ama gerçek sonucu: Electron bu durumda
+# kendi süreçlerine (namespace sandbox kurabilmek için) `no_new_privs=1` uyguluyor, ve bu bayrak
+# TÜM alt süreçlere miras kalıyor -- uygulama içinden `spawn('pkexec', ...)` ile yapılan HER
+# yetki yükseltme (appUninstaller.js, serviceInstaller.js) "pkexec must be setuid root" hatasıyla
+# (exit code 127) başarısız oluyordu, pkexec kendisi diskte doğru setuid olsa bile. Düzeltme:
+# izinleri burada elle düzeltiyoruz (script zaten root olarak çalışıyor, ek bir parola istemine
+# gerek yok).
+CHROME_SANDBOX="/opt/SplitCord-Turkey/chrome-sandbox"
+if [ -f "$CHROME_SANDBOX" ]; then
+  chown root:root "$CHROME_SANDBOX" || true
+  chmod 4755 "$CHROME_SANDBOX" || true
+fi
+
 INSTALLER_DIR="/opt/SplitCord-Turkey/resources/service-installer"
 
 if [ -f "$INSTALLER_DIR/install.sh" ]; then
