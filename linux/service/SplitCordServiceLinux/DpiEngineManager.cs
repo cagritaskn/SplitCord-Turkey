@@ -265,13 +265,24 @@ public sealed class DpiEngineManager : IHostedService
 
     public async Task UpdateArgsAsync(string engineId, string args, bool restart = true)
     {
-        var target = _engines.FirstOrDefault(e => e.Id == engineId)
-            ?? throw new ArgumentException($"Bilinmeyen motor: {engineId}");
+        if (!_engines.Any(e => e.Id == engineId))
+            throw new ArgumentException($"Bilinmeyen motor: {engineId}");
 
-        // bkz. ResetSettingsAsync'teki AYNI D-33 düzeltmesi — devam eden bir tarama varsa
-        // kilidi beklemeden önce iptal sinyaline sok, yoksa bu çağrı tarama kendiliğinden
-        // bitene kadar tıkanır.
-        _scanCts?.Cancel();
+        // CANLI TESTTE BULUNAN GERÇEK BUG (2026-09-07): bu metot RejectCurrentArgsAsync/
+        // ReportEngineFailureAsync/RejectCurrentByeDpiArgsAsync'in KULLANDIĞI doğru kalıbı
+        // (ayarı kilit altında değiştirip kilidi bırak, yeniden başlatmayı AYRI bir
+        // SwitchToAsync çağrısına devret) kullanmıyordu -- bunun yerine motoru doğrudan,
+        // kilit TUTULURKEN ve CancellationToken.None ile durdurup başlatıyordu. İki gerçek
+        // sonucu vardı: (1) _switching hiç true olmuyordu, bu yüzden arayüz gerçekten süren
+        // bir deneme sırasında bile hemen "Durduruldu" gösteriyordu (kullanıcının "kaydet'e
+        // basınca ayarı çalıştırmayı denemiyor" şikayeti); (2) CancellationToken.None
+        // kullanıldığı için bu deneme _scanCts?.Cancel() ile İPTAL EDİLEMİYORDU -- "Otomatik
+        // Arama Başlat" butonu bu yüzden kilidi bekleyip sessizce kuyrukta kalıyor, deneme
+        // (birkaç dakika sürebilen tam taramaya düşerse) kendiliğinden bitene kadar hiçbir
+        // şey olmuyormuş gibi görünüyordu. Düzeltme: ayar değişikliğini kilit altında yap,
+        // sonra yeniden başlatmayı SwitchToAsync'e devret (kendi kilidini/switching/iptal
+        // durumunu doğru yönetiyor) -- allowEscalation:false, ORİJİNAL davranışla AYNI
+        // (başarısızlıkta başka bir motora otomatik geçilmiyor).
         await _switchLock.WaitAsync();
         try
         {
@@ -289,23 +300,15 @@ public sealed class DpiEngineManager : IHostedService
                     break;
             }
             _settings.Save();
-
-            if (restart)
-            {
-                foreach (var engine in _engines.Where(e => e.Id != engineId))
-                    await engine.StopAsync(CancellationToken.None);
-
-                await target.StopAsync(CancellationToken.None);
-                await target.StartAsync(CancellationToken.None);
-
-                _activeEngineId = engineId;
-                _settings.Current.ActiveEngineId = engineId;
-                _settings.Save();
-            }
         }
         finally
         {
             _switchLock.Release();
+        }
+
+        if (restart)
+        {
+            await SwitchToAsync(engineId, allowEscalation: false);
         }
     }
 
