@@ -346,6 +346,18 @@ async function initDpiMode() {
         } catch (err) {
           window.splitcord.log('set-dpi-mode-error', { mode, error: err.message });
         }
+
+        // CANLI TESTTE BULUNAN GERÇEK BUG (2026-09-07): selectedEngineId yalnızca İLK KEZ
+        // boşken (bkz. renderEngineList'teki "selectedEngineId || getDisplayActiveEngineId"
+        // düşmesi) gerçek aktif motora eşitleniyordu — Otomatik<->Manuel geçişinde HİÇ
+        // sıfırlanmıyordu. Sonucu: kullanıcı daha önce Manuel'de bir motoru (ör. Zapret2)
+        // seçip sonra Otomatik'e geçse (bu, arka planda FARKLI bir motoru — Otomatik'in giriş
+        // noktası Zapret'i — aktive ediyor), sonra tekrar Manuel'e dönse, kart listesi hâlâ
+        // ESKİ seçimi (Zapret2) vurguluyordu, GERÇEKTE aktif olan (Zapret) değil. Manuel'e her
+        // girişte seçimi sıfırlıyoruz ki aşağıdaki refreshStatus() onu GERÇEK aktif motora
+        // yeniden eşitlesin.
+        if (mode === 'manual') selectedEngineId = null;
+
         applyDpiModeView();
         await refreshStatus();
       } finally {
