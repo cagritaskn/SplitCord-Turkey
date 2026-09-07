@@ -46,6 +46,22 @@ SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint'te te
 
 ---
 
+## Karşılaşılabilecek Sorunlar
+
+- **Sistem Geneli Aşımlarda (Zapret, Zapret2 ve GoodbyeDPI) Belirli Siteler/Uygulamalara Erişimin Kaybedilmesi Durumunda**
+DPI Aşımı ayarlarından **Gelişmiş** seçeneğini aktifleştirin, ardından aşağı kaydırıp **Argüman Setini Yasakla** butonunu bulup tıklayın. Sorun devam ederse bu işlemi tekrar edin. Yine sonuç alamazsanız DPI aşım motorunu değşitirmeyi deneyin. (Örn. Zapret2 -> Zapret) Ayrıca SplitCord-Turkey'i sonlandırdığınızda hiçbir aşım motorunun çalışmayacağı, bu sebeple erişim kaybettiğiniz site/uygulamalara SplitCord-Turkey'den çıkış yaptıktan sonra erişebileceğinizi unutmayın.
+
+- **QUIC Hatası Almanız Durumunda**
+Genel ayarlarda bulunan **QUIC devre dışı** seçeneğini aktifleştirip yeniden arama başlatmayı deneyin.
+
+- **Ekran Paylaşımı Panelinde Tercih Ettiğiniz Uygulamanın Bulunmaması Durumunda**
+SplitCord-Turkey, Chromium tabanlı bir Discord sunduğu için tam ekran uygulamalar ekran paylaşım panelinde görülemeyebilir. Bu sebeple tam ekran uygulama/oyun destekliyorsa pencere modunu çerçevesiz pencereli (windowed borderless) moduna alarak ekran paylaşımını tekrar deneyin.
+
+- **DPI Motoruna Bağlanılamama Hatası Aldığınızda**
+**SplitCordDpiService.dll** dosyası her güncellendiğinde yeni bir hash'e sahip olduğundan Microsoft Defender'ın makine öğrenmesine bağlı zararlı yazlım tespitinde hatalı olarak flaglenebiliyor. Bu durumun yaşanmaması adına her release'ten sonra Microsoft'a dosya örneği ve inceleme talebi gönderiliyor ve kabul ediliyor ancak bu manuel bir işlem olduğundan gözden kaçtığında DLL dosyasının Defender tarafından silinmesi ihtimali bulunuyor. Bu yaşandığında DPI motoruna erişlemediğine ilişkin hata alınabiliyor. Eğer bu durum gerçekleşirse Defender üzerinden ilgili DLL dosyası ya da SplitCord-Turkey'in kurulum klasörünü Defender istisnalarına ekleyip tekrar kurulum yaparak sorunu çözebilirsiniz.
+
+---
+
 ## Özellikler
 
 - **Discord'a görsel ve işlevsel olarak birebir yakın bir arayüz.** Kendi özel başlık çubuğu, bildirimleri, tepsi simgesi ve ekran paylaşımı seçicisiyle resmi masaüstü istemcisinin yerini alabilecek şekilde tasarlanmıştır.
