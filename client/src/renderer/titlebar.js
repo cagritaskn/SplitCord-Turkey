@@ -235,6 +235,28 @@ function hideStatus() {
   clearStatusScanLog();
 }
 
+// CANLI TESTTE BULUNAN GERÇEK BUG (2026-09-07, Linux istemcisinde bulunup buraya da uygulandı):
+// hem did-finish-load'daki "gerçekten Discord'a mı ulaşıldı" kontrolü hem de did-fail-load'ın
+// "sayfa zaten kendiliğinden toparlandı mı" kontrolü webview.getURL()'e güveniyordu -- ama bir
+// yükleme bir hatayla Chromium'un kendi dahili hata sayfasına (chrome-error://chromewebdata/)
+// düşünce, getURL() GERÇEKTE gösterilen chrome-error:// adresini DEĞİL, DENENEN hedefi (ör.
+// "https://discord.com/login") döndürmeye devam ediyordu -- bu iki kontrol yanlış pozitif
+// üretip siyah/boş hata sayfasını "gerçek Discord yüklendi" sanıyordu. Bu, önceden 2sn'de bir
+// koşulsuz tekrar deneme (flaşlanan yükleniyor ekranı) sayesinde çoğunlukla kendiliğinden
+// düzeliyordu; gereksiz tekrarları önleyen düzeltme bu güvenlik ağını kaldırınca kullanıcı
+// KALICI olarak siyah hata sayfasında takılı kalabiliyordu. Düzeltme: webview.getURL() yerine
+// sayfanın KENDİ location.href'ini (executeJavaScript ile) okuyoruz -- hata sayfalarında bile
+// script çalıştırma çalışıyor.
+async function getWebviewRealUrl() {
+  try {
+    const href = await webview?.executeJavaScript?.('location.href');
+    if (typeof href === 'string' && href) return href;
+  } catch (err) {
+    window.splitcord.log?.('get-webview-real-url-error', { error: err.message });
+  }
+  return webview?.getURL?.() ?? '';
+}
+
 // Otomatik tarama sürerken (status.switching) arka planda hangi hizmetin/ayarın o an
 // denendiğini gösteren bulanık günlük akışı — bkz. index.html'deki #discord-status-log-backdrop.
 function clearStatusScanLog() {
@@ -679,7 +701,7 @@ webview?.addEventListener('did-fail-load', async (event) => {
       // yeniden tetikliyordu — "Discord yükleniyor…" ekranının sürekli flaşlanmasının kök
       // nedeni buydu. Düzeltme: yeniden yüklemeden önce sayfanın zaten gerçekten yüklü/başarılı
       // olup olmadığını kontrol ediyoruz; öyleyse gereksiz reload'u ATLIYORUZ.
-      const currentUrl = webview?.getURL?.() ?? '';
+      const currentUrl = await getWebviewRealUrl();
       const alreadyLoaded = /^https:\/\/(www\.)?discord\.com\//.test(currentUrl) && webview?.isLoading?.() === false;
       if (alreadyLoaded) {
         window.splitcord.log?.('did-fail-load-already-recovered', { url: currentUrl });
@@ -698,15 +720,16 @@ webview?.addEventListener('did-fail-load', async (event) => {
   }
 });
 
-webview?.addEventListener('did-finish-load', () => {
+webview?.addEventListener('did-finish-load', async () => {
   // did-fail-load'dan hemen sonra Chromium kendi dahili hata sayfasına (chrome-error://
   // veya benzeri) düşüp onu BAŞARIYLA yüklüyor — bu da hemen ardından bir did-finish-load
   // tetikliyor. webview.src (ayarladığımız hedef) her zaman aynı kaldığı için önceden bunu
   // "gerçek başarı" sanıp engineFailCount'u sıfırlıyorduk, bu da vazgeçme sınırını hiç
   // devreye girmeden 2 saniyede bir SONSUZA KADAR tekrar denemeye yol açıyordu. Gerçekte
-  // hangi URL'in yüklendiğini (webview.getURL()) kontrol edip yalnızca GERÇEKTEN
-  // discord.com'a ulaşıldıysa "başarı" sayıyoruz.
-  const loadedUrl = webview.getURL?.() ?? '';
+  // hangi URL'in yüklendiğini (bkz. getWebviewRealUrl üstündeki not — webview.getURL()
+  // GÜVENİLMEZ, chrome-error:// sayfalarında bile denenen hedefi döndürüyordu) kontrol edip
+  // yalnızca GERÇEKTEN discord.com'a ulaşıldıysa "başarı" sayıyoruz.
+  const loadedUrl = await getWebviewRealUrl();
   const isRealDiscordPage = /^https:\/\/(www\.)?discord\.com\//.test(loadedUrl);
   window.splitcord.log?.('did-finish-load', { url: loadedUrl, isRealDiscordPage });
   if (!isRealDiscordPage) return;
