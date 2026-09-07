@@ -668,6 +668,26 @@ webview?.addEventListener('did-fail-load', async (event) => {
     } else {
       showStatus(`Discord yüklenemedi (${event.errorDescription || event.errorCode}).\nTekrar deneniyor…`);
       await new Promise((resolve) => setTimeout(resolve, ENGINE_RETRY_DELAY_MS));
+
+      // CANLI TESTTE BULUNAN GERÇEK BUG (2026-09-07, Linux istemcisinde bulunup buraya da
+      // uygulandı — bkz. linux/client/src/renderer/titlebar.js'teki AYNI düzeltme): bu bekleme
+      // sırasında sayfa KENDİLİĞİNDEN (bu hatanın ait olduğu reload'un kendisi milisaniyeler
+      // içinde toparlanıp did-finish-load'u ZATEN tetiklemiş olabilir) başarıyla yüklenmiş
+      // olabiliyordu -- aşağıdaki refreshConnection() bunu HİÇ KONTROL ETMEDEN koşulsuz
+      // webview.reload() çağırıyordu, bu da ZATEN İYİ ÇALIŞAN sayfayı gereksiz yere yeniden
+      // yükleyip AYNI geçici hatayı (ve dolayısıyla AYNI 2sn'lik yeniden deneme döngüsünü)
+      // yeniden tetikliyordu — "Discord yükleniyor…" ekranının sürekli flaşlanmasının kök
+      // nedeni buydu. Düzeltme: yeniden yüklemeden önce sayfanın zaten gerçekten yüklü/başarılı
+      // olup olmadığını kontrol ediyoruz; öyleyse gereksiz reload'u ATLIYORUZ.
+      const currentUrl = webview?.getURL?.() ?? '';
+      const alreadyLoaded = /^https:\/\/(www\.)?discord\.com\//.test(currentUrl) && webview?.isLoading?.() === false;
+      if (alreadyLoaded) {
+        window.splitcord.log?.('did-fail-load-already-recovered', { url: currentUrl });
+        engineFailCount = 0;
+        hideStatus();
+        return;
+      }
+
       await refreshConnection();
     }
   } catch (err) {
