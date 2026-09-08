@@ -37,7 +37,7 @@ SplitCord-Turkey'in Linux sürümü öncelikli olarak Debian/Ubuntu tabanlı da�
 AppImage, çalışması gereken kütüphaneleri (`libnetfilter_queue`, `libmnl`, `libnfnetlink`, `luajit`) ve araçları (`iptables`/`iptables-nft`, `nft`) kendi içine gömmeye çalışır. Yine de dağıtımınıza özgü bir sebeple bunlardan biri eksik/çalışmıyor olabilir. Bu durumda:
 
 - **Ayarlar > İzinler ve Kontroller** ekranında "AppImage Bağımlılıkları" bölümünden hangi bileşenin eksik olduğunu ve dağıtımınıza özel önerilen kurulum komutunu görebilirsiniz.
-- DPI motoru hiçbir ayar bulamadan tükenirse (tüm stratejiler denenip hiçbiri çalışmazsa) ve bunun sebebi gerçekten bir bağımlılık sorunuysa, ana ekranda otomatik olarak **"⚠ Bağımlılık Sorunu Tespit Edildi"** butonu belirir — bu buton yalnızca gerçek bir bağımlılık sorunu tespit edildiğinde çıkar, ağ/ISP kaynaklı normal bir "ayar bulunamadı" durumunda görünmez.
+- DPI motoru hiçbir ayar bulamadan tükenirse (tüm stratejiler denenip hiçbiri çalışmazsa) ve bunun sebebi gerçekten bir bağımlılık sorunuysa, ana ekranda otomatik olarak **"Bağımlılık Sorunu Tespit Edildi"** butonu belirir — bu buton yalnızca gerçek bir bağımlılık sorunu tespit edildiğinde çıkar, ağ/ISP kaynaklı normal bir "ayar bulunamadı" durumunda görünmez.
 
 ---
 
