@@ -6,7 +6,7 @@
     "email": "cagritaskn@gmail.com"
   },
   "homepage": "https://github.com/cagritaskn/SplitCord-Turkey",
-  "version": "0.9.9",
+  "version": "1.0.0",
   "description": "SplitCord-Turkey",
   "main": "src/main/index.js",
   "scripts": {
@@ -40,7 +40,7 @@
       }
     ],
     "linux": {
-      "target": ["deb"],
+      "target": ["deb", "AppImage"],
       "icon": "build/icons",
       "category": "Network",
       "executableName": "splitcord-turkey"
@@ -49,6 +49,9 @@
       "artifactName": "SplitCord-Turkey-Linux-${version}-AMD64.${ext}",
       "afterInstall": "../packaging/deb-postinst.sh",
       "afterRemove": "../packaging/deb-postrm.sh"
+    },
+    "appImage": {
+      "artifactName": "SplitCord-Turkey-Linux-${version}-AMD64.${ext}"
     }
   },
   "allowScripts": {
