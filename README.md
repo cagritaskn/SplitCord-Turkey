@@ -86,6 +86,7 @@ Ayarlardaki Hakkında ve Güncelleme bölümünde bulunan **Tüm Ayarları Sıf�
 - **Tema desteği.** Discord'un o anki temasından otomatik renk örnekleme veya sabit tema ön ayarları arasında seçim yapabilirsiniz.
 - **Kolay kaldırma.** Windows'un dahili program ekleme ve kaldırma menülerinden SplitCord-Turkey'i kolaylıkla kaldırabilirsiniz; kaldırma işlemi hizmeti, tüm DPI aşım süreçlerini ve WinDivert sürücü kayıtlarını da tam olarak temizler.
 - **Kendi kendine kurtarma.** Discord uzun süre bağlanamadığında, Discord'un kendi yükleme ekranında beliren bir butonla mevcut ayarı yasaklayıp Otomatik moddan sıfırdan bir tarama başlatabilirsiniz.
+- **Program içinden davet bağlantısı açma.** Discord davet bağlantılarını programın başlık çubuğunda bulunan "+" butonu ile kullanarak davetleri sistem geneli aşım olmayan durumlarda kolayca açabilirsiniz.
 
 ---
 
