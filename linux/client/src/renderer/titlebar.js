@@ -967,6 +967,25 @@ function applySmallTitlebarAttr(enabled) {
 window.splitcord.app.getSmallTitlebar().then(applySmallTitlebarAttr).catch(() => {});
 window.splitcord.onSmallTitlebarChanged?.(applySmallTitlebarAttr);
 
+// --- KULLANICI TALEBİ: "SplitCord-Turkey başlığını göster/ortala" -- ikisi de varsayılan
+// AÇIK geldiği için (bkz. localSettings.js), titlebar.css'teki kurallar TERSİNE çalışıyor:
+// data-title-hidden/data-title-left "kapalı" durumunu (override) temsil ediyor, enabled=true
+// (varsayılan) herhangi bir attribute GEREKTİRMİYOR. Yalnızca ANA PENCEREyi etkiliyor (bkz.
+// titlebar.css .sc-titlebar-title--app'in notu) -- settings.js'te bir karşılığı YOK.
+function applyShowTitleAttr(enabled) {
+  if (enabled === false) document.documentElement.setAttribute('data-title-hidden', '');
+  else document.documentElement.removeAttribute('data-title-hidden');
+}
+window.splitcord.app.getShowTitle().then(applyShowTitleAttr).catch(() => {});
+window.splitcord.onShowTitleChanged?.(applyShowTitleAttr);
+
+function applyCenterTitleAttr(enabled) {
+  if (enabled === false) document.documentElement.setAttribute('data-title-left', '');
+  else document.documentElement.removeAttribute('data-title-left');
+}
+window.splitcord.app.getCenterTitle().then(applyCenterTitleAttr).catch(() => {});
+window.splitcord.onCenterTitleChanged?.(applyCenterTitleAttr);
+
 // --- Bildirim rozeti (tray ikonu + görev çubuğu ikonu) ---
 // Ana süreçte piksel çizim/kompozisyon API'si yok — bu yüzden ikonları bir <canvas> ile
 // burada (renderer'da) çizip PNG data URL olarak main sürece gönderiyoruz. capturePage()

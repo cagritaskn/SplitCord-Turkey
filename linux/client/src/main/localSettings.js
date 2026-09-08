@@ -47,6 +47,16 @@ const DEFAULTS = {
   // GERÇEKTEN yarıya iner, içindeki her şey (logo, başlık metni, butonlar) orantılı olarak
   // küçülür; #content-area zaten flex:1 olduğu için boşalan alanı otomatik dolduruyor.
   smallTitlebar: false,
+  // KULLANICI TALEBİ: Ayarlar > Görünüm'deki "SplitCord-Turkey başlığını göster/ortala" --
+  // ikisi de varsayılan AÇIK (kullanıcının kendi tercihi) -- yalnızca ANA PENCEREdeki
+  // "SplitCord-Turkey" başlığını etkiler (bkz. titlebar.css .sc-titlebar-title--app'in
+  // üstündeki not, settings.html'in "Ayarlar" başlığı bundan hiç etkilenmiyor).
+  showTitle: true,
+  // centerTitle yalnızca showTitle açıkken görsel olarak anlamlı (kapalıyken başlık zaten
+  // hiç görünmüyor) ama ayrı bir kalıcı değer olarak tutuluyor -- showTitle kapatılıp
+  // tekrar açıldığında kullanıcının önceki centerTitle tercihi korunsun diye (autostart/
+  // startInBackground'daki AYNI desen, bkz. settings.js updateStartInBackgroundVisibility).
+  centerTitle: true,
   // Ayarlar > Tuş Atamaları'ndaki ana anahtar — kapalıyken aşağıdaki hiçbir kombinasyon
   // sistem genelinde kayıtlı olmuyor (bkz. shortcuts.js applyShortcutsFromSettings).
   globalShortcutsEnabled: true,

@@ -656,3 +656,73 @@ if (document.readyState === 'loading') {
   }
   startObserving();
 })();
+
+/**
+ * KULLANICI TALEBİ: Discord'un web istemcisi, hesaptan çıkış yapıldığında (ya da girişsiz
+ * kök sayfaya gidildiğinde) "Discord Uygulaması Algılandı" başlıklı, "Uygulamayı Aç"/
+ * "Tarayıcıda Devam Et" seçenekli bir ekran gösterebiliyor -- bu ekranın hiç görünmemesi
+ * isteniyor. ÖNEMLİ: resmi Discord masaüstü uygulaması sistemde kurulu OLMASA BİLE bu ekran
+ * çıkıyor (kullanıcı tarafından doğrulandı) -- yani bu, OS seviyesinde gerçek bir "discord://
+ * için kayıtlı bir uygulama var mı" kontrolüne dayanmıyor, Discord'un web istemcisinin
+ * KENDİ, koşulsuz bir "masaüstü uygulamasını dene" teşviki (birçok web sitesinin mobil/
+ * masaüstü ziyaretçilere gösterdiği "uygulamada aç" banner'ıyla AYNI kategoriden bir desen).
+ *
+ * NEDEN User-Agent DEĞİŞTİRİLMİYOR: permissions.js configureBrowserIdentity()'deki AYNI
+ * sınıftan bir sorunu (Discord'un "Electron" ibaresi görünce bizi "bozuk resmi uygulama
+ * kopyası" sanıp ekran paylaşımını "önce indir" mesajıyla engellemesi) zaten UA'yı sıradan
+ * bir Chrome tarayıcısına çevirerek çözmüştük -- UA'yı Discord'un GERÇEK masaüstü istemcisi
+ * gibi görünecek şekilde ("discord/"/"Electron/" ekleyerek) değiştirmek bu ekranı da
+ * çözebilirdi AMA ekran paylaşımı düzeltmesini GERİ ALIRDI (Discord'u yeniden "gerçek
+ * masaüstü istemcisiyim" sanmaya döndürüp web tabanlı getDisplayMedia akışını devre dışı
+ * bırakırdı) -- bu yüzden DOM seviyesinde, dosyadaki diğer enjeksiyonlarla (setupKeybinds
+ * NoticeReplacer, setupVoiceWarningNoticeHandler) AYNI desenle susturuluyor.
+ *
+ * KULLANICI DÜZELTMESİ (buton bulup tıklamak YERİNE): Discord'un "devam et" butonunu DOM'da
+ * arayıp tıklamak (önceki tasarım) Discord'un iç diyalog yapısına bağımlı, kırılgan bir
+ * sezgiydi. Bunun yerine, ekran tespit edilir edilmez webview'ı doğrudan Discord'un normal
+ * uygulama adresine (`https://discord.com/app` -- titlebar.js'in webview.src için zaten
+ * kullandığı AYNI, bilinen-doğru adres) yönlendiriyoruz -- Discord'un kendi "devam et"
+ * mantığına hiç güvenmeden, kesin/öngörülebilir bir hedefe gidiyoruz.
+ *
+ * DİL BAĞIMSIZ EŞLEŞTİRME: bu ekranın varlığı, `discord://` ile başlayan bir href'in DOM'da
+ * bulunmasıyla tespit ediliyor (native app'e devretmenin TEK yolu bu, Discord'un dili ne
+ * olursa olsun aynı kalır) -- dosyadaki diğer enjeksiyonlarla (setupKeybindsNoticeReplacer
+ * vb.) AYNI ilke.
+ *
+ * BİLİNEN KÜÇÜK RİSK: bu eşleştirme yalnızca BU EKRANA özgü değil -- Discord'un normal,
+ * OTURUM AÇMIŞ arayüzünde (ör. bir "uygulamada aç" bağlantısı içeren nadir bir yer)
+ * benzer bir `discord://` href'i teorik olarak bulunursa, o durumda da /app'e yönlendirme
+ * tetiklenir (zararsız -- zaten /app'e gitmiş oluruz, ama beklenmedik bir navigasyon olur).
+ * DOĞRULANMADI: bu ekran bu oturumda canlı olarak incelenemedi (yalnızca bir ekran
+ * görüntüsünden yola çıkıldı).
+ */
+(function setupNativeAppPromptSuppressor() {
+  let redirected = false;
+
+  function tryRedirect(root) {
+    if (redirected) return;
+    const appLink = root.querySelector?.('[href^="discord://"]');
+    if (!appLink) return;
+    redirected = true;
+    window.location.replace('https://discord.com/app');
+  }
+
+  function startObserving() {
+    if (!document.body) {
+      setTimeout(startObserving, 50);
+      return;
+    }
+    tryRedirect(document.body);
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (redirected) break;
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType !== 1) return;
+          tryRedirect(node);
+        });
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+  startObserving();
+})();

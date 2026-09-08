@@ -70,6 +70,10 @@ contextBridge.exposeInMainWorld('splitcord', {
     setPerformanceMode: (enabled) => ipcRenderer.invoke('app:set-performance-mode', enabled),
     getSmallTitlebar: () => ipcRenderer.invoke('app:get-small-titlebar'),
     setSmallTitlebar: (enabled) => ipcRenderer.invoke('app:set-small-titlebar', enabled),
+    getShowTitle: () => ipcRenderer.invoke('app:get-show-title'),
+    setShowTitle: (enabled) => ipcRenderer.invoke('app:set-show-title', enabled),
+    getCenterTitle: () => ipcRenderer.invoke('app:get-center-title'),
+    setCenterTitle: (enabled) => ipcRenderer.invoke('app:set-center-title', enabled),
     getProtocolHandlerStatus: () => ipcRenderer.invoke('app:get-protocol-handler-status'),
     getControlsIssueStatus: () => ipcRenderer.invoke('app:get-controls-issue-status'),
     getIgnoredControlIssues: () => ipcRenderer.invoke('app:get-ignored-control-issues'),
@@ -148,6 +152,16 @@ contextBridge.exposeInMainWorld('splitcord', {
     const listener = (_event, enabled) => callback(enabled);
     ipcRenderer.on('app:small-titlebar-changed', listener);
     return () => ipcRenderer.removeListener('app:small-titlebar-changed', listener);
+  },
+  onShowTitleChanged: (callback) => {
+    const listener = (_event, enabled) => callback(enabled);
+    ipcRenderer.on('app:show-title-changed', listener);
+    return () => ipcRenderer.removeListener('app:show-title-changed', listener);
+  },
+  onCenterTitleChanged: (callback) => {
+    const listener = (_event, enabled) => callback(enabled);
+    ipcRenderer.on('app:center-title-changed', listener);
+    return () => ipcRenderer.removeListener('app:center-title-changed', listener);
   },
   onDynamicColorSampled: (callback) => {
     const listener = (_event, colors) => callback(colors);

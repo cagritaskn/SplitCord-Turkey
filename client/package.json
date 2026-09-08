@@ -2,8 +2,8 @@
   "name": "splitcord-client",
   "private": true,
   "author": "SplitCord-Turkey",
-  "version": "1.0.0",
-  "description": "SplitCord-Turkey 1.0.0 Installer",
+  "version": "1.0.1",
+  "description": "SplitCord-Turkey 1.0.1 Installer",
   "main": "src/main/index.js",
   "scripts": {
     "start": "electron .",

@@ -655,6 +655,26 @@ function registerIpcHandlers() {
     return enabled;
   });
 
+  // KULLANICI TALEBİ: Ayarlar > Görünüm'deki "SplitCord-Turkey başlığını göster/ortala" --
+  // smallTitlebar'ın AKSİNE yalnızca ANA PENCEREyi ilgilendiriyor (bkz. titlebar.css
+  // .sc-titlebar-title--app'in üstündeki not) -- bu yüzden settingsWindow'a hiç
+  // yayınlanmıyor, orada dinleyen/etkilenen bir şey yok.
+  ipcMain.handle('app:get-show-title', () => readLocalSettings().showTitle);
+  ipcMain.handle('app:set-show-title', (_event, enabled) => {
+    logEvent('set-show-title', { enabled });
+    writeLocalSettings({ showTitle: enabled });
+    getMainWindow()?.webContents.send('app:show-title-changed', enabled);
+    return enabled;
+  });
+
+  ipcMain.handle('app:get-center-title', () => readLocalSettings().centerTitle);
+  ipcMain.handle('app:set-center-title', (_event, enabled) => {
+    logEvent('set-center-title', { enabled });
+    writeLocalSettings({ centerTitle: enabled });
+    getMainWindow()?.webContents.send('app:center-title-changed', enabled);
+    return enabled;
+  });
+
   ipcMain.handle('app:get-theme-mode', () => readLocalSettings().themeMode);
   ipcMain.handle('app:set-theme-mode', (_event, mode) => {
     logEvent('set-theme-mode', { mode });

@@ -1,7 +1,7 @@
 .sc-titlebar {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   height: 36px;
   background: var(--sc-bg-secondary);
   -webkit-app-region: drag;
@@ -21,6 +21,7 @@
   height: 18px;
   border-radius: 50%;
   display: block;
+  flex-shrink: 0;
 }
 
 .sc-titlebar-title {
@@ -30,9 +31,18 @@
   letter-spacing: 0.02em;
 }
 
+/* KULLANICI DÜZELTMESİ: "başlığı ortala" özelliği .sc-titlebar-drag--app'i (aşağıda)
+   position:absolute yapıp normal flex akışından ÇIKARDIĞI için, önceden burada duran
+   "justify-content: space-between" .sc-titlebar-controls'ü (davet/yenile/ayarlar/pencere
+   kontrolleri) artık akıştaki TEK öğe sanıp sola yapıştırıyordu -- "iki öğe arasına boşluk
+   dağıt" mantığı akışta tek öğe kalınca "hiç boşluk dağıtma" anlamına geliyordu.
+   margin-left:auto ile .sc-titlebar-controls kendi konumunu KOMŞU öğenin akışta olup
+   olmamasından TAMAMEN BAĞIMSIZ olarak sağa sabitliyor -- butonlar başlık ortalansa da
+   ortalanmasa da HİÇ yer değiştirmiyor. */
 .sc-titlebar-controls {
   display: flex;
   align-items: center;
+  margin-left: auto;
   -webkit-app-region: no-drag;
 }
 
@@ -109,4 +119,46 @@
    (settings.js) AYNI şekilde ayarlanıyor. */
 html[data-small-titlebar] .sc-titlebar {
   zoom: 0.5;
+}
+
+/* KULLANICI TALEBİ: Ayarlar > Görünüm'deki "SplitCord-Turkey başlığını göster/ortala" --
+   yalnızca ANA PENCEREdeki logo+başlık grubunu hedefliyor (settings.html'in kendi "Ayarlar"
+   başlığını/logosunu TAŞIMAMASI için .sc-titlebar-drag/.sc-titlebar-title yerine BİLEREK
+   ayrı, yalnızca index.html'de bulunan --app class'ları kullanılıyor -- iki pencere de aynı
+   titlebar.css'i paylaştığı için salt .sc-titlebar-drag/.sc-titlebar-title üzerinden
+   hedeflemek settings penceresinin "Ayarlar" başlığını/logosunu da istemeden etkilerdi).
+   Varsayılan (hiçbir data-* yokken) davranış: başlık GÖRÜNÜR ve ORTALANMIŞ -- ikisi de
+   kullanıcı talebiyle varsayılan AÇIK geldiği için "override" gereken durumlar kapalı
+   olma hâlleri (data-title-hidden/data-title-left), açık olma değil.
+   KULLANICI DÜZELTMESİ: "ortala" yalnızca başlık METNİNİ değil, logo+başlık İKİSİNİ BİRLİKTE
+   (bir grup olarak, aralarındaki mesafe/sıra bozulmadan) ortalıyor -- bu yüzden ortalama
+   .sc-titlebar-title--app'e değil, ikisini birden saran .sc-titlebar-drag--app'e uygulanıyor;
+   .sc-titlebar-title--app yalnızca göster/gizle'den (display) sorumlu. */
+.sc-titlebar-drag--app {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding-left: 0;
+  max-width: 50%;
+}
+
+.sc-titlebar-title--app {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-title-hidden] .sc-titlebar-title--app {
+  display: none;
+}
+
+/* "Başlığı ortala" kapalıyken (ama "göster" hâlâ açıkken) logo+başlık grubu ESKİ/orijinal
+   konumuna -- sol kenara yaslı, aralarındaki mesafe/hizalama aynı -- dönüyor. */
+html[data-title-left] .sc-titlebar-drag--app {
+  position: static;
+  padding-left: 12px;
+  max-width: none;
+  transform: none;
 }

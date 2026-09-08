@@ -871,6 +871,9 @@ const linkOpenerNewWindowToggle = document.getElementById('toggle-link-opener-ne
 const performanceModeToggle = document.getElementById('toggle-performance-mode');
 const notificationBadgeToggle = document.getElementById('toggle-notification-badge');
 const smallTitlebarToggle = document.getElementById('toggle-small-titlebar');
+const showTitleToggle = document.getElementById('toggle-show-title');
+const centerTitleToggle = document.getElementById('toggle-center-title');
+const rowCenterTitle = document.getElementById('row-center-title');
 const disableFalseVoiceWarningToggle = document.getElementById('toggle-disable-false-voice-warning');
 const dnsProvidersListEl = document.getElementById('dns-providers-list');
 const unsavedBar = document.getElementById('unsaved-bar');
@@ -895,6 +898,8 @@ const initialGeneral = {
   performanceMode: null,
   notificationBadge: null,
   smallTitlebar: null,
+  showTitle: null,
+  centerTitle: null,
   disableFalseVoiceWarning: null,
 };
 let pendingGeneral = {};
@@ -911,6 +916,13 @@ function updateUnsavedBar() {
 function updateStartInBackgroundVisibility() {
   const currentAutostart = 'autostart' in pendingGeneral ? pendingGeneral.autostart : initialGeneral.autostart;
   rowStartInBackground.hidden = !currentAutostart;
+}
+
+// "Başlığı ortala" satırı yalnızca "Başlığı göster" işaretliyken (ya da kaydedilmemiş bir
+// değişiklikle işaretlenmek üzereyken) anlamlı -- autostart/startInBackground'daki AYNI desen.
+function updateCenterTitleVisibility() {
+  const currentShowTitle = 'showTitle' in pendingGeneral ? pendingGeneral.showTitle : initialGeneral.showTitle;
+  rowCenterTitle.hidden = !currentShowTitle;
 }
 
 // "change" dinleyicileri KASITLI olarak başlangıç değeri IPC'den gelip uygulanana
@@ -1118,6 +1130,52 @@ async function initSmallTitlebarToggle() {
   });
 }
 
+async function initShowTitleToggle() {
+  let value = showTitleToggle.checked;
+  try {
+    value = await window.splitcord.app.getShowTitle();
+    showTitleToggle.checked = value;
+  } catch (err) {
+    console.error(err);
+    window.splitcord.log('get-show-title-error', { error: err.message });
+  }
+  initialGeneral.showTitle = value;
+  updateCenterTitleVisibility();
+
+  showTitleToggle.addEventListener('change', () => {
+    if (showTitleToggle.checked === initialGeneral.showTitle) {
+      delete pendingGeneral.showTitle;
+    } else {
+      pendingGeneral.showTitle = showTitleToggle.checked;
+    }
+    window.splitcord.log('show-title-toggle-changed', { checked: showTitleToggle.checked });
+    updateCenterTitleVisibility();
+    updateUnsavedBar();
+  });
+}
+
+async function initCenterTitleToggle() {
+  let value = centerTitleToggle.checked;
+  try {
+    value = await window.splitcord.app.getCenterTitle();
+    centerTitleToggle.checked = value;
+  } catch (err) {
+    console.error(err);
+    window.splitcord.log('get-center-title-error', { error: err.message });
+  }
+  initialGeneral.centerTitle = value;
+
+  centerTitleToggle.addEventListener('change', () => {
+    if (centerTitleToggle.checked === initialGeneral.centerTitle) {
+      delete pendingGeneral.centerTitle;
+    } else {
+      pendingGeneral.centerTitle = centerTitleToggle.checked;
+    }
+    window.splitcord.log('center-title-toggle-changed', { checked: centerTitleToggle.checked });
+    updateUnsavedBar();
+  });
+}
+
 async function initDisableFalseVoiceWarningToggle() {
   let value = disableFalseVoiceWarningToggle.checked;
   try {
@@ -1239,6 +1297,17 @@ btnSaveChanges.addEventListener('click', async () => {
       initialGeneral.smallTitlebar = pendingGeneral.smallTitlebar;
       delete pendingGeneral.smallTitlebar;
     }
+    if ('showTitle' in pendingGeneral) {
+      await window.splitcord.app.setShowTitle(pendingGeneral.showTitle);
+      initialGeneral.showTitle = pendingGeneral.showTitle;
+      delete pendingGeneral.showTitle;
+      updateCenterTitleVisibility();
+    }
+    if ('centerTitle' in pendingGeneral) {
+      await window.splitcord.app.setCenterTitle(pendingGeneral.centerTitle);
+      initialGeneral.centerTitle = pendingGeneral.centerTitle;
+      delete pendingGeneral.centerTitle;
+    }
     if ('disableFalseVoiceWarning' in pendingGeneral) {
       await window.splitcord.app.setDisableFalseVoiceWarning(pendingGeneral.disableFalseVoiceWarning);
       initialGeneral.disableFalseVoiceWarning = pendingGeneral.disableFalseVoiceWarning;
@@ -1294,9 +1363,12 @@ btnDiscardChanges.addEventListener('click', () => {
   if ('performanceMode' in pendingGeneral) performanceModeToggle.checked = initialGeneral.performanceMode;
   if ('notificationBadge' in pendingGeneral) notificationBadgeToggle.checked = initialGeneral.notificationBadge;
   if ('smallTitlebar' in pendingGeneral) smallTitlebarToggle.checked = initialGeneral.smallTitlebar;
+  if ('showTitle' in pendingGeneral) showTitleToggle.checked = initialGeneral.showTitle;
+  if ('centerTitle' in pendingGeneral) centerTitleToggle.checked = initialGeneral.centerTitle;
   if ('disableFalseVoiceWarning' in pendingGeneral) disableFalseVoiceWarningToggle.checked = initialGeneral.disableFalseVoiceWarning;
   pendingGeneral = {};
   updateStartInBackgroundVisibility();
+  updateCenterTitleVisibility();
   updateUnsavedBar();
 });
 
@@ -2104,6 +2176,8 @@ Promise.all([
   initPerformanceModeToggle(),
   initNotificationBadgeToggle(),
   initSmallTitlebarToggle(),
+  initShowTitleToggle(),
+  initCenterTitleToggle(),
   initDisableFalseVoiceWarningToggle(),
 ]).then(() => updateUnsavedBar());
 initThemePicker();
