@@ -4,7 +4,7 @@
 
 # <p align="center"><strong>SplitCord-Turkey</strong></p>
 
-**SplitCord-Turkey**, Türkiye'deki bazı internet servis sağlayıcılarının DPI (Deep Packet Inspection) tabanlı kısıtlamaları nedeniyle Discord'a erişimde yaşanan sorunları çözmek için geliştirilmiş, Discord'un web istemcisini saran açık kaynaklı bir Windows masaüstü uygulamasıdır. Electron tabanlı olduğu için tarayıcıya yakın bir ağ parmak izi taşır, dört farklı DPI aşım motorunu (Zapret, Zapret2, ByeDPI, GoodbyeDPI) tek bir arayüzden otomatik olarak dener, şifreli DNS (DoH/DoT/DoQ/DNSCrypt) desteğiyle DNS tabanlı engellemelere karşı da dayanıklıdır ve kalıcı bir arka plan hizmeti sayesinde sisteminizi her açtığınızda ekstra bir işlem yapmanıza gerek kalmadan çalışır.
+**SplitCord-Turkey**, Türkiye'deki bazı internet servis sağlayıcılarının DPI (Deep Packet Inspection) tabanlı kısıtlamaları nedeniyle Discord'a erişimde yaşanan sorunları çözmek için geliştirilmiş, Discord'un web istemcisini saran açık kaynaklı bir Windows masaüstü uygulamasıdır. Electron tabanlı olduğu için tarayıcıya yakın bir ağ parmak izi taşır, dört farklı DPI aşım motorunu (Zapret, Zapret2, ByeDPI, GoodbyeDPI) tek bir arayüzden otomatik olarak dener, şifreli DNS desteğiyle DNS tabanlı engellemelere karşı da dayanıklıdır ve kalıcı bir arka plan hizmeti sayesinde sisteminizi her açtığınızda ekstra bir işlem yapmanıza gerek kalmadan çalışır. Resmi Discord Windows uygulamasının yapabildiği çoğu şeyi yapabilecek şekilde tasarlandı ve Vencord'u da isteğe bağlı şekilde destekliyor. Tam otomatik çalışma odaklı hazırlanmış olsa da manuel ve gelişmiş ayarlamalar yapmaya da izin verir.
 
 ---
 
