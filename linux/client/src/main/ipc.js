@@ -15,8 +15,9 @@ const { showThemedConfirm } = require('./themedDialog');
 const voiceState = require('./voiceState');
 const notificationBadge = require('./notificationBadge');
 const { applyShortcutsFromSettings } = require('./shortcuts');
-const { installDpiService, isInstallerBundled } = require('./serviceInstaller');
+const { installDpiService, uninstallDpiService, isInstallerBundled } = require('./serviceInstaller');
 const { uninstallApp: uninstallAppPackage } = require('./appUninstaller');
+const { isAppImage, getPackagingKind } = require('./packagingInfo');
 
 let settingsWindow = null;
 // Ayarlar penceresindeki kaydedilmemiş değişiklik durumu, renderer'dan
@@ -449,6 +450,22 @@ function registerIpcHandlers() {
     }
   });
 
+  // KULLANICI TALEBİ (2026-09-08): AppImage'a özel "Servisi Kaldır" butonu (bkz. settings.js
+  // btnRemoveDpiService) -- installDpiService'in ayna görevi, AYNI CANCELLED/hata sözleşmesini
+  // kullanıyor.
+  ipcMain.handle('dpi:uninstall-service', async () => {
+    logEvent('dpi-uninstall-service-requested', {});
+    try {
+      await uninstallDpiService();
+      logEvent('dpi-uninstall-service-succeeded', {});
+      return { ok: true };
+    } catch (err) {
+      const cancelled = err.message === 'CANCELLED';
+      logEvent('dpi-uninstall-service-failed', { error: err.message, cancelled });
+      return { ok: false, cancelled, error: cancelled ? null : err.message };
+    }
+  });
+
   // Üç motor için de ortak (ByeDPI/Zapret/Zapret2) — Otomatik moddaki "Argüman Setini
   // Yasakla" butonu, hangi motor o an aktifse onun id'sini gönderiyor.
   ipcMain.handle('dpi:get-rejected-args', (_event, id) => serviceClient.getRejectedArgs(id));
@@ -849,6 +866,15 @@ function registerIpcHandlers() {
   ipcMain.handle('app:uninstall-app', async () => {
     logEvent('uninstall-app-click', {});
 
+    // PORT_PLAN_2.md AP-3: AppImage'da kurulum kavramı yok (apt paketi hiç yok), bu yüzden
+    // appUninstaller.js'in `pkexec apt-get remove` çağrısı burada anlamsız/hatalı olurdu --
+    // appUninstaller.js'in KENDİSİ hiç değiştirilmedi (bkz. PORT_PLAN_2.md §1 madde 2), yalnızca
+    // buraya, çağrıdan ÖNCE bir koruma eklendi. Renderer tarafında buton zaten AppImage'da
+    // gizleniyor (bkz. settings.js) -- bu yalnızca ikinci bir güvenlik ağı.
+    if (isAppImage()) {
+      throw new Error('AppImage sürümünde ayrı bir kaldırma adımına gerek yok -- AppImage dosyasını silmen yeterli.');
+    }
+
     try {
       await Promise.race([
         serviceClient.stopAllEngines(),
@@ -870,6 +896,47 @@ function registerIpcHandlers() {
     const mw = getMainWindow();
     if (mw) mw.isQuitting = true; // gerçek çıkış: pencere close handler'ı artık engellemiyor
     app.quit();
+  });
+
+  // PORT_PLAN_2.md Faz 4 — renderer'ın deb/AppImage'a göre dallanabilmesi (Kaldır butonunu
+  // gizlemek, Hakkında panelindeki güncelleme butonunun davranışını değiştirmek, İzinler
+  // panelindeki AppImage bağımlılık bölümünü göstermek/gizlemek) için tek, paylaşılan kaynak.
+  ipcMain.handle('app:get-packaging-kind', () => getPackagingKind());
+
+  // PORT_PLAN_2.md AP-2 — AppImage'ın basitleştirilmiş güncelleme akışı: indirme/kurulum YOK,
+  // yalnızca release sayfasını tarayıcıda açıyor. .deb'in download-update/open-downloaded-update
+  // handler'ları (yukarıda) TEK SATIR değişmedi, bu tamamen ayrı/ek bir handler.
+  ipcMain.handle('app:open-release-page', async (_event, releaseUrl) => {
+    logEvent('open-release-page', { releaseUrl });
+    try {
+      await updateChecker.openReleasePage(releaseUrl);
+    } catch (err) {
+      logEvent('open-release-page-error', { error: err.message });
+      throw err;
+    }
+  });
+
+  // PORT_PLAN_2.md AP-5/Faz 3 — servisin YENİ /dependency-check uç noktasının ince bir geçişi.
+  // Uç nokta her iki paketleme türünde de var (servis deb/AppImage ayrımını bilmiyor, bkz.
+  // PORT_PLAN_2.md §1 madde 4) ama İzinler panelinde yalnızca AppImage'da GÖSTERİLİYOR (bkz.
+  // settings.js) -- .deb zaten apt'ın kendi dependency çözümüyle bu kütüphaneleri garantiliyor
+  // (bkz. PORT_PLAN_2.md §10 madde 3'teki açık not).
+  ipcMain.handle('dpi:dependency-check', () => serviceClient.getDependencyCheck());
+
+  // PORT_PLAN_2.md AP-16 (2026-09-09, kullanıcı talebi) — AppImage'a özgü bağımlılık/dağıtım
+  // uyarı diyaloğundaki "Sorun Bildir" butonu. Repo/temel URL'i BİLEREK renderer'dan gelen bir
+  // parametre DEĞİL, burada sabit -- renderer yalnızca başlık/gövde METNİNİ belirliyor, keyfi bir
+  // URL açma yüzeyi oluşturmuyoruz (openReleasePage'in aksine, o zaten GitHub API'sinden gelen
+  // güvenilir bir URL'i açıyordu).
+  ipcMain.handle('app:open-issue-page', async (_event, { title, body }) => {
+    const url = `https://github.com/cagritaskn/SplitCord-Turkey/issues/new?title=${encodeURIComponent(title || '')}&body=${encodeURIComponent(body || '')}`;
+    logEvent('open-issue-page', { title });
+    try {
+      await shell.openExternal(url);
+    } catch (err) {
+      logEvent('open-issue-page-error', { error: err.message });
+      throw err;
+    }
   });
 }
 

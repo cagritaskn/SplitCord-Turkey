@@ -12,6 +12,7 @@ const { startConfiguredEngine, registerShutdownHook } = require('./dpiLifecycle'
 const { configureSecureDns } = require('./secureDns');
 const { readLocalSettings, writeLocalSettings } = require('./localSettings');
 const { applyAutoStart, isAutoStartEnabled } = require('./autostart');
+const { isAppImage } = require('./packagingInfo');
 const { registerScreenSharePicker } = require('./screenSharePicker');
 const updateChecker = require('./updateChecker');
 const { logEvent } = require('./log');
@@ -167,7 +168,13 @@ if (!gotSingleInstanceLock) {
     // kullanıcı kalıcı olarak "kapalı" kalıyordu (ayarı elle açana kadar). Şimdi isAutoStartEnabled()
     // ile GERÇEKTEN uygulanıp uygulanmadığı doğrulanıyor -- yalnızca başarılıysa bayrak yazılıyor,
     // başarısızsa bir sonraki açılışta tekrar denenecek (applyAutoStart idempotent, zararsız).
-    if (!readLocalSettings().autostartDefaultApplied) {
+    // KULLANICI TALEBİ (2026-09-10): AppImage'da bu varsayılan-açık davranışı İSTENMİYOR --
+    // kullanıcı .deb'in aksine AppImage'ı "kur"muyor, yalnızca indirip çalıştırıyor; sistemle
+    // otomatik başlaması AÇIKÇA istemeden BEKLENMEDİK bir davranış olurdu. AppImage'da autostart
+    // artık tamamen OPT-IN (varsayılan kapalı, kullanıcı Ayarlar'dan elle açmalı) -- bu blok
+    // isAppImage() ise hiç çalışmıyor, autostartDefaultApplied bayrağı da hiç yazılmıyor (zararsız,
+    // her açılışta aynı kontrolü tekrar es geçer). .deb dalı TEK SATIR değişmedi.
+    if (!isAppImage() && !readLocalSettings().autostartDefaultApplied) {
       applyAutoStart(true, true);
       if (isAutoStartEnabled()) {
         writeLocalSettings({ autostartDefaultApplied: true });

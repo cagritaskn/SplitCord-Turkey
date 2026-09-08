@@ -44,6 +44,9 @@ contextBridge.exposeInMainWorld('splitcord', {
     setByeDpiUseExtendedCandidates: (enabled) => ipcRenderer.invoke('dpi:set-byedpi-use-extended-candidates', enabled),
     isInstallerBundled: () => ipcRenderer.invoke('dpi:is-installer-bundled'),
     installService: () => ipcRenderer.invoke('dpi:install-service'),
+    uninstallService: () => ipcRenderer.invoke('dpi:uninstall-service'),
+    // PORT_PLAN_2.md AP-5/Faz 3 — İzinler ve Kontroller panelindeki AppImage bağımlılık bölümü.
+    dependencyCheck: () => ipcRenderer.invoke('dpi:dependency-check'),
     // getFirewallStatus/grantFirewallPermission/getAppFirewallStatus/grantAppFirewallPermission/
     // getSystemControlsStatus/killProcess/removeConflictingService BİLEREK YOK (bkz.
     // PORTING_PLAN.md D-9 — ipc.js'te karşılık gelen handler'lar da yok).
@@ -86,6 +89,11 @@ contextBridge.exposeInMainWorld('splitcord', {
     setDisableFalseVoiceWarning: (enabled) => ipcRenderer.invoke('app:set-disable-false-voice-warning', enabled),
     resetAllSettings: () => ipcRenderer.invoke('app:reset-all-settings'),
     uninstallApp: () => ipcRenderer.invoke('app:uninstall-app'),
+    // PORT_PLAN_2.md Faz 4 — renderer'ın deb/AppImage'a göre dallanabilmesi + AppImage'ın
+    // basitleştirilmiş güncelleme akışı (yalnızca release sayfasını açmak, bkz. AP-2).
+    getPackagingKind: () => ipcRenderer.invoke('app:get-packaging-kind'),
+    openReleasePage: (releaseUrl) => ipcRenderer.invoke('app:open-release-page', releaseUrl),
+    openIssuePage: (payload) => ipcRenderer.invoke('app:open-issue-page', payload),
     registerBadgedTrayIcon: (dataUrl) => ipcRenderer.invoke('tray:register-badged-icon', dataUrl),
     registerNotificationOverlayIcon: (dataUrl) => ipcRenderer.invoke('window:register-notification-overlay-icon', dataUrl),
   },

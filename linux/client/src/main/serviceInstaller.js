@@ -114,4 +114,70 @@ function installDpiService() {
   });
 }
 
-module.exports = { installDpiService, isInstallerBundled, getInstallerDir };
+/** DPI servisini (systemd birimi + /opt/splitcord) kaldırır -- installDpiService ile AYNI FUSE
+ * kısıtı burada da geçerli (uninstall.sh da installerDir/AppImage FUSE bağlamasının içinde),
+ * bu yüzden AYNI kopyala-sonra-pkexec deseni tekrarlanıyor. uninstall.sh kendi başına yeterli
+ * (yalnızca opsiyonel --purge argümanı alıyor, installerDir'e ihtiyacı yok) -- kullanıcı verisini
+ * KORUMAK için --purge GEÇMİYORUZ (bu, "Ayarlar > Tüm Ayarları Sıfırla" ile karışmasın diye
+ * kasıtlı bir seçim; --purge kullanıcının DPI stratejisi/DNS ayarlarını da siler). */
+function uninstallDpiService() {
+  return new Promise((resolve, reject) => {
+    const installerDir = getInstallerDir();
+    if (!fs.existsSync(path.join(installerDir, 'uninstall.sh'))) {
+      reject(new Error('uninstall.sh bulunamadı -- bu özellik yalnızca paketlenmiş (AppImage/.deb) sürümde çalışır.'));
+      return;
+    }
+
+    let effectiveDir = installerDir;
+    let tempDirToCleanup = null;
+    if (isAppImage()) {
+      try {
+        tempDirToCleanup = fs.mkdtempSync(path.join(os.tmpdir(), 'splitcord-uninstall-'));
+        execFileSync('cp', ['-a', `${installerDir}/.`, tempDirToCleanup]);
+        effectiveDir = tempDirToCleanup;
+      } catch (err) {
+        reject(new Error(`Kaldırma dosyaları geçici bir dizine kopyalanamadı: ${err.message}`));
+        return;
+      }
+    }
+    const uninstallScript = path.join(effectiveDir, 'uninstall.sh');
+
+    const cleanup = () => {
+      if (!tempDirToCleanup) return;
+      try {
+        fs.rmSync(tempDirToCleanup, { recursive: true, force: true });
+      } catch {
+        // en iyi çaba -- kalırsa yalnızca /tmp'de zararsız bir artık kalır
+      }
+    };
+
+    const proc = spawn('pkexec', ['bash', uninstallScript], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stderr = '';
+    proc.stdout.on('data', () => {});
+    proc.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+    proc.on('error', (err) => {
+      cleanup();
+      if (err.code === 'ENOENT') {
+        reject(new Error(`pkexec bulunamadı. Elle kaldırmak için bir terminalde: sudo bash "${uninstallScript}"`));
+      } else {
+        reject(new Error(`pkexec çalıştırılamadı: ${err.message}`));
+      }
+    });
+    proc.on('close', (code, signal) => {
+      cleanup();
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      if (code === 126 || signal === 'SIGTERM') {
+        reject(new Error('CANCELLED'));
+        return;
+      }
+      reject(new Error(`Kaldırma başarısız (çıkış kodu ${code}): ${stderr.trim() || 'bilinmeyen hata'}`));
+    });
+  });
+}
+
+module.exports = { installDpiService, uninstallDpiService, isInstallerBundled, getInstallerDir };

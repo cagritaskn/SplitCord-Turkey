@@ -1155,10 +1155,35 @@ btnSaveChanges.addEventListener('click', async () => {
   btnSaveChanges.disabled = true;
   try {
     if ('autostart' in pendingGeneral) {
-      await window.splitcord.app.setAutoStart(pendingGeneral.autostart);
-      initialGeneral.autostart = pendingGeneral.autostart;
-      delete pendingGeneral.autostart;
-      updateStartInBackgroundVisibility();
+      // KULLANICI TALEBİ (2026-09-08): AppImage'da autostart yöntemi (~/.config/autostart/*.desktop)
+      // dağıtıma göre başarısız olabilir (ör. salt-okunur/eksik dizin, XDG autostart desteklemeyen
+      // masaüstü ortamı) -- bu durumda hata GÖSTERİLMELİ ve switch AÇIK BIRAKILMAMALI (kullanıcının
+      // GERÇEKTE açılmayan bir özelliği "açık" sanmasını önlemek için). .deb'de bu davranış
+      // DEĞİŞMEDİ (aşağıdaki genel catch'e düşmeye devam ediyor) -- yalnızca AppImage'a özel YENİ
+      // bir dal eklendi (PORT_PLAN_2.md kuralı: paylaşılan dosyalarda yalnızca yeni isAppImage()
+      // dalı eklenir, mevcut davranış değiştirilmez).
+      if (packagingKind === 'appimage') {
+        try {
+          await window.splitcord.app.setAutoStart(pendingGeneral.autostart);
+          initialGeneral.autostart = pendingGeneral.autostart;
+          delete pendingGeneral.autostart;
+          updateStartInBackgroundVisibility();
+        } catch (err) {
+          window.splitcord.log('set-autostart-error', { error: err.message });
+          autostartToggle.checked = initialGeneral.autostart;
+          delete pendingGeneral.autostart;
+          updateStartInBackgroundVisibility();
+          await window.showAlertModal({
+            title: 'Otomatik başlatma ayarlanamadı',
+            message: err.message,
+          });
+        }
+      } else {
+        await window.splitcord.app.setAutoStart(pendingGeneral.autostart);
+        initialGeneral.autostart = pendingGeneral.autostart;
+        delete pendingGeneral.autostart;
+        updateStartInBackgroundVisibility();
+      }
     }
     if ('startInBackground' in pendingGeneral) {
       await window.splitcord.app.setStartInBackground(pendingGeneral.startInBackground);
@@ -1664,6 +1689,22 @@ window.splitcord.voice
 
 window.splitcord.onVoiceStateChanged?.(renderVoiceState);
 
+// --- PORT_PLAN_2.md Faz 4: paketleme türü (deb/appimage) tespiti ---
+// Hakkında panelindeki güncelleme akışı VE Kaldır butonu VE İzinler panelindeki AppImage
+// bağımlılık bölümü bu tek değere göre dallanıyor -- .deb'in kendi kod yolları (aşağıda)
+// packagingKind hâlâ varsayılan 'deb' iken bile TEK SATIR değişmeden çalışmaya devam eder
+// (varsayılan zaten 'deb' olduğu için bu ilk anlık pencerede de doğru davranır).
+let packagingKind = 'deb';
+window.splitcord.app
+  .getPackagingKind()
+  .then((kind) => {
+    packagingKind = kind;
+    if (kind === 'appimage') {
+      applyAppImageOnlyUi();
+    }
+  })
+  .catch((err) => window.splitcord.log?.('get-packaging-kind-error', { error: err.message }));
+
 // --- Hakkında ve Güncelleme paneli ---
 const btnCheckUpdate = document.getElementById('btn-check-update');
 const btnInstallUpdate = document.getElementById('btn-install-update');
@@ -1701,7 +1742,9 @@ btnCheckUpdate?.addEventListener('click', async () => {
     if (lastUpdateInfo.available) {
       aboutUpdateStatus.textContent = `Yeni sürüm mevcut: ${lastUpdateInfo.latestVersion}`;
       btnInstallUpdate.hidden = false;
-      btnInstallUpdate.textContent = 'Güncellemeyi İndir';
+      // PORT_PLAN_2.md AP-2: AppImage'da indirme/kurulum YOK, buton yalnızca release sayfasını
+      // açıyor -- .deb'in "Güncellemeyi İndir" metni/akışı DEĞİŞMEDİ (aşağıdaki else dalı).
+      btnInstallUpdate.textContent = packagingKind === 'appimage' ? 'Sürüm Sayfasını Aç' : 'Güncellemeyi İndir';
     } else {
       aboutUpdateStatus.textContent = 'En güncel sürümü kullanıyorsun.';
       btnInstallUpdate.hidden = true;
@@ -1719,6 +1762,22 @@ btnCheckUpdate?.addEventListener('click', async () => {
 // kapatılıp kurulum tamamlanmazsa buton "Güncellemeyi Kur" olarak kalır, tekrar
 // indirmeden elle tekrar açılabilir.
 btnInstallUpdate?.addEventListener('click', async () => {
+  // PORT_PLAN_2.md AP-2: AppImage için TAMAMEN AYRI, daha basit bir dal -- yalnızca release
+  // sayfasını tarayıcıda açıyor, indirme/kurulum/pkexec YOK. Aşağıdaki .deb akışı (downloadUrl/
+  // updateDownloaded/openDownloadedUpdateGuarded) bu dal içinde HİÇ ÇALIŞMIYOR, tek satırı
+  // değişmedi.
+  if (packagingKind === 'appimage') {
+    if (!lastUpdateInfo?.releaseUrl) return;
+    window.splitcord.log('open-release-page-click', { version: lastUpdateInfo.latestVersion });
+    try {
+      await window.splitcord.app.openReleasePage(lastUpdateInfo.releaseUrl);
+    } catch (err) {
+      window.splitcord.log('open-release-page-error', { error: err.message });
+      aboutUpdateStatus.textContent = `Sürüm sayfası açılamadı: ${err.message}`;
+    }
+    return;
+  }
+
   if (!lastUpdateInfo?.downloadUrl) return;
 
   if (updateDownloaded) {
@@ -1824,6 +1883,132 @@ btnUninstallApp?.addEventListener('click', async () => {
     }
     btnUninstallApp.disabled = false;
     btnUninstallApp.textContent = btnUninstallAppOriginalText;
+  }
+});
+
+// KULLANICI TALEBİ (2026-09-08): AppImage'a özel "Servisi Kaldır" butonu -- yalnızca DPI
+// servisini (systemd birimi + /opt/splitcord) kaldırır, AppImage'ın kendisine (uygulamanın
+// dosyasına) dokunmaz -- .deb'deki "SplitCord-Turkey'i Kaldır" (yukarıda) ile KARIŞTIRILMAMALI,
+// o hem uygulamayı hem servisi kaldırıyor ve AppImage'da zaten gizli (bkz. applyAppImageOnlyUi).
+// Bu buton yalnızca AppImage'da görünür (HTML'de varsayılan hidden, applyAppImageOnlyUi ile
+// açılıyor). installDpiService ile AYNI {ok,cancelled,error} sözleşmesini kullanıyor (bkz.
+// titlebar.js btnStatusInstallService) -- ipc.js handler'ı hata fırlatmıyor, sonuç nesnesinde
+// döndürüyor.
+const btnRemoveDpiService = document.getElementById('btn-remove-dpi-service');
+const btnRemoveDpiServiceOriginalText = btnRemoveDpiService?.textContent;
+btnRemoveDpiService?.addEventListener('click', async () => {
+  const choice = await window.showConfirmModal({
+    title: 'DPI servisi kaldırılsın mı?',
+    message: 'Arkaplan DPI servisi (systemd birimi) sistemden kaldırılacak.',
+    detail: 'Kullanıcı ayarlarınız (doğrulanmış DPI stratejisi, DNS sağlayıcıları) korunacak. ' +
+      'Parola isteyen bir pencere açılabilir.',
+  });
+  if (choice !== 0) return;
+
+  window.splitcord.log('remove-dpi-service-click', {});
+  btnRemoveDpiService.disabled = true;
+  btnRemoveDpiService.textContent = 'Kaldırılıyor…';
+  try {
+    const result = await window.splitcord.dpi.uninstallService();
+    if (!result.ok && !result.cancelled) {
+      window.splitcord.log('remove-dpi-service-failed', { error: result.error });
+      await window.showAlertModal({
+        title: 'Kaldırma başarısız',
+        message: result.error,
+      });
+    } else if (result.ok) {
+      window.splitcord.log('remove-dpi-service-succeeded', {});
+    }
+  } catch (err) {
+    window.splitcord.log('remove-dpi-service-error', { error: err.message });
+    await window.showAlertModal({
+      title: 'Kaldırma başarısız',
+      message: err.message,
+    });
+  }
+  btnRemoveDpiService.disabled = false;
+  btnRemoveDpiService.textContent = btnRemoveDpiServiceOriginalText;
+});
+
+// --- PORT_PLAN_2.md AP-3/AP-5/Faz 4: yalnızca AppImage'da uygulanan UI değişiklikleri ---
+// packagingKind 'appimage' olduğu doğrulanınca (yukarıdaki getPackagingKind().then) BİR KEZ
+// çağrılır. .deb'de bu fonksiyon HİÇ ÇAĞRILMAZ -- btnUninstallApp'ın kendi click handler'ı
+// (yukarıda) ve appUninstaller.js TEK SATIR değişmedi, burada yalnızca görünürlüğü kapatılıyor.
+function applyAppImageOnlyUi() {
+  if (btnUninstallApp) {
+    btnUninstallApp.hidden = true;
+  }
+
+  if (btnRemoveDpiService) {
+    btnRemoveDpiService.hidden = false;
+  }
+
+  const depsSection = document.getElementById('appimage-dependencies-section');
+  if (depsSection) {
+    depsSection.hidden = false;
+    refreshDependencyCheck();
+  }
+}
+
+const dependencyActionBtn = document.getElementById('btn-dependency-action');
+let lastDependencyResult = null;
+
+async function refreshDependencyCheck() {
+  const listEl = document.getElementById('appimage-dependencies-list');
+  if (!listEl) return;
+  try {
+    const result = await window.splitcord.dpi.dependencyCheck();
+    lastDependencyResult = result;
+    const items = result?.items || [];
+    listEl.innerHTML = items
+      .map((item) => {
+        const ok = !!item.ok;
+        return `
+          <div class="sc-permission-row">
+            <div class="sc-permission-info">
+              <span class="sc-permission-icon ${ok ? 'sc-permission-icon--ok' : 'sc-permission-icon--missing'}">${ok ? '✓' : '✗'}</span>
+              <span>${escapeHtml(item.label)}${!ok && item.detail ? ` — ${escapeHtml(item.detail)}` : ''}</span>
+            </div>
+          </div>`;
+      })
+      .join('');
+
+    const diagnostic = window.buildDependencyDiagnostic(result);
+    if (dependencyActionBtn) {
+      dependencyActionBtn.hidden = !diagnostic.hasIssue;
+    }
+  } catch (err) {
+    // DPI servisi henüz ayakta değilse (ör. AppImage ilk açılış, servis kurulmadan önce) bu
+    // BEKLENEN bir durum -- panelin geri kalanındaki "DPI servisine ulaşılamıyor" mesajıyla aynı
+    // sınıfta, ayrı bir hata olarak göstermiyoruz.
+    listEl.innerHTML = `<div class="sc-hint">Kontrol edilemedi: ${escapeHtml(err.message)}</div>`;
+    window.splitcord.log?.('dependency-check-error', { error: err.message });
+  }
+}
+
+// PORT_PLAN_2.md AP-4/AP-5/AP-16: OTOMATİK kurulum YOK (kasıtlı karar) -- bu buton yalnızca
+// tespit edilen dağıtıma göre GERÇEK bir kurulum komutu önerir (bkz. dependencyDiagnostics.js/
+// DistroPackageHints.cs), hiçbir komutu KENDİSİ çalıştırmaz. "Sorun Bildir" GitHub'da önceden
+// doldurulmuş bir issue sayfası açar (bkz. ipc.js app:open-issue-page).
+dependencyActionBtn?.addEventListener('click', async () => {
+  const diagnostic = window.buildDependencyDiagnostic(lastDependencyResult);
+  if (!diagnostic.hasIssue) return;
+
+  const choice = await window.showConfirmModal({
+    title: diagnostic.title,
+    message: diagnostic.message,
+    detail: diagnostic.detail,
+    buttons: ['Tamam', 'Sorun Bildir'],
+    defaultId: 0,
+    cancelId: 0,
+  });
+  if (choice === 1) {
+    window.splitcord.log?.('dependency-issue-report-click', {});
+    try {
+      await window.splitcord.app.openIssuePage({ title: diagnostic.issueTitle, body: diagnostic.issueBody });
+    } catch (err) {
+      window.splitcord.log?.('dependency-issue-report-error', { error: err.message });
+    }
   }
 });
 
