@@ -27,10 +27,10 @@ Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'
 
 SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint'te test edildi) `.deb` paketi olarak sunulan bir Linux sürümü de bulunur. Motor seti Windows'tan biraz farklıdır: WinDivert yerine NFQUEUE/iptables kullanılır, GoodbyeDPI Linux'a özgü bir karşılığı olmadığı için bulunmaz — Otomatik modun motor sırası **Zapret → Zapret2 → ByeDPI**'dir.
 
-1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından ilgili `.deb` dosyasını indirin.
+1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından [SplitCord-Turkey-Linux-1.0.0-AMD64.deb](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.0/SplitCord-Turkey-Linux-1.0.0-AMD64.deb) dosyasını indirin.
 2. Paketi kurun:
    ```bash
-   sudo dpkg -i SplitCord-Turkey-Linux-*.deb
+   sudo dpkg -i SplitCord-Turkey-Linux-1.0.0-AMD64.deb
    ```
    ya da 
    Linux dağıtımınız destekliyorsa .deb dosyasına çift tıklayıp çalıştırarak kurun.
@@ -46,6 +46,28 @@ SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint'te te
 
 > [!NOTE]
 > Debian/Ubuntu tabanlı olmayan *AppImage destekleyen popüler Linux dağıtımları* (Arch, Manjaro, EndeavourOS, Fedora, openSUSE gibi) dağıtımları için AppImage ile kullanım hakkında daha fazla bilgi [bu sayfada](resources/APPIMAGE.md) mevcut.
+
+---
+
+## Karşılaşılabilecek Sorunlar
+
+### **Sistem Geneli Aşımlarda (Zapret, Zapret2 ve GoodbyeDPI) Belirli Siteler/Uygulamalara Erişimin Kaybedilmesi Durumunda**
+DPI Aşımı ayarlarından **Gelişmiş** seçeneğini aktifleştirin, ardından aşağı kaydırıp **Argüman Setini Yasakla** butonunu bulup tıklayın. Sorun devam ederse bu işlemi tekrar edin. Yine sonuç alamazsanız DPI aşım motorunu değşitirmeyi deneyin. (Örn. Zapret2 -> Zapret) Ayrıca SplitCord-Turkey'i sonlandırdığınızda hiçbir aşım motorunun çalışmayacağı, bu sebeple erişim kaybettiğiniz site/uygulamalara SplitCord-Turkey'den çıkış yaptıktan sonra erişebileceğinizi unutmayın.
+
+### **QUIC Hatası Almanız Durumunda**
+Genel ayarlarda bulunan **QUIC devre dışı** seçeneğini aktifleştirip yeniden arama başlatmayı deneyin.
+
+### **Ekran Paylaşımı Panelinde Tercih Ettiğiniz Uygulamanın Bulunmaması Durumunda**
+SplitCord-Turkey, Chromium tabanlı bir Discord sunduğu için tam ekran uygulamalar ekran paylaşım panelinde görülemeyebilir. Bu sebeple tam ekran uygulama/oyun destekliyorsa pencere modunu çerçevesiz pencereli (windowed borderless) moduna alarak ekran paylaşımını tekrar deneyin.
+
+### **DPI Motoruna Bağlanılamama Hatası Aldığınızda**
+**SplitCordDpiService.dll** dosyası her güncellendiğinde yeni bir hash'e sahip olduğundan Microsoft Defender'ın makine öğrenmesine bağlı zararlı yazlım tespitinde hatalı olarak flaglenebiliyor. Bu durumun yaşanmaması adına her release'ten sonra Microsoft'a dosya örneği ve inceleme talebi gönderiliyor ve kabul ediliyor ancak bu manuel bir işlem olduğundan gözden kaçtığında DLL dosyasının Defender tarafından silinmesi ihtimali bulunuyor. Bu yaşandığında DPI motoruna erişlemediğine ilişkin hata alınabiliyor. Eğer bu durum gerçekleşirse Defender üzerinden ilgili DLL dosyası ya da SplitCord-Turkey'in kurulum klasörünü Defender istisnalarına ekleyip tekrar kurulum yaparak sorunu çözebilirsiniz.
+
+### **Sesli Görüşmeye Bağlantı Sorunu Yaşadığınızda**
+Ayarlardaki DPI Aşımı bölümünde **Gelişmiş** seçeneğini aktifleştirip **Argüman Setini Yasakla** butonunu kullanarak o an aktif olan argüman setini yasaklayabilirsiniz. Bu sayede sonraki taramada bu argüman seti atlanacak ve sonraki argüman setleri denenecektir.
+
+### **Herhangi Bir Sebeple Sayfanın Takılı Kalması Durumunda**
+Ayarlardaki Hakkında ve Güncelleme bölümünde bulunan **Tüm Ayarları Sıfırla** butonunu kullanarak programı en baştaki haline getirebilirsiniz.
 
 ---
 

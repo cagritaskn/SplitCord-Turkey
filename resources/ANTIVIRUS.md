@@ -33,13 +33,13 @@ Metin trafiğinin aksine sesli bağlantı için WinDivert'siz bir alternatif **y
 SplitCord-Turkey tamamen açık kaynak kodludur; tüm kaynak kod [GitHub deposundan](https://github.com/cagritaskn/SplitCord-Turkey) incelenebilir, tercih edilirse kendiniz de derleyebilirsiniz. Programı kullanmak istemeyen ve güvenmeyen kullanıcılar programı kullanmak zorunda değildir, kullanmak tamamen sizin inisiyatifinizdedir.
 
 > [!NOTE]
-> **[SplitCord-Turkey 0.9.8 kurulum dosyası VirusTotal sonuçları](https://www.virustotal.com/gui/file-analysis/YTljN2UwOTRmMThhODFhMWVkMzc5YjBkYTMwM2M2NWU6MTc4ODUyODU2NA==)** — bu tespitlerin sebebi de yukarıda anlatılan WinDivert sınıflandırmasıdır; kurulum dosyasının kendisi arka planda çalışacak bir Windows Service kaydettiği ve sistem üzerinde değişiklik yaptığı için bazı az kullanılan, güvenilirliği düşük antivirüs motorları tarafından hatalı (false positive) olarak işaretlenebilir.
+> **[SplitCord-Turkey 0.9.9 kurulum dosyası VirusTotal sonuçları](https://www.virustotal.com/gui/file-analysis/ZWRhNGUyOWNiNjVkMjFhYjk1MDVhMWRjNDBiMWU3N2I6MTc4ODc5NTI3NQ==)** — bu tespitlerin sebebi de yukarıda anlatılan WinDivert sınıflandırmasıdır; kurulum dosyasının kendisi arka planda çalışacak bir Windows Service kaydettiği ve sistem üzerinde değişiklik yaptığı için bazı az kullanılan, güvenilirliği düşük antivirüs motorları tarafından hatalı (false positive) olarak işaretlenebilir.
 
 > [!NOTE]
 > **SmartScreen "Windows kişisel bilgisayarınızı korudu"** uyarısı, imzalanmamış yazılımların tamamında çalıştırmadan önce görünür. Bunun sebebi, yazılımların uluslararası kod imzalama sertifikasına tabi olma zorunluluğudur. Ancak bu imzalama işlemi döviz kuru üzerinden düzenli ödeme gerektirdiğinden ve bağımsız, gelir elde etmeyen bir geliştirici tarafından hazırlandığından dolayı yazılım imzalanamıyor.
 
 > [!IMPORTANT]
-> İndirme yapacağınız her zaman önce adres çubuğuna bakıp URL'ye dikkat edin. SplitCord-Turkey'i yalnızca **[resmi GitHub reposundan](https://github.com/cagritaskn/SplitCord-Turkey)** veya doğrudan **[en güncel kurulum dosyasından](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.0/SplitCord-Turkey-Setup-1.0.0.exe)** indirip kullanın.
+> İndirme yapacağınız her zaman önce adres çubuğuna bakıp URL'ye dikkat edin. SplitCord-Turkey'i yalnızca **[resmi GitHub reposundan](https://github.com/cagritaskn/SplitCord-Turkey)** veya doğrudan size uygun **[en güncel kurulum dosyasından](https://github.com/cagritaskn/SplitCord-Turkey/releases/latest)** indirip kullanın.
 
 ---
 
