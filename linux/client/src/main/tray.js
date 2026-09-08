@@ -2,12 +2,13 @@
 
 const { Tray, Menu, app, ipcMain, nativeImage } = require('electron');
 const path = require('node:path');
-const { loadAppIcon } = require('./icon');
+const { loadAppIcon, resolveTrayIconPath, writeIconBuffer } = require('./icon');
 const { getDpiStatus } = require('./serviceClient');
 const voiceState = require('./voiceState');
 const notificationBadge = require('./notificationBadge');
 const { readLocalSettings } = require('./localSettings');
 const { openSettingsWindow } = require('./ipc');
+const { logEvent } = require('./log');
 
 let tray = null;
 let badgedBaseIcon = null;
@@ -25,9 +26,42 @@ function iconFileForState(state) {
   return 'tray-icon-voice-speaking.png';
 }
 
+// PORT_PLAN_2.md AP-4 (kapsam genişletmesi, 2026-09-09): "best-effort TÜM dağıtımlar" hedefiyle
+// artık masaüstü ortamı da HİÇ bilinmiyor — D-21'de bulunan AppIndicator/Ayatana sürprizinin
+// (bkz. yukarıdaki tray.on('click') yorumu) daha da uç bir hâli, bazı MİNİMAL pencere
+// yöneticilerinde (ör. sistem tepsisi barındıran hiçbir bileşen (polybar/waybar/trayer vb.)
+// çalışmayan çıplak bir i3/Hyprland/sway kurulumu) `new Tray()` HİÇ BİR StatusNotifierItem
+// sunucusu bulamayınca native bir istisna FIRLATABİLİR (DOĞRULANMADI — Electron'un GNOME'daki
+// "sessizce görünmez kalma" davranışından farklı olarak, sunucu TAMAMEN yoksa fırlatma ihtimali
+// var). Bu, önceden HİÇ try/catch'siz olduğu için TÜM uygulamayı (pencere/motor/webview dahil)
+// açılışta çökertirdi — şimdi yalnızca tray özelliğinin kendisi devre dışı kalıyor, uygulamanın
+// geri kalanı (ana pencere, DPI motorları) normal çalışmaya devam ediyor.
 function createTray(mainWindow) {
-  const icon = loadAppIcon(path.join(RESOURCES_DIR, 'tray-icon.png'), 32);
-  tray = new Tray(icon);
+  try {
+    return createTrayUnsafe(mainWindow);
+  } catch (err) {
+    logEvent('create-tray-failed', { error: err.message });
+    return null;
+  }
+}
+
+// KULLANICI TALEBİ (2026-09-08, CANLI TESTTE BULUNDU): AppImage'da Cinnamon panelindeki tray
+// ikonu GTK'nın genel/gri "resim bulunamadı" simgesiyle geliyordu -- programın KENDİ blurple
+// fallback'i DEĞİL, GTK'nın ikonu hiç ÇÖZEMEDİĞİ durumun simgesi. Kök neden: Electron'un Linux
+// AppIndicator (libappindicator/Ayatana, Cinnamon'ın kullandığı) arka ucu, bellekteki bir
+// nativeImage'ı KENDİSİ bir dosyaya yazıp bir ikon teması yolu olarak kaydetmeye çalışıyor, bu
+// iç aktarım asar içinden okunan nativeImage'larda güvenilir çalışmıyor. Düzeltme: nativeImage
+// yerine icon.js'in resolveTrayIconPath'inin döndürdüğü GERÇEK (asar dışı, kullanıcı verisi
+// dizinindeki) dosya yoluna bir STRING veriyoruz -- Tray()/setImage() path string'i doğrudan
+// destekliyor. resolveTrayIconPath başarısız olursa (çok nadir, ör. userData dizini yazılamıyor)
+// eski nativeImage yoluna geri düşüyoruz (zararsız, yalnızca en kötü ihtimalde eski bug geri gelir).
+function resolveTrayImage(file) {
+  const resolvedPath = resolveTrayIconPath(path.join(RESOURCES_DIR, file), file, 32);
+  return resolvedPath || loadAppIcon(path.join(RESOURCES_DIR, file), 32);
+}
+
+function createTrayUnsafe(mainWindow) {
+  tray = new Tray(resolveTrayImage('tray-icon.png'));
   tray.setToolTip('SplitCord-Turkey');
 
   // Renderer (titlebar.js), temel tray ikonunun üzerine kırmızı bildirim rozeti eklenmiş
@@ -171,7 +205,12 @@ function createTray(mainWindow) {
     if (key === currentIconKey) return;
     currentIconKey = key;
 
-    tray.setImage(showBadge ? badgedBaseIcon : loadAppIcon(path.join(RESOURCES_DIR, file), 32));
+    // resolveTrayImage/writeIconBuffer notu (yukarıda createTrayUnsafe'te) burada da geçerli:
+    // rozetli ikon da renderer'dan gelen bir nativeImage (badgedBaseIcon) DEĞİL, ondan üretilen
+    // GERÇEK bir dosya yolu olarak veriliyor -- aksi halde rozet AÇIKKEN de aynı "genel/gri
+    // simge" sorunu yaşanabilirdi.
+    const badgedPath = showBadge ? writeIconBuffer(badgedBaseIcon.toPNG(), 'tray-icon-badged.png') : null;
+    tray.setImage(badgedPath || resolveTrayImage(file));
 
     let tooltip = 'SplitCord-Turkey';
     if (state.connected) {

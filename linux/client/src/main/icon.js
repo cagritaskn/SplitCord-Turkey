@@ -1,8 +1,9 @@
 'use strict';
 
-const { nativeImage } = require('electron');
+const { nativeImage, app } = require('electron');
 const zlib = require('node:zlib');
 const fs = require('node:fs');
+const path = require('node:path');
 
 /**
  * Gerçek marka ikonu (client/resources/icon.png, tray-icon.png) eklenene kadar,
@@ -77,4 +78,43 @@ function loadAppIcon(candidatePath, size = 256) {
   return nativeImage.createFromBuffer(generateSolidPng(size, SPLITCORD_BRAND_COLOR));
 }
 
-module.exports = { loadAppIcon };
+// KULLANICI TALEBİ (2026-09-08): AppImage'da sistem tepsisi ikonu Cinnamon'da (libappindicator/
+// Ayatana) GTK'nın kendi genel/gri "resim bulunamadı" simgesiyle geliyordu -- programın kendi
+// blurple kare fallback'i (loadAppIcon'un generateSolidPng'i) DEĞİL, GTK'nın ikonu HİÇ
+// ÇÖZEMEDİĞİ durumdaki simgesi. Bu, Electron'un Linux'ta AppIndicator arka ucuyla bilinen bir
+// davranışı: `new Tray(nativeImage)`/`tray.setImage(nativeImage)` bellekteki bir görüntüyü
+// libappindicator'a KENDİSİ bir dosyaya yazıp bir ikon TEMASI yolu olarak kaydetmeye çalışıyor,
+// ve bu iç aktarım bazı masaüstü ortamlarında (özellikle .asar içinden okunan bir nativeImage'da)
+// güvenilir çalışmıyor. Bilinen/belgelenmiş düzeltme: nativeImage yerine GERÇEK, KALICI bir
+// dosya sistemi yoluna (asar İÇİNDE DEĞİL) işaret eden bir STRING vermek -- Tray()/setImage()
+// bir path string'i doğrudan kabul ediyor. Bu yüzden ikon dosyalarını (kaynak asar içinde olsa
+// bile) kullanıcı verisi dizinindeki gerçek bir dosyaya KOPYALAYIP o gerçek yolu döndürüyoruz.
+// Verilen buffer'ı kullanıcı verisi dizinindeki (asar DIŞINDA, gerçek bir dosya sistemi
+// yolunda) sabit bir dosyaya yazıp o gerçek yolu döndürür -- tray.js hem statik ikonlar
+// (tray-icon.png vb.) hem renderer'ın <canvas> ile ürettiği dinamik rozetli ikon (bkz.
+// tray.js tray:register-badged-icon) için bunu kullanıyor.
+function writeIconBuffer(buffer, cacheFileName) {
+  try {
+    const cacheDir = path.join(app.getPath('userData'), 'tray-icons');
+    fs.mkdirSync(cacheDir, { recursive: true });
+    const destPath = path.join(cacheDir, cacheFileName);
+    fs.writeFileSync(destPath, buffer);
+    return destPath;
+  } catch {
+    return null; // en kötü ihtimalle çağıran taraf nativeImage'a geri düşebilir
+  }
+}
+
+function resolveTrayIconPath(candidateAsarPath, cacheFileName, size = 32) {
+  let buffer;
+  try {
+    buffer = candidateAsarPath && fs.existsSync(candidateAsarPath)
+      ? fs.readFileSync(candidateAsarPath) // asar-şeffaf okuma, gerçek dosya İÇERİĞİ
+      : generateSolidPng(size, SPLITCORD_BRAND_COLOR);
+  } catch {
+    return null;
+  }
+  return writeIconBuffer(buffer, cacheFileName);
+}
+
+module.exports = { loadAppIcon, resolveTrayIconPath, writeIconBuffer };
