@@ -118,6 +118,16 @@ if (readLocalSettings().quicDisabled) {
   app.commandLine.appendSwitch('disable-quic');
 }
 
+// ECH (Encrypted Client Hello): TLS ClientHello'daki SNI alanını (hangi domaine bağlanıldığı)
+// şifreleyip DPI'nin salt SNI'ye bakarak engellemesini zorlaştırıyor. Chrome bunu normal
+// kullanıcılara Google'ın sunucu taraflı (Finch) deneyleriyle kademeli açıyor -- Electron
+// bu deneylere dahil olmadığı için varsayılan KAPALI kalıyor. Burada açıkça açıyoruz: sunucu
+// gerçek bir ECH config yayınlamıyorsa Chromium sessizce normal (ECH'siz) TLS'e düşüyor,
+// hiçbir bağlantı bozulmuyor -- yalnızca sunucu destekliyorsa ek bir DPI aşım katmanı
+// kazanıyoruz. Zapret/Zapret2'nin TCP/ClientHello parçalama tekniğiyle çakışmıyor: ECH TLS
+// katmanında, onlar TCP katmanında çalışıyor.
+app.commandLine.appendSwitch('enable-features', 'EncryptedClientHello');
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
