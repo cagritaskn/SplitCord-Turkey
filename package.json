@@ -5,7 +5,8 @@
   "description": "SplitCord-Turkey",
   "scripts": {
     "fetch-binaries": "node scripts/fetch-binaries.js",
-    "build-byedpi": "node scripts/build-byedpi.js"
+    "build-byedpi": "node scripts/build-byedpi.js",
+    "build-vencord": "node scripts/build-vencord.js"
   },
   "devDependencies": {
     "adm-zip": "^0.5.16"

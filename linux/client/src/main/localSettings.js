@@ -101,6 +101,17 @@ const DEFAULTS = {
   // index.js), Discord QUIC hiç denemeden doğrudan TCP/TLS'e (DPI motorlarının
   // kapsama alanına) düşer.
   quicDisabled: false,
+  // KULLANICI TALEBİ: Vencord'un (GPL-3.0, github.com/Vendicated/Vencord) "web" hedefi için
+  // derlenmiş, salt tarayıcı-uyumlu paketini (resources/vencord/browser.js + browser.css)
+  // Discord webview'inin ANA dünyasına enjekte eder (bkz. discordWebviewPreload.js
+  // setupVencordInjection). Bu paket masaüstüne özgü değil: Vencord'un kendi
+  // VencordNativeStub.ts'i (native/Electron IPC yerine localStorage/IndexedDB kullanıyor)
+  // sayesinde native bir köprü YAZMAMIZA gerek kalmadan doğrudan çalışıyor. Varsayılan KAPALI
+  // ve değişikliği uygulamak için webview'in yeniden yüklenmesi gerekiyor (bkz. ipc.js
+  // vencord:set-enabled) -- ÇÜNKÜ Discord'un ToS'u üçüncü taraf istemci değişikliklerini
+  // yasaklıyor (hesap aksiyonu riski DPI aşımından TAMAMEN AYRI bir risk kategorisi);
+  // kullanıcı Ayarlar'daki net uyarıyı görüp BİLEREK açmalı.
+  vencordEnabled: false,
 };
 
 function readLocalSettings() {

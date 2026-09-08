@@ -335,6 +335,80 @@ if (document.readyState === 'loading') {
 }
 
 /**
+ * KULLANICI TALEBİ: Vencord (bkz. localSettings.js vencordEnabled notu, varsayılan KAPALI --
+ * Discord ToS riski nedeniyle kullanıcı bilerek açmalı). Vencord'un webpack modüllerini
+ * yamalayabilmesi için Discord'un GERÇEK script'lerinden (ve onların webpackChunkdiscord_app
+ * push'larından) KESİNLİKLE ÖNCE çalışması gerekiyor -- bu yüzden injectMainWorldScript()'le
+ * AYNI document-start zamanlamasında, ama ondan ÖNCE tetikleniyor.
+ *
+ * Neden native bir köprü (VencordNative IPC) YAZMADIK: resources/vencord/browser.js,
+ * Vencord'un kendi "web" derleme hedefi (bkz. resources/vencord/SOURCE.txt) -- bu hedefin
+ * kendi VencordNativeStub.ts'i zaten localStorage/IndexedDB kullanıyor (gerçek dosya
+ * sistemi/Electron IPC'sine hiç ihtiyaç duymuyor), yani paket kendi başına webview'in ana
+ * dünyasında çalışmaya hazır. localStorage/IndexedDB partition'a (persist:discord) özel
+ * olduğu için Vencord'un ayarları/temaları uygulama yeniden başlatıldığında da kalıcı.
+ *
+ * GERÇEK BUG (canlı testte bulundu): <webview>'in preload'u SANDBOXED çalışıyor -- burada
+ * require('node:fs')/require('node:path') kullanmaya çalışmak "module not found: node:fs"
+ * ile İSTİSNAİ ATIYOR ve bu, bu dosyanın TAMAMINI (Vencord'dan bağımsız, önceden çalışan
+ * kod dahil -- contextBridge.exposeInMainWorld dahil) sessizce çökertiyordu
+ * (webContents.on('preload-error') ile doğrulandı). Bu yüzden dosya okuma işlemi ana
+ * sürece taşındı (bkz. ipc.js vencord:get-injection-sync) -- burada yalnızca hazır JS/CSS
+ * metnini SENKRON olarak alıyoruz (async bir IPC round-trip'i Discord'un script'leri
+ * başlamadan bitiremeyebilir).
+ */
+function injectVencordIfEnabled() {
+  let injection = null;
+  try {
+    injection = ipcRenderer.sendSync('vencord:get-injection-sync');
+  } catch {
+    return;
+  }
+  if (!injection) return;
+  if (injection.error) {
+    try {
+      ipcRenderer.send('discord-preload:diag', { vencordLoadError: injection.error });
+    } catch {}
+    return;
+  }
+  const { js: vencordJs, css: vencordCss } = injection;
+
+  // CSS'i ayrı bir <style> etiketi olarak enjekte ediyoruz -- document-start'ta
+  // document.head henüz oluşmamış olabilir, bu yüzden setupNativeAppPromptSuppressor'daki
+  // AYNI bekleme deseniyle (document.head oluşana kadar kısa aralıklarla tekrar dener)
+  // hazır olana kadar bekliyoruz.
+  const script = `
+    ${vencordJs}
+    (function() {
+      function __splitcordAppendVencordCss() {
+        if (!document.head) { setTimeout(__splitcordAppendVencordCss, 20); return; }
+        if (document.getElementById('__splitcordVencordCss')) return;
+        var style = document.createElement('style');
+        style.id = '__splitcordVencordCss';
+        style.textContent = ${JSON.stringify(vencordCss)};
+        document.head.appendChild(style);
+      }
+      __splitcordAppendVencordCss();
+    })();
+  `;
+
+  webFrame.executeJavaScript(script)
+    .then(() => webFrame.executeJavaScript('typeof window.Vencord'))
+    .then((vencordType) => {
+      try {
+        ipcRenderer.send('discord-preload:diag', { vencordInjected: true, vencordType });
+      } catch {}
+    })
+    .catch((err) => {
+      try {
+        ipcRenderer.send('discord-preload:diag', { vencordInjectError: err.message });
+      } catch {}
+    });
+}
+
+injectVencordIfEnabled();
+
+/**
  * Ayarlar > Görünüm'deki "Discord temasına göre otomatik renk" özelliği, ana süreçte
  * (dynamicColor.js) periyodik DOM örneklemesi yaparak çalışıyor — Discord'un kendi hesap
  * ayarlarından tema değiştirildiğinde bunun beklemeden anında tetiklenmesi için, Discord

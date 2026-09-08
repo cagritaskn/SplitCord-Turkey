@@ -651,6 +651,49 @@ function registerIpcHandlers() {
     return enabled;
   });
 
+  // KULLANICI TALEBİ: Ayarlar > Genel'deki "Vencord'u etkinleştir" -- yalnızca
+  // discordWebviewPreload.js'in enjeksiyon kararını (document-start'ta, webview'in kendi
+  // preload'u tarafından SENKRON okunması gerekiyor) ilgilendirdiği için normal
+  // ipcMain.handle yerine sendSync/event.returnValue kullanan ayrı bir kanal var (aşağıda).
+  // Buradaki get/set çifti SADECE Ayarlar penceresinin okuma/yazma ihtiyacı için.
+  ipcMain.handle('app:get-vencord-enabled', () => readLocalSettings().vencordEnabled);
+  ipcMain.handle('app:set-vencord-enabled', (_event, enabled) => {
+    logEvent('set-vencord-enabled', { enabled });
+    writeLocalSettings({ vencordEnabled: enabled });
+    // Yalnızca ANA PENCEREdeki webview'i ilgilendiriyor -- titlebar.js bunu dinleyip
+    // webview.reload() çağırıyor (yeni enjeksiyon kararı ancak bir sonraki navigasyonda/
+    // document-start'ta etkili olabiliyor).
+    getMainWindow()?.webContents.send('app:vencord-enabled-changed', enabled);
+    return enabled;
+  });
+  // discordWebviewPreload.js document-start'ta (webview'in kendi izole preload dünyasında)
+  // çalışıyor -- o an ana pencereyle normal async IPC round-trip'i bekleyecek zaman/mimari
+  // yok (enjeksiyon Discord'un kendi script'lerinden ÖNCE tamamlanmalı), bu yüzden senkron
+  // ipcRenderer.sendSync kullanıyor.
+  //
+  // CANLI TESTTE BULUNAN GERÇEK BUG: <webview>'in preload'u SANDBOXED çalışıyor (Electron
+  // 20+'ta webview preload'ları için varsayılan) -- require('node:fs')/require('node:path')
+  // preload'ın kendi izole dünyasında MEVCUT DEĞİL ("module not found: node:fs"), ve bu hata
+  // sessizce preload'un TAMAMINI (contextBridge.exposeInMainWorld dahil, Vencord'dan TAMAMEN
+  // BAĞIMSIZ önceden çalışan kod da dahil) çökertiyordu -- webContents.on('preload-error')
+  // ile canlı doğrulandı. Bu yüzden dosya OKUMA işlemini (fs erişimi olan) buraya, ana
+  // sürece taşıdık; preload artık yalnızca hazır JS/CSS metnini IPC üzerinden alıyor.
+  ipcMain.on('vencord:get-injection-sync', (event) => {
+    const enabled = readLocalSettings().vencordEnabled;
+    if (!enabled) {
+      event.returnValue = null;
+      return;
+    }
+    try {
+      const vencordDir = path.join(__dirname, '..', '..', 'resources', 'vencord');
+      const js = fs.readFileSync(path.join(vencordDir, 'browser.js'), 'utf8');
+      const css = fs.readFileSync(path.join(vencordDir, 'browser.css'), 'utf8');
+      event.returnValue = { js, css };
+    } catch (err) {
+      event.returnValue = { error: err.message };
+    }
+  });
+
   ipcMain.handle('app:get-theme-mode', () => readLocalSettings().themeMode);
   ipcMain.handle('app:set-theme-mode', (_event, mode) => {
     logEvent('set-theme-mode', { mode });

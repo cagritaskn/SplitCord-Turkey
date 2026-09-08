@@ -75,6 +75,8 @@ contextBridge.exposeInMainWorld('splitcord', {
     setShowTitle: (enabled) => ipcRenderer.invoke('app:set-show-title', enabled),
     getCenterTitle: () => ipcRenderer.invoke('app:get-center-title'),
     setCenterTitle: (enabled) => ipcRenderer.invoke('app:set-center-title', enabled),
+    getVencordEnabled: () => ipcRenderer.invoke('app:get-vencord-enabled'),
+    setVencordEnabled: (enabled) => ipcRenderer.invoke('app:set-vencord-enabled', enabled),
     getProtocolHandlerStatus: () => ipcRenderer.invoke('app:get-protocol-handler-status'),
     getControlsIssueStatus: () => ipcRenderer.invoke('app:get-controls-issue-status'),
     getIgnoredControlIssues: () => ipcRenderer.invoke('app:get-ignored-control-issues'),
@@ -168,6 +170,11 @@ contextBridge.exposeInMainWorld('splitcord', {
     const listener = (_event, enabled) => callback(enabled);
     ipcRenderer.on('app:center-title-changed', listener);
     return () => ipcRenderer.removeListener('app:center-title-changed', listener);
+  },
+  onVencordEnabledChanged: (callback) => {
+    const listener = (_event, enabled) => callback(enabled);
+    ipcRenderer.on('app:vencord-enabled-changed', listener);
+    return () => ipcRenderer.removeListener('app:vencord-enabled-changed', listener);
   },
   onDynamicColorSampled: (callback) => {
     const listener = (_event, colors) => callback(colors);

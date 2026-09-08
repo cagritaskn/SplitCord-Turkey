@@ -26,6 +26,11 @@ Thumbs.db
 # ByeDPI kaynagindan derlenen ikili (npm run build-byedpi ile yeniden uretilir)
 vendor/byedpi-src/ciadpi.exe
 
+# Vencord'un (GPL-3.0) derlenmis "web" paketi (lisans/repo boyutu nedeniyle commitlenmiyor,
+# npm run build-vencord ile yeniden uretilir)
+client/resources/vencord/
+linux/client/resources/vencord/
+
 # Linux portu icin yerel ilerleme/not dosyalari -- yalnizca yerel gelistirme takibi icin,
 # repoya commitlenmiyor.
 linux/PORTING_PLAN.md

@@ -961,6 +961,15 @@ function applyCenterTitleAttr(enabled) {
 window.splitcord.app.getCenterTitle().then(applyCenterTitleAttr).catch(() => {});
 window.splitcord.onCenterTitleChanged?.(applyCenterTitleAttr);
 
+// KULLANICI TALEBİ: Ayarlar > Genel'deki "Vencord'u etkinleştir" -- yeni enjeksiyon kararı
+// yalnızca webview'in kendi preload'unun document-start'ta SENKRON okuduğu değeri
+// etkiliyor (bkz. ipc.js vencord:get-enabled-sync notu), yani ancak BİR SONRAKİ
+// navigasyonda devreye girebilir. Ayarlar penceresi kapanana kadar beklemek yerine
+// hemen webview.reload() ile o navigasyonu tetikliyoruz.
+window.splitcord.onVencordEnabledChanged?.(() => {
+  webview?.reload();
+});
+
 // --- Bildirim rozeti (tray ikonu + görev çubuğu ikonu) ---
 // Ana süreçte piksel çizim/kompozisyon API'si yok — bu yüzden ikonları bir <canvas> ile
 // burada (renderer'da) çizip PNG data URL olarak main sürece gönderiyoruz. capturePage()
