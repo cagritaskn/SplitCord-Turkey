@@ -122,6 +122,11 @@ const resetServiceSettings = () => request('POST', '/settings/reset', null, LONG
 // tetikliyor), varsayılan kısa zaman aşımı yeterli.
 const cancelScan = () => request('POST', '/scan/cancel');
 
+// PORT_PLAN_2.md AP-5/Faz 3 — İzinler ve Kontroller panelindeki AppImage bağımlılık bölümü için
+// (yalnızca AppImage'da gösteriliyor, bkz. settings.js). Uç noktanın kendisi servis tarafında
+// paketleme türünden bağımsız/her zaman var (bkz. PORT_PLAN_2.md §1 madde 4).
+const getDependencyCheck = () => request('GET', '/dependency-check');
+
 module.exports = {
   getDpiStatus,
   activateEngine,
@@ -145,4 +150,5 @@ module.exports = {
   setByeDpiUseExtendedCandidates,
   resetServiceSettings,
   cancelScan,
+  getDependencyCheck,
 };

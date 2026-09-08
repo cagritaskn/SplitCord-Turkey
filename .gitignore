@@ -26,6 +26,7 @@ Thumbs.db
 # ByeDPI kaynagindan derlenen ikili (npm run build-byedpi ile yeniden uretilir)
 vendor/byedpi-src/ciadpi.exe
 
-# Linux portu icin yerel ilerleme/not dosyasi -- yalnizca yerel gelistirme takibi icin,
+# Linux portu icin yerel ilerleme/not dosyalari -- yalnizca yerel gelistirme takibi icin,
 # repoya commitlenmiyor.
 linux/PORTING_PLAN.md
+linux/PORT_PLAN_2.md

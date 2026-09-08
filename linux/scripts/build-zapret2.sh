@@ -64,4 +64,11 @@ cp -L "$SRC_DIR/mdig/mdig" "$OUT_DIR/mdig/mdig"
 chmod +x "$OUT_DIR/blockcheck2.sh" "$OUT_DIR/nfq2/nfqws2" "$OUT_DIR/ip2net/ip2net" "$OUT_DIR/mdig/mdig"
 find "$OUT_DIR/common" "$OUT_DIR/blockcheck2.d" -type f -name "*.sh" -exec chmod +x {} \;
 
+# PORT_PLAN_2.md AP-4/Faz 2: nfqws2 EK OLARAK luajit'e de dinamik bağlı (blockcheck2.sh'nin
+# --lua-desync= adayları için) -- ip2net/mdig muhtemelen yalnızca glibc'ye bağlı (DOĞRULANMADI)
+# ama zararsız olduğu için üçü de aynı şekilde taranıyor.
+"$SCRIPT_DIR/bundle-libs.sh" "$OUT_DIR/nfq2/nfqws2"
+"$SCRIPT_DIR/bundle-libs.sh" "$OUT_DIR/ip2net/ip2net"
+"$SCRIPT_DIR/bundle-libs.sh" "$OUT_DIR/mdig/mdig"
+
 echo "[zapret2] tamam -> $OUT_DIR/blockcheck2.sh (+ nfq2/nfqws2, ip2net/ip2net, mdig/mdig, lua/, common/, blockcheck2.d/)"

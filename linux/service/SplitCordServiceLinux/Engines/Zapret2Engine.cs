@@ -532,6 +532,14 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
         // sistemin normal PATH'ini zaten miras alıyor, Windows'taki gibi elle PATH kurmaya
         // gerek YOK (sistemin dirname/grep/uname gibi araçları zaten PATH'te).
         psi.ArgumentList.Add("./blockcheck2.sh");
+        // PORT_PLAN_2.md AP-4/Faz 2 (kapsam genişletmesi, 2026-09-09): blockcheck2.sh'nin
+        // KENDİSİ iptables/ip6tables/nft'i doğrudan bare komut adıyla çağırıyor (bkz.
+        // EmbeddedTools.cs'in üstündeki not, gerçek kaynak satır ~190-210/800-909) -- bunlar
+        // sistemde hiç kurulu olmasa bile gömülü kopyaları (varsa) bulabilsin diye PATH'e
+        // ekleniyor. Yukarıdaki yorumdaki "sistemin normal PATH'ini zaten miras alıyor, elle PATH
+        // kurmaya gerek YOK" notu hâlâ geçerli -- bu YENİ bir dağıtım değil, MEVCUT PATH'in ÖNÜNE
+        // ekleme (sistemdeki her şey hâlâ erişilebilir, yalnızca gömülü kopya önceliklendiriliyor).
+        psi.Environment["PATH"] = EmbeddedTools.PathWithEmbeddedToolsFirst();
         psi.Environment["BATCH"] = "1";
         psi.Environment["DOMAINS"] = "discord.com";
         psi.Environment["IPVS"] = "4";
@@ -1271,6 +1279,10 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
+        // PORT_PLAN_2.md AP-4/Faz 2 (kapsam genişletmesi): sistemin PATH'inde iptables hiç
+        // kurulu olmayabilir (Arch tabanlı dağıtımlarda varsayılan DEĞİL) -- gömülü kopyayı
+        // (varsa) önce arıyoruz, bkz. EmbeddedTools.cs.
+        psi.Environment["PATH"] = EmbeddedTools.PathWithEmbeddedToolsFirst();
         foreach (var arg in args) psi.ArgumentList.Add(arg);
 
         try
@@ -1284,7 +1296,7 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
         }
         catch
         {
-            // iptables sistemde yoksa/PATH'te değilse -- sessizce geç.
+            // iptables sistemde yoksa/PATH'te değilse (gömülü kopya da yoksa) -- sessizce geç.
         }
     }
 }

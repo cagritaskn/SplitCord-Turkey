@@ -5,7 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { spawn } = require('node:child_process');
-const { app } = require('electron');
+const { app, shell } = require('electron');
+const { isAppImage } = require('./packagingInfo');
 
 // Windows karşılığının (client/src/main/updateChecker.js) portu. checkForUpdate()'in GitHub
 // API mantığı (release/tag/sürüm karşılaştırma) BİREBİR aynı — tek fark asset seçimi ve
@@ -97,9 +98,25 @@ async function checkForUpdate() {
     return { available: false, latestVersion };
   }
 
+  // PORT_PLAN_2.md AP-2/Faz 4: release.html_url GitHub API'sinin HER release nesnesinde zaten
+  // döndürdüğü, o release'in web sayfasına giden bağlantı -- AppImage tarafı artık indirme/kurulum
+  // YAPMIYOR, yalnızca bu sayfayı tarayıcıda açıyor (bkz. openReleasePage).
+  const releaseUrl = release.html_url || `https://github.com/${REPO}/releases/tag/${latestVersion}`;
+
+  // ÖNEMLİ AYRIM: AppImage tarafı hiçbir asset İNDİRMİYOR (yalnızca sürüm sayfasını açıyor), bu
+  // yüzden "güncelleme mevcut mu" sorusunu bir .deb asset'inin bulunup bulunmadığına
+  // BAĞLAMAMALI -- pickAsset() yalnızca "*-amd64.deb"/"*-arm64.deb" arıyor (bkz. altında), bir
+  // release yalnızca AppImage asset'i içerse bile (ki gelecekte böyle olabilir) AppImage
+  // kullanıcısı hâlâ doğru şekilde "yeni sürüm var" görmeli. .deb tarafı ise asset'i GERÇEKTEN
+  // indirip kuracağı için eşleşen asset yoksa "güncelleme yok" demeye devam etmeli (ESKİ davranış,
+  // hiç değişmedi).
+  if (isAppImage()) {
+    return { available: true, latestVersion, releaseUrl };
+  }
+
   const asset = pickAsset(release.assets || []);
   if (!asset) {
-    return { available: false, latestVersion };
+    return { available: false, latestVersion, releaseUrl };
   }
 
   return {
@@ -108,7 +125,21 @@ async function checkForUpdate() {
     downloadUrl: asset.browser_download_url,
     releaseNotes: release.body || '',
     assetName: asset.name,
+    releaseUrl,
   };
+}
+
+/** PORT_PLAN_2.md AP-2: AppImage'ın güncelleme akışı -- `.deb`'in indir+`pkexec dpkg -i` (D-38)
+ * akışının AYNISI DEĞİL, kullanıcının kendi tercihiyle basitleştirildi: yeni sürüm mevcutsa
+ * yalnızca GitHub release sayfasını tarayıcıda açıyoruz, indirme/kurulum kullanıcının kendi elinde
+ * (indirdiği yeni AppImage'ı eskisinin üzerine koyması gibi). Kök/pkexec gerektiren bir adım YOK.
+ * `.deb` tarafının downloadUpdate/installDownloadedUpdate/openDownloadedUpdate'i bu fonksiyondan
+ * TAMAMEN bağımsız, hiç değişmedi. */
+function openReleasePage(releaseUrl) {
+  if (!releaseUrl) {
+    throw new Error('Sürüm sayfası adresi yok -- önce güncellemeleri kontrol et.');
+  }
+  return shell.openExternal(releaseUrl);
 }
 
 async function downloadUpdate(downloadUrl) {
@@ -184,4 +215,4 @@ function downloadFile(url, destPath) {
   });
 }
 
-module.exports = { checkForUpdate, downloadUpdate, openDownloadedUpdate };
+module.exports = { checkForUpdate, downloadUpdate, openDownloadedUpdate, openReleasePage };

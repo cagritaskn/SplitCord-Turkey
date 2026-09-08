@@ -12,7 +12,7 @@
 
 Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'i kurup kullanmaya başlayabilirsiniz.
 
-1. **[SplitCord-Turkey-Setup-0.9.9.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.9.9/SplitCord-Turkey-Setup-0.9.9.exe)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
+1. **[SplitCord-Turkey-Setup-1.0.0.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.0/SplitCord-Turkey-Setup-1.0.0.exe)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
 2. İndirilen dosyayı çalıştırın. SmartScreen uyarısı görürseniz **(Windows kişisel bilgisayarınızı korudu başlıklı)** pencerede bulunan **Ek bilgi** kısmına tıklayıp daha sonra **Yine de çalıştır** butonuna tıklayın. Set-up, arka planda çalışacak DPI aşım hizmetini (SplitCordDpiService) kaydedebilmek için yönetici izni isteyebilir; kurulum tamamlandıktan sonra uygulama hiçbir zaman yükseltilmiş yetkiyle çalışmaz (Yönetici izni istemez).
 3. Kurulum bitince SplitCord-Turkey'i çalıştırın.
 4. İlk açılışta uygulama sizin için en uygun DPI aşım motorunu ve ayarını bulmak amacıyla Zapret, Zapret2, ByeDPI ve GoodbyeDPI'yi sırayla dener; bu tarama birkaç dakika sürebilir. Bu süre boyunca "Bağlantı hazırlanıyor…" ekranını görmeniz normaldir, taramanın bitmesini bekleyin.
@@ -43,6 +43,9 @@ SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint'te te
    ```
    ya da 
    SplitCord-Turkey ayarlarında Hakkında ve Güncelleme sayfasından SplitCord-Turkey'i kaldır butonu ile kaldırabilirsiniz.
+
+> [!NOTE]
+> Debian/Ubuntu tabanlı olmayan *AppImage destekleyen popüler Linux dağıtımları* (Arch, Manjaro, EndeavourOS, Fedora, openSUSE gibi) dağıtımları için AppImage ile kullanım hakkında daha fazla bilgi [bu sayfada](resources/APPIMAGE.md) mevcut.
 
 ---
 

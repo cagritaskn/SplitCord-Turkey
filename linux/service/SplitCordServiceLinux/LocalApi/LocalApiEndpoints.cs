@@ -256,5 +256,19 @@ public static class LocalApiEndpoints
             mgr.CancelCurrentScan();
             return Results.Ok();
         });
+
+        // PORT_PLAN_2.md AP-5/Faz 3 — İzinler ve Kontroller panelindeki (yalnızca AppImage
+        // istemcisinde gösterilen) bağımlılık teşhis bölümü. Paketleme türünden bağımsız (bkz.
+        // PORT_PLAN_2.md §1 madde 4) — .deb kurulumunda da erişilebilir, yalnızca istemci
+        // tarafında AppImage dışında hiç ÇAĞRILMIYOR.
+        app.MapGet("/dependency-check", async () =>
+        {
+            var result = await DependencyChecker.CheckAsync();
+            return Results.Ok(new
+            {
+                distro = new { id = result.Distro.Id, prettyName = result.Distro.PrettyName, family = result.Distro.Family.ToString() },
+                items = result.Items,
+            });
+        });
     }
 }

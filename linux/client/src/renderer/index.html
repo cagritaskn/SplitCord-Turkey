@@ -337,12 +337,16 @@
             <button id="btn-status-install-service" class="sc-status-btn sc-status-btn--primary" hidden>DPI Servisini Kur</button>
             <button id="btn-status-reject-unstable-args" class="sc-status-btn sc-status-btn--primary" hidden>Argüman Setini Yasakla</button>
             <button id="btn-status-retry-manual" class="sc-status-btn" hidden>Tekrar Dene (20 Kez)</button>
+            <!-- PORT_PLAN_2.md AP-16 -- yalnızca AppImage'da VE gerçek bir bağımlılık sorunu
+                 tespit edildiğinde görünür (bkz. titlebar.js maybeShowAppImageDependencyWarning). -->
+            <button id="btn-status-dependency-issue" class="sc-status-btn sc-status-btn--primary" hidden>⚠ Bağımlılık Sorunu Tespit Edildi</button>
           </div>
         </div>
       </div>
     </div>
   </div>
   <script src="modal.js"></script>
+  <script src="dependencyDiagnostics.js"></script>
   <script src="titlebar.js"></script>
 </body>
 </html>

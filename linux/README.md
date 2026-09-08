@@ -8,6 +8,10 @@ birbirine dokunmaz, ikisi de aynı repodan ayrı ayrı release edilir.
 açık riskleri orada tutuluyor. Bu iş birden çok oturumda ilerliyor; her yeni oturum önce o dosyayı
 okumalı.
 
+**AppImage desteği (Fedora/Manjaro/Arch/openSUSE/EndeavourOS hedefli) üzerinde çalışıyorsan ayrıca
+[`PORT_PLAN_2.md`](PORT_PLAN_2.md)'yi de oku** — `.deb` hattına DOKUNMADAN AppImage eklemek için
+açılan ayrı bir takip dosyası, kendi karar günlüğü/faz listesi var.
+
 ## Mimari (Windows tarafıyla aynı fikir, farklı uygulama)
 
 - **`service/SplitCordServiceLinux/`** — bir systemd servisi olarak çalışan .NET 8 servisi. Aynı
@@ -24,10 +28,9 @@ okumalı.
 
 ## Dev ortamı durumu
 
-Henüz canlı bir Linux test ortamı yok (bkz. PORTING_PLAN.md §7). Kod, upstream projelerin (bol-van/zapret,
-bol-van/zapret2, hufrea/byedpi) kendi Linux desteğine dayanarak yazılıyor ama gerçek bir Linux
-çekirdeğinde doğrulanmadı. Önerilen sıra: WSL2 (systemd + NFQUEUE) → özel WSL2 kernel → yerel VM →
-cloud VM. Detay için PORTING_PLAN.md §"Test/geliştirme ortamı önerisi"ne bakın.
+Linux Mint üzerinde canlı olarak test edildi ve çalışıyor — hem `.deb` hem AppImage paketleme
+hattı doğrulandı. Diğer dağıtımlar (Debian/Ubuntu ailesi dışındakiler) best-effort/teorik olarak
+hazırlandı ama ayrıca canlı test edilmedi.
 
 ## Windows tarafıyla paylaşılan tek şey
 

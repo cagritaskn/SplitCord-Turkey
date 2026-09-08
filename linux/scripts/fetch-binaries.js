@@ -104,6 +104,23 @@ async function main() {
   runBuildScript('build-zapret2.sh', 'zapret2');
   runBuildScript('build-byedpi.sh', 'byedpi');
 
+  // PORT_PLAN_2.md AP-4/Faz 2 -- yalnızca AppImage'ın bağımlılık gömme stratejisi için (bkz.
+  // build-iptables-nft.sh'in kendi DOĞRULANMADI notu). Bu adım BAŞARISIZ olursa (nftables'ın
+  // build sistemi henüz canlı denenmedi) TÜM fetch-binaries.js'i BAŞARISIZ SAYMIYORUZ -- .deb
+  // hattı (ve bu adımdan önceki üç motor) buna hiç bağımlı değil, PORT_PLAN_2.md §1 madde 1
+  // gereği .deb hattını bu YENİ, doğrulanmamış adımın bir hatası bozmamalı.
+  try {
+    runBuildScript('build-iptables-nft.sh', 'iptables-nft');
+  } catch (err) {
+    console.warn(`\n[iptables-nft] UYARI: gömülü iptables-nft derlenemedi (${err.message}) -- bağımlılık teşhis paneli bunu eksik gösterecek, ama diğer motorlar ETKİLENMEDİ (EmbeddedTools.cs sessizce sistemdeki iptables'a düşer). Bkz. linux/PORT_PLAN_2.md §6/§10.`);
+  }
+
+  try {
+    runBuildScript('build-nftables.sh', 'nftables');
+  } catch (err) {
+    console.warn(`\n[nftables] UYARI: gömülü nft derlenemedi (${err.message}) -- blockcheck2.sh sistemdeki nft'e düşecek, sistemde de yoksa Zapret2 taraması başarısız olabilir. Bkz. linux/PORT_PLAN_2.md §6/§10.`);
+  }
+
   console.log('\nTüm DPI araçları hazır. Servisi yeniden build etmeyi unutma: dotnet build linux/service/SplitCordServiceLinux');
 }
 

@@ -46,6 +46,11 @@ mkdir -p "$OUT_DIR/nfq"
 cp "$NFQWS_BIN" "$OUT_DIR/nfq/nfqws"
 chmod +x "$OUT_DIR/nfq/nfqws"
 
+# PORT_PLAN_2.md AP-4/Faz 2: nfqws libnetfilter_queue/libmnl/libnfnetlink'e dinamik bağlı --
+# hedef dağıtımda bunlar kurulu olmayabilir (özellikle Arch tabanlı dağıtımlar), bu yüzden
+# AppImage'ın içine gömülüyor (DOĞRULANMADI, bkz. bundle-libs.sh'in kendi notu).
+"$SCRIPT_DIR/bundle-libs.sh" "$OUT_DIR/nfq/nfqws"
+
 # ZapretEngine.cs'in CandidateStrategies'inde "--dpi-desync-fake-tls=tls_clienthello_www_google_com.bin"
 # olarak referans verilen dosya -- nfqws ile AYNI dizinde olmali (bkz. yukaridaki not).
 cp "$SRC_DIR/files/fake/tls_clienthello_www_google_com.bin" "$OUT_DIR/nfq/tls_clienthello_www_google_com.bin"

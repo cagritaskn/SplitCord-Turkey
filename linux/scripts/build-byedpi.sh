@@ -43,4 +43,10 @@ mkdir -p "$OUT_DIR"
 cp "$SRC_DIR/ciadpi" "$OUT_DIR/ciadpi"
 chmod +x "$OUT_DIR/ciadpi"
 
+# PORT_PLAN_2.md AP-4/Faz 2: ciadpi'nin glibc dışında ekstra bir kütüphaneye bağlı olmadığı
+# yukarıdaki gcc çağrısından belli (hiç -l bayrağı yok) -- bu adım büyük ihtimalle no-op kalacak
+# ama tutarlılık için (ve ileride bir bağımlılık eklenirse otomatik yakalansın diye) yine de
+# çalıştırılıyor.
+"$SCRIPT_DIR/bundle-libs.sh" "$OUT_DIR/ciadpi"
+
 echo "[byedpi] tamam -> $OUT_DIR/ciadpi"

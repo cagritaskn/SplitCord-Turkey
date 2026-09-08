@@ -39,7 +39,7 @@ SplitCord-Turkey tamamen açık kaynak kodludur; tüm kaynak kod [GitHub deposun
 > **SmartScreen "Windows kişisel bilgisayarınızı korudu"** uyarısı, imzalanmamış yazılımların tamamında çalıştırmadan önce görünür. Bunun sebebi, yazılımların uluslararası kod imzalama sertifikasına tabi olma zorunluluğudur. Ancak bu imzalama işlemi döviz kuru üzerinden düzenli ödeme gerektirdiğinden ve bağımsız, gelir elde etmeyen bir geliştirici tarafından hazırlandığından dolayı yazılım imzalanamıyor.
 
 > [!IMPORTANT]
-> İndirme yapacağınız her zaman önce adres çubuğuna bakıp URL'ye dikkat edin. SplitCord-Turkey'i yalnızca **[resmi GitHub reposundan](https://github.com/cagritaskn/SplitCord-Turkey)** veya doğrudan **[en güncel kurulum dosyasından](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/0.9.8/SplitCord-Turkey-Setup-0.9.8.exe)** indirip kullanın.
+> İndirme yapacağınız her zaman önce adres çubuğuna bakıp URL'ye dikkat edin. SplitCord-Turkey'i yalnızca **[resmi GitHub reposundan](https://github.com/cagritaskn/SplitCord-Turkey)** veya doğrudan **[en güncel kurulum dosyasından](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.0/SplitCord-Turkey-Setup-1.0.0.exe)** indirip kullanın.
 
 ---
 

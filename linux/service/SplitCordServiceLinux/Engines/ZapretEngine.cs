@@ -456,6 +456,9 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
+        // PORT_PLAN_2.md AP-4/Faz 2 (kapsam genişletmesi): sistemin PATH'inde iptables hiç
+        // kurulu olmayabilir -- gömülü kopyayı (varsa) önce arıyoruz, bkz. EmbeddedTools.cs.
+        psi.Environment["PATH"] = EmbeddedTools.PathWithEmbeddedToolsFirst();
         foreach (var arg in args) psi.ArgumentList.Add(arg);
 
         try

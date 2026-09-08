@@ -1,0 +1,35 @@
+# PORT_PLAN_2.md AP-6/AP-9/Faz 5 -- TASLAK, TAMAMLANMAMIŞ.
+#
+# pacman'ın kendi kurulum kancaları (post_install/post_upgrade/post_remove) -- .deb'in
+# deb-postinst.sh/deb-postrm.sh'inin (PORTING_PLAN.md D-36) pacman karşılığı. AYNI install.sh/
+# uninstall.sh'i (linux/packaging/) çağırıyor -- o script'ler paketleme türünden bağımsız zaten.
+#
+# ÖNEMLİ (bkz. PORT_PLAN_2.md AP-9): pacman'ın post_remove/pre_remove modeli dpkg'nin remove/purge
+# ayrımından FARKLI -- pacman'da "yükseltme" ayrı bir kanca (post_upgrade), "tam kaldırma" ayrı
+# (post_remove) olarak gelir, dpkg'deki gibi AYNI script'in içinde $1 argümanına bakmak GEREKMEZ.
+# Bu yüzden D-36'daki dpkg $1==0/$1>=1 mantığı buraya kopyalanmadı, DOĞRUDAN pacman'ın kendi ayrı
+# kancalarına dayanıyor -- ama bu da DOĞRULANMADI, gerçek bir `makepkg -i`/kaldırma ile hiç
+# denenmedi.
+
+post_install() {
+  INSTALLER_DIR=/opt/splitcord-turkey
+  if [ -f "$INSTALLER_DIR/service-installer/install.sh" ]; then
+    bash "$INSTALLER_DIR/service-installer/install.sh" "$INSTALLER_DIR/service-installer" || \
+      echo "UYARI: DPI servisi kurulamadı -- uygulama içinden 'DPI Servisini Kur' ile elle deneyebilirsin."
+  fi
+}
+
+post_upgrade() {
+  post_install
+}
+
+post_remove() {
+  # dpkg'nin aksine burada "remove vs purge" AYRIMI YOK -- pacman -R çağrıldığında bu kanca
+  # çalışır ve DPI servisi + /opt/splitcord-turkey kaldırılır, AMA kullanıcı verisi
+  # (/var/lib/splitcord) KORUNUR (Windows NSIS'in ve .deb'in varsayılan davranışıyla TUTARLI
+  # kalması için) -- DOĞRULANMADI.
+  UNINSTALL_SCRIPT=/opt/splitcord/uninstall.sh
+  if [ -f "$UNINSTALL_SCRIPT" ]; then
+    bash "$UNINSTALL_SCRIPT" || true
+  fi
+}

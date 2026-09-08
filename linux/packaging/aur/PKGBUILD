@@ -1,0 +1,51 @@
+# PORT_PLAN_2.md AP-6/Faz 5 -- TASLAK, TAMAMLANMAMIŞ, YAYINLANMADI.
+#
+# Kullanıcının kendi sıralaması: AppImage canlı doğrulanıp stabil hâle gelmeden bu paket
+# tamamlanmıyor (bkz. PORT_PLAN_2.md §9) -- AppImage'ın içeriği/RPATH yapısı Faz 2'de değişebilir,
+# bu PKGBUILD o zaman zaten güncellenmesi gerekir. Bu dosya yalnızca YAKLAŞIMI belgelemek için var.
+#
+# "-bin" deseni (google-chrome/visual-studio-code-bin gibi): kaynaktan DERLEMİYOR, GitHub
+# release'inden zaten üretilmiş AppImage'ı indirip --appimage-extract ile açıyor, içindeki
+# dosyaları doğrudan pacman paket ağacına yerleştiriyor -- bu sayede kurulan sistemde FUSE
+# bağımlılığı bile kalmıyor (AppImage yalnızca "taşıma formatı" olarak kullanılmış oluyor).
+#
+# DOĞRULANMADI: hiç `makepkg` ile denenmedi. pkgver/sha256sums GERÇEK bir release yayınlanmadan
+# doldurulamaz (aşağıdaki placeholder'lar). AUR'a yayınlamak (`git push` to aur.archlinux.org)
+# kullanıcının kendi hesabı/SSH anahtarını gerektiriyor -- otomatikleştirilemez.
+
+pkgname=splitcord-turkey-bin
+pkgver=0.0.0 # TODO: gerçek bir AppImage release'i yayınlanınca güncelle
+pkgrel=1
+pkgdesc="SplitCord-Turkey -- Discord DPI aşımı istemcisi (AppImage'dan paketlenmiş)"
+arch=('x86_64')
+url="https://github.com/cagritaskn/SplitCord-Turkey"
+license=('unknown') # TODO: ana repodaki LICENSE dosyasına göre doldur
+depends=('glibc') # PORT_PLAN_2.md AP-4/Faz 2 sayesinde diğer her şey (libnetfilter_queue/libmnl/
+                   # libnfnetlink/luajit/iptables-nft) AppImage'ın içine GÖMÜLÜ -- Faz 2 canlı
+                   # doğrulanana kadar bu liste iyimser bir varsayım, DOĞRULANMADI.
+provides=('splitcord-turkey')
+conflicts=('splitcord-turkey')
+source=("${pkgname}-${pkgver}.AppImage::https://github.com/cagritaskn/SplitCord-Turkey/releases/download/v${pkgver}/SplitCord-Turkey-Linux-${pkgver}-AMD64.AppImage")
+sha256sums=('SKIP') # TODO: gerçek release yayınlanınca doğru checksum'la değiştir, 'SKIP' YALNIZCA
+                     # taslak/geliştirme aşamasında kabul edilir, YAYINDA KULLANILMAMALI
+
+install=splitcord-turkey.install
+
+package() {
+  cd "$srcdir"
+  chmod +x "${pkgname}-${pkgver}.AppImage"
+  # PORT_PLAN_2.md Faz 5: --appimage-extract, AppImage'ı FUSE olmadan bir squashfs-root/ dizinine
+  # açar (bu makinede FUSE kurulu olmasa BİLE, yalnızca build zamanında gerekiyor, kurulum sonrası
+  # hiç gerekmiyor).
+  "./${pkgname}-${pkgver}.AppImage" --appimage-extract
+
+  install -dm755 "$pkgdir/opt/splitcord-turkey"
+  cp -r squashfs-root/usr/* "$pkgdir/usr/" 2>/dev/null || true
+  cp -r squashfs-root/* "$pkgdir/opt/splitcord-turkey/" 2>/dev/null || true
+
+  # DOĞRULANMADI: AppImage'ın gerçek squashfs iç yapısı (electron-builder'ın AppImage hedefi neyi
+  # nereye koyuyor) hiç incelenmedi -- yukarıdaki kopyalama adımı TAHMİNİ, gerçek bir
+  # `--appimage-extract` çıktısına bakılarak düzeltilmesi gerekiyor.
+
+  install -Dm644 "$srcdir/../splitcord-dpi.service" "$pkgdir/usr/lib/systemd/system/splitcord-dpi.service" 2>/dev/null || true
+}
