@@ -3,7 +3,7 @@
 const { app, ipcMain, BrowserWindow, shell, session } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
-const { getMainWindow } = require('./window');
+const { getMainWindow, getAttachedWebviewContents } = require('./window');
 const serviceClient = require('./serviceClient');
 const { isAutoStartEnabled, isStartInBackgroundEnabled, applyAutoStart } = require('./autostart');
 const { applyDpiProxy } = require('./dpiProxy');
@@ -651,20 +651,92 @@ function registerIpcHandlers() {
     return enabled;
   });
 
-  // KULLANICI TALEBİ: Ayarlar > Genel'deki "Vencord'u etkinleştir" -- yalnızca
+  // KULLANICI TALEBİ: Ayarlar > Vencord panelindeki "Vencord'u etkinleştir" -- diğer
+  // toggle'ların aksine ertelenmiş kaydetme (unsaved-bar) DEĞİL, tıklandığı anda onay
+  // isteyip cevaba göre HEMEN uygulanıyor (bkz. settings.js initVencordToggle). Bu yüzden
+  // "get" hâlâ sade ama "set" yerine bu onay akışını da içeren tek bir handler var.
   // discordWebviewPreload.js'in enjeksiyon kararını (document-start'ta, webview'in kendi
-  // preload'u tarafından SENKRON okunması gerekiyor) ilgilendirdiği için normal
-  // ipcMain.handle yerine sendSync/event.returnValue kullanan ayrı bir kanal var (aşağıda).
-  // Buradaki get/set çifti SADECE Ayarlar penceresinin okuma/yazma ihtiyacı için.
+  // preload'u tarafından SENKRON okunması gerekiyor) ilgilendirdiği için AYRICA
+  // sendSync/event.returnValue kullanan bir kanal daha var (aşağıda) -- oradaki normal
+  // ipcMain.handle ile karışmasın.
   ipcMain.handle('app:get-vencord-enabled', () => readLocalSettings().vencordEnabled);
-  ipcMain.handle('app:set-vencord-enabled', (_event, enabled) => {
-    logEvent('set-vencord-enabled', { enabled });
-    writeLocalSettings({ vencordEnabled: enabled });
+
+  // KULLANICI TALEBİ: switch'e tıklanınca (Kaydet'e basılana kadar bekletmeden) onay
+  // isteniyor -- "Evet" denirse hemen kaydedilip webview yeniden yükleniyor, "Hayır"
+  // denirse hiçbir şey değişmiyor (renderer checkbox'ı geri alıyor). Etkinleştirme ve
+  // devre dışı bırakma için AYRI metinler + sesli sohbetteyken EK bir uyarı satırı
+  // (bkz. voiceState.getLastState().connected) kullanıcı talebiyle birebir eklendi.
+  ipcMain.handle('app:request-vencord-toggle', async (_event, desired) => {
+    const connected = voiceState.getLastState().connected;
+    const voiceWarning = 'Ayrıca şuanki sesli sohbetiniz geçici olarak kesintiye uğrayabilir.';
+
+    const options = desired
+      ? {
+          type: 'question',
+          buttons: ['Evet', 'Hayır'],
+          defaultId: 0,
+          cancelId: 1,
+          title: "Vencord'u Etkinleştir",
+          message: "Vencord, Discord için daha fazla özelleştirme, ek özellik ve eklentileri kullanabileceğiniz bir moddur. Ancak Discord'un Hizmet Şartları üçüncü taraf değişiklikleri yasaklayabiliyor. Bu durumda hesabınıza uygulanabilecek herhangi bir işlemden siz sorumlu olacaksınız. Riski kabul ediyorsanız aktifleştirin.",
+          detail: connected ? voiceWarning : undefined,
+        }
+      : {
+          type: 'question',
+          buttons: ['Evet', 'Hayır'],
+          defaultId: 0,
+          cancelId: 1,
+          title: "Vencord'u Devre Dışı Bırak",
+          message: "Vencord'u pasif hale getirmek istediğinizden emin misiniz?",
+          detail: connected ? voiceWarning : undefined,
+        };
+
+    const choice = await showThemedConfirm(settingsWindow, options);
+    const confirmed = choice === 0;
+    logEvent('vencord-toggle-choice', { desired, connected, confirmed });
+    if (!confirmed) return { applied: false, enabled: !desired };
+
+    writeLocalSettings({ vencordEnabled: desired });
     // Yalnızca ANA PENCEREdeki webview'i ilgilendiriyor -- titlebar.js bunu dinleyip
     // webview.reload() çağırıyor (yeni enjeksiyon kararı ancak bir sonraki navigasyonda/
     // document-start'ta etkili olabiliyor).
-    getMainWindow()?.webContents.send('app:vencord-enabled-changed', enabled);
-    return enabled;
+    getMainWindow()?.webContents.send('app:vencord-enabled-changed', desired);
+    return { applied: true, enabled: desired };
+  });
+
+  // KULLANICI TALEBİ: Vencord panelindeki "Vencord Ayarlarını Göster" butonu -- Vencord
+  // kendi ayarlarını Discord'un KENDİ Kullanıcı Ayarları modaline bir "Vencord" sekmesi
+  // olarak ekliyor (bkz. Vencord'un _core/settings.tsx'indeki "vencord_main" -> "_panel"
+  // deseni, diğer Vencord eklentilerinin de SettingsRouter.openUserSettings("<key>_panel")
+  // ile kullandığı AYNI mekanizma). Bu yüzden bizim ayarlar penceremizden DEĞİL, ana
+  // pencerenin webview'inde (Vencord'un GERÇEKTEN çalıştığı ana dünya) çalıştırıyoruz.
+  // Ayarlar penceresi ana pencerenin child'ı olduğu için onu kapatmadan mainWindow'u
+  // öne almak Vencord'un açtığı modali GİZLEYEBİLİYORDU -- bu yüzden önce kapatıyoruz.
+  ipcMain.handle('app:open-vencord-settings', () => {
+    const webview = getAttachedWebviewContents();
+    if (!webview || webview.isDestroyed()) return false;
+    webview
+      .executeJavaScript('window.Vencord?.Webpack?.Common?.SettingsRouter?.openUserSettings("vencord_main_panel")')
+      .catch((err) => logEvent('open-vencord-settings-error', { error: err.message }));
+    if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.close();
+    const mainWindow = getMainWindow();
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    return true;
+  });
+
+  // KULLANICI TALEBİ: Vencord panelindeki "Vencord Sürümü" satırı -- Vencord'un kendi
+  // çalışma zamanı API'sinden (belgelenmemiş, değişebilir) okumak yerine, build-vencord.js
+  // tarafından derleme anında yazılan sabit resources/vencord/version.json'dan okunuyor --
+  // daha güvenilir, Vencord'un iç yapısına bağımlı değil.
+  ipcMain.handle('app:get-vencord-version', () => {
+    try {
+      const raw = fs.readFileSync(path.join(__dirname, '..', '..', 'resources', 'vencord', 'version.json'), 'utf8');
+      return JSON.parse(raw).version ?? null;
+    } catch {
+      return null;
+    }
   });
   // discordWebviewPreload.js document-start'ta (webview'in kendi izole preload dünyasında)
   // çalışıyor -- o an ana pencereyle normal async IPC round-trip'i bekleyecek zaman/mimari
@@ -692,6 +764,19 @@ function registerIpcHandlers() {
     } catch (err) {
       event.returnValue = { error: err.message };
     }
+  });
+
+  // KULLANICI TALEBİ: Discord webview'ine enjekte edilen temalı diyalog kutusu (bkz.
+  // discordWebviewPreload.js setupStyledAlert) SplitCord-Turkey'in Ayarlar > Görünüm'deki
+  // renk seçimine (Otomatik/Aydınlık/Kül/Karanlık/Abanoz) uymuyordu -- sabit kodlanmış
+  // renkler kullanıyordu. dynamicColor.getLastPalette() ana pencerenin titlebar'ının
+  // KENDİSİNİN kullandığı AYNI palet -- document-start'ta senkron olarak (aynı gerekçeyle,
+  // bkz. vencord:get-injection-sync notu) buradan okunuyor. Tema ÇALIŞMA SIRASINDA
+  // değişirse (ör. Otomatik yeniden örnekleme) bu diyalog yalnızca bir sonraki webview
+  // navigasyonunda güncellenir -- diyaloglar nadir/tek seferlik olduğu için bu bilinen,
+  // kabul edilmiş bir sınırlama.
+  ipcMain.on('theme:get-colors-sync', (event) => {
+    event.returnValue = dynamicColor.getLastPalette();
   });
 
   ipcMain.handle('app:get-theme-mode', () => readLocalSettings().themeMode);

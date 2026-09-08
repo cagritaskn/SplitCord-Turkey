@@ -52,8 +52,18 @@ function createMainWindow() {
     // sistem tarayıcısına yönlendirip Electron'un kendi popup penceresini engelliyoruz;
     // kapalıysa (varsayılan) Electron'un mevcut davranışı (uygulama içi popup pencere)
     // devam ediyor.
+    //
+    // GERÇEK BUG (canlı testte bulundu): bu kontrol http(s) dışı URL'leri de "harici link"
+    // sayıp shell.openExternal'a veriyordu -- Vencord'un QuickCSS düzenleyicisi (ve benzeri
+    // uygulama-içi popup'lar) window.open("about:blank", ...) çağırıyor, bu da masaüstü
+    // ortamının "about" protokolü için hiç uygulama bulamamasına, ardından pencere
+    // reddedildiği (deny) için Vencord'un kendi "if (!win) alert(...)" dalına düşmesine yol
+    // açıyordu. "Harici link" kavramı yalnızca gerçek web adresleri (http/https) için
+    // anlamlı -- about:/blob:/data: gibi uygulama-içi popup'lar HER ZAMAN normal bir
+    // Electron alt penceresi olarak açılmalı.
     webContents.setWindowOpenHandler(({ url }) => {
-      if (readLocalSettings().openLinksExternally) {
+      const isExternalWebLink = /^https?:\/\//i.test(url);
+      if (isExternalWebLink && readLocalSettings().openLinksExternally) {
         shell.openExternal(url);
         return { action: 'deny' };
       }

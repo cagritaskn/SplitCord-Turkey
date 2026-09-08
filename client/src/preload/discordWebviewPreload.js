@@ -313,11 +313,99 @@ const MAIN_WORLD_SCRIPT = `
 
     connect();
   })();
+
+  // --- KULLANICI TALEBİ: Programda gösterilen TÜM dialoglar bizim temamıza uymalı ---
+  // Discord'un kendi sayfası (ve içine enjekte edilen Vencord gibi üçüncü taraf kod)
+  // window.alert() çağırdığında normalde Chromium'un native/temasız uyarı kutusu
+  // çıkıyordu (canlı testte bulundu: Vencord'un QuickCSS düzenleyicisi bir popup
+  // penceresi açamayınca "Failed to open QuickCSS popup" diye TAM OLARAK bunu
+  // gösteriyordu -- asıl popup sorunu window.js'teki setWindowOpenHandler'da
+  // düzeltildi, ama bu yama Discord/eklenti kodunun çağıracağı HERHANGİ bir alert()
+  // için genel bir güvence).
+  //
+  // window.confirm()/prompt() KASITLI OLARAK burada YOK: bunlar çağıran koda SENKRON
+  // bir boolean/string DÖNMESİ gerekiyor (ör. "if (confirm(...)) sil()"), ama bizim
+  // enjekte ettiğimiz modal ASENKRON (bir Promise/DOM olayı) -- gerçekten engellemeden
+  // sahte bir senkron değer döndürmek (ör. her zaman false) kullanıcı HİÇBİR ŞEY
+  // SEÇMEDEN kodun "İptal edildi" gibi davranmasına yol açardı; bu, temasız ama
+  // GERÇEKTEN doğru çalışan native confirm'den daha kötü bir regresyon olurdu.
+  // alert()'in bu sorunu YOK çünkü dönüş değeri (undefined) hiçbir zaman kontrol
+  // akışında kullanılmıyor -- bu yüzden yalnızca o yamalanıyor.
+  //
+  // Renderer'ımızdaki modal.js'in AYNISI değil (o dosya bu sayfaya hiç yüklenmiyor) --
+  // aynı görsel tasarımın (theme.css .sc-modal-* kuralları) bağımsız, kendi kendine
+  // yeten bir kopyası; Discord'un sayfası bizim CSS değişkenlerimizi tanımadığı için
+  // renkler sabit (theme.css'teki :root değerleriyle birebir aynı) kodlandı.
+  (function setupStyledAlert() {
+    var STYLE_ID = '__splitcordAlertStyle';
+    function ensureStyle() {
+      if (document.getElementById(STYLE_ID) || !document.head) return;
+      var style = document.createElement('style');
+      style.id = STYLE_ID;
+      style.textContent =
+        '.__splitcord-alert-overlay{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);opacity:0;transition:opacity 120ms ease;font-family:"gg sans","Noto Sans",sans-serif}' +
+        '.__splitcord-alert-overlay.__splitcord-alert-visible{opacity:1}' +
+        '.__splitcord-alert-box{width:440px;max-width:calc(100vw - 32px);padding:24px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);transform:scale(.96);transition:transform 120ms ease}' +
+        '.__splitcord-alert-overlay.__splitcord-alert-visible .__splitcord-alert-box{transform:scale(1)}' +
+        '.__splitcord-alert-message{font-size:15px;line-height:1.4;white-space:pre-wrap}' +
+        '.__splitcord-alert-actions{margin-top:20px;display:flex;justify-content:flex-end}' +
+        '.__splitcord-alert-btn{border:none;border-radius:4px;padding:10px 16px;font-size:14px;font-weight:500;cursor:pointer;color:#fff;background:#5865f2}' +
+        '.__splitcord-alert-btn:hover{background:#4752c4}';
+      document.head.appendChild(style);
+    }
+
+    window.alert = function splitcordStyledAlert(message) {
+      if (!document.body) { console.log('[SplitCord alert]', message); return; }
+      ensureStyle();
+      var overlay = document.createElement('div');
+      overlay.className = '__splitcord-alert-overlay';
+      var box = document.createElement('div');
+      box.className = '__splitcord-alert-box';
+      // KULLANICI TALEBİ: Ayarlar > Görünüm'deki renk seçimine uysun -- window.js'te
+      // injectMainWorldScript'in ÖNCEDEN yazdığı __splitcordThemeColors (dynamicColor'ın
+      // titlebar için kullandığı AYNI palet) varsa onu kullan, yoksa (ör. henüz hiç örnek
+      // alınmamışsa) theme.css'teki :root varsayılanlarıyla birebir aynı sabit değerlere düş.
+      var colors = window.__splitcordThemeColors || {};
+      box.style.background = colors.primary || '#313338';
+      box.style.color = colors.textNormal || '#f2f3f5';
+      var messageEl = document.createElement('div');
+      messageEl.className = '__splitcord-alert-message';
+      messageEl.textContent = String(message);
+      var actions = document.createElement('div');
+      actions.className = '__splitcord-alert-actions';
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = '__splitcord-alert-btn';
+      btn.textContent = 'Tamam';
+      btn.addEventListener('click', function () {
+        overlay.classList.remove('__splitcord-alert-visible');
+        setTimeout(function () { overlay.remove(); }, 150);
+      });
+      actions.appendChild(btn);
+      box.appendChild(messageEl);
+      box.appendChild(actions);
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+      requestAnimationFrame(function () {
+        overlay.classList.add('__splitcord-alert-visible');
+        btn.focus();
+      });
+    };
+  })();
 })();
 `;
 
 function injectMainWorldScript() {
-  webFrame.executeJavaScript(MAIN_WORLD_SCRIPT).catch((err) => {
+  // KULLANICI TALEBİ: setupStyledAlert (aşağıda) SplitCord-Turkey'in Görünüm'deki renk
+  // seçimini yansıtsın -- dynamicColor'ın titlebar için kullandığı AYNI paleti burada
+  // senkron olarak okuyup ana dünyaya değişken olarak (MAIN_WORLD_SCRIPT'ten ÖNCE) veriyoruz.
+  let themeColors = null;
+  try {
+    themeColors = ipcRenderer.sendSync('theme:get-colors-sync');
+  } catch {}
+  const themePrefix = `window.__splitcordThemeColors = ${JSON.stringify(themeColors)};\n`;
+
+  webFrame.executeJavaScript(themePrefix + MAIN_WORLD_SCRIPT).catch((err) => {
     try {
       ipcRenderer.send('discord-preload:diag', { injectError: err.message });
     } catch {}
@@ -378,6 +466,37 @@ function injectVencordIfEnabled() {
   // AYNI bekleme deseniyle (document.head oluşana kadar kısa aralıklarla tekrar dener)
   // hazır olana kadar bekliyoruz.
   const script = `
+    // KULLANICI TALEBİ (2026-09-09): Vencord'un WebScreenShareFixes/WebKeybinds/WebPWA
+    // eklentileri kendi kaynağında "enabledByDefault:true" olarak tanımlı -- yani Vencord
+    // ilk kez etkinleştirildiğinde bu üçü otomatik AÇIK geliyor, ama bunlar bizim enjeksiyon
+    // mimarimizde (gerçek bir tarayıcı eklentisi/Vesktop DEĞİLİZ) sorunlara yol açıyor.
+    // Vencord'un KENDİ (pinlenmiş commit'teki) kaynağını yamalamak yerine -- ki bu her
+    // build-vencord.js çalıştırmasında/sürüm güncellemesinde kırılgan olurdu -- Vencord
+    // henüz hiç çalışmadan ÖNCE localStorage'daki "VencordSettings" JSON'ına bu üç eklenti
+    // için AÇIKÇA {enabled:false} yazıyoruz. Vencord'un kendi ayar proxy'si (Settings.ts)
+    // bir eklentinin durumunu "target[name] ??= {enabled: required||enabledByDefault||false}"
+    // şeklinde YALNIZCA henüz bir kayıt YOKSA hesaplayıp önbelleğe alıyor -- kayıt zaten
+    // varsa (aşağıdaki gibi bizim önceden yazdığımız {enabled:false}) onu OLDUĞU GİBİ
+    // kullanıyor. Bu yüzden bu kod SADECE ilk kez (henüz bir kayıt yokken) varsayılanı
+    // kapalıya çeviriyor -- kullanıcı bunları SONRADAN Vencord ayarlarından elle tekrar
+    // açarsa (bu durumda kayıt zaten var olacağı için) bir daha asla ezilmiyor.
+    (function __splitcordDisableDefaultVencordPlugins() {
+      var DISABLED_BY_DEFAULT = ['WebScreenShareFixes', 'WebKeybinds', 'WebPWA'];
+      try {
+        var raw = localStorage.getItem('VencordSettings');
+        var settings = raw ? JSON.parse(raw) : {};
+        if (!settings.plugins) settings.plugins = {};
+        var changed = false;
+        DISABLED_BY_DEFAULT.forEach(function (name) {
+          if (!(name in settings.plugins)) {
+            settings.plugins[name] = { enabled: false };
+            changed = true;
+          }
+        });
+        if (changed) localStorage.setItem('VencordSettings', JSON.stringify(settings));
+      } catch (e) {}
+    })();
+
     ${vencordJs}
     (function() {
       function __splitcordAppendVencordCss() {
@@ -389,6 +508,51 @@ function injectVencordIfEnabled() {
         document.head.appendChild(style);
       }
       __splitcordAppendVencordCss();
+    })();
+
+    // KULLANICI TALEBİ: Vencord'un bazı özellikleri bizim enjeksiyon mimarimizde
+    // (gerçek bir tarayıcı eklentisi DEĞİLİZ) çalışamıyor -- bunları sessizce kırık
+    // bırakmak yerine "kullanılamıyor" bilgilendirmesi gösteriyoruz. window.alert
+    // burada ZATEN bizim temalı kutumuza yamalı (bkz. MAIN_WORLD_SCRIPT'teki
+    // setupStyledAlert -- bu script ondan HEP SONRA çalışıyor, injectMainWorldScript
+    // her zaman injectVencordIfEnabled'dan ÖNCE çağrılıyor).
+    (function setupSplitcordVencordFeatureBlocks() {
+      var UNAVAILABLE_MESSAGE = 'Bu özellik SplitCord-Turkey içerisinde kullanılamıyor.';
+
+      // QuickCSS düzenleyici: VencordNative.quickCss.openEditor() bir "about:blank" popup'ı
+      // açıp Monaco editörünü yazıyor -- ama bu popup Vencord'un GERÇEK bir tarayıcı
+      // eklentisi olduğunu varsayıp kendi statik dosyalarını (editor.worker.js vb.) bir
+      // eklenti sunucusundan (EXTENSION_BASE_URL) çekmeye çalışıyor; bizim ham JS
+      // enjeksiyonu yaklaşımımızda böyle bir sunucu YOK, bu yüzden popup sonsuza kadar
+      // "loading" kalıp hiçbir zaman gerçek bir editör göstermiyor (canlı testte
+      // doğrulandı). VencordNative.quickCss GERÇEK, mutable bir global olduğu için
+      // (Discord'un DOM'una bağlı değil) doğrudan üzerine yazmak DOM tıklama
+      // yakalamaktan daha güvenilir.
+      if (window.VencordNative && window.VencordNative.quickCss) {
+        window.VencordNative.quickCss.openEditor = function () {
+          window.alert(UNAVAILABLE_MESSAGE);
+        };
+      }
+
+      // Cloud Integrations: authorizeCloud() (api.vencord.dev'e OAuth) CloudTab.tsx'in
+      // kendi modül kapsamına gömülü -- VencordNative gibi mutable bir global üzerinden
+      // erişilemiyor, bu yüzden onu tetikleyen İKİ giriş noktasını (switch + "Reauthorise"
+      // butonu) Vencord'un kendi KARARLI "vc-form-switch-wrapper"/"vc-cloud-icon-with-
+      // button" class'larıyla (Discord'un hash'li class'ları DEĞİL, bu yüzden Discord
+      // güncellemelerinden bağımsız) yakalayıp tıklamayı Vencord'un handler'ına ULAŞMADAN
+      // engelliyoruz.
+      document.addEventListener('click', function (event) {
+        var target = event.target;
+        var switchWrapper = target && target.closest && target.closest('.vc-form-switch-wrapper');
+        var isCloudSwitch = switchWrapper && switchWrapper.textContent.indexOf('Enable Cloud Integrations') !== -1;
+        var reauthBtn = target && target.closest && target.closest('.vc-cloud-icon-with-button');
+        var isReauthBtn = reauthBtn && reauthBtn.textContent.indexOf('Reauthorise') !== -1;
+        if (!isCloudSwitch && !isReauthBtn) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        window.alert(UNAVAILABLE_MESSAGE);
+      }, true);
     })();
   `;
 
@@ -799,4 +963,94 @@ injectVencordIfEnabled();
     observer.observe(document.body, { childList: true, subtree: true });
   }
   startObserving();
+})();
+
+/**
+ * KULLANICI TALEBİ: Discord'un kendi Kullanıcı Ayarları kenar çubuğunun en üstüne (Hesap
+ * seçeneğinin hemen üstüne) "SplitCord-Turkey Ayarları" adında bir öğe eklenir; tıklanınca
+ * bizim Ayarlar penceremiz açılır.
+ *
+ * "Hesap" öğesini bulmak için Discord'un CSS module hash'lerini (ör. item_caf372 -- her
+ * derlemede değişir) SABİT KODLAMIYORUZ; onun yerine canlı testte doğrulanan, çok daha
+ * kararlı bir işaretleyici kullanıyoruz: data-list-item-id="settings-sidebar___account_panel"
+ * (test/otomasyon amaçlı, insan tarafından verilmiş bir kimlik gibi görünüyor, build hash'i
+ * değil). Yeni öğeyi bu gerçek öğenin (ve tüm <li> kapsayıcısının) TAM bir klonu olarak
+ * oluşturuyoruz -- böylece Discord'un o AN kullandığı hangi hash/stil olursa olsun otomatik
+ * eşleşiyor, kendi tarafımızda hiçbir class adı tahmin etmemize gerek kalmıyor.
+ *
+ * DOM işlemleri (izole preload dünyasından) doğrudan çalışıyor çünkü DOM düğümleri süreç
+ * genelinde paylaşılıyor -- bu yüzden webFrame.executeJavaScript'e hiç gerek yok, ve
+ * ipcRenderer.send('window:open-settings') doğrudan buradan (titlebar.js'in kendi ayarlar
+ * butonuyla AYNI kanal) çağrılabiliyor.
+ */
+(function setupSettingsShortcut() {
+  const ACCOUNT_ITEM_SELECTOR = '[data-list-item-id="settings-sidebar___account_panel"]';
+  const INSERTED_ID = '__splitcordSettingsShortcut';
+
+  function tryInsert() {
+    if (document.getElementById(INSERTED_ID)) return;
+    const accountItem = document.querySelector(ACCOUNT_ITEM_SELECTOR);
+    if (!accountItem) return;
+    const li = accountItem.closest('li') || accountItem.parentElement;
+    const list = li?.parentElement;
+    if (!list) return;
+
+    const clonedLi = li.cloneNode(true);
+    clonedLi.id = INSERTED_ID;
+
+    // Klonlanan <li>, "Hesap" öğesinin alt navigasyon kapsayıcısını (varsa) da kopyalar --
+    // bizim öğemizin böyle bir alt menüsü olmamalı.
+    clonedLi.querySelectorAll('[class*="subnavContainer"]').forEach((el) => el.remove());
+
+    const clonedItem = clonedLi.querySelector(ACCOUNT_ITEM_SELECTOR) || clonedLi.firstElementChild;
+    if (clonedItem) {
+      clonedItem.removeAttribute('data-list-item-id');
+      clonedItem.removeAttribute('aria-current');
+      Array.from(clonedItem.classList || []).forEach((cls) => {
+        if (/^active/i.test(cls)) clonedItem.classList.remove(cls);
+      });
+
+      const textEl = clonedItem.querySelector('[data-text-variant]');
+      if (textEl) textEl.textContent = 'SplitCord-Turkey Ayarları';
+
+      // KULLANICI TALEBİ: "Hesap" öğesinden miras kalan kişi ikonu yerine Discord'un
+      // KENDİ dişli/ayarlar ikonunu kullan -- sol alttaki kullanıcı panelindeki
+      // "Kullanıcı Ayarları" butonunun İÇİNDEKİ <svg>'nin İÇERİĞİNİ (defs/path) alıp
+      // klonun KENDİ <svg> kapsayıcısına yazıyoruz. Kapsayıcıyı (class'ları, viewBox'ı
+      // OLDUĞU GİBİ) DEĞİL sadece iç çizimi değiştiriyoruz ki kenar çubuğunun diğer
+      // ikonlarıyla AYNI boyutlandırma/hizalama korunsun.
+      const gearIconSvg = document.querySelector('[aria-label="Kullanıcı Ayarları"] svg');
+      const ourIconSvg = clonedItem.querySelector('svg');
+      if (gearIconSvg && ourIconSvg) {
+        ourIconSvg.innerHTML = gearIconSvg.innerHTML;
+      }
+
+      // Discord'un kendi tıklama/yönlendirme mantığına HİÇ ulaşmasın diye capture
+      // aşamasında yakalayıp durduruyoruz (klon zaten React'in event delegation ağacının
+      // parçası DEĞİL, ama yine de garanti olsun).
+      clonedItem.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        try {
+          ipcRenderer.send('window:open-settings');
+        } catch (err) {
+          console.error('[SplitCord] Ayarlar penceresi açılamadı:', err);
+        }
+      }, true);
+    }
+
+    list.insertBefore(clonedLi, list.firstChild);
+  }
+
+  tryInsert();
+  const observer = new MutationObserver(tryInsert);
+  if (document.body) {
+    observer.observe(document.body, { childList: true, subtree: true });
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      observer.observe(document.body, { childList: true, subtree: true });
+      tryInsert();
+    }, { once: true });
+  }
 })();

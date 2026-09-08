@@ -21,6 +21,7 @@
       <div class="sc-settings-nav-item" data-panel="panel-dpi">DPI Aşımı</div>
       <div class="sc-settings-nav-item" data-panel="panel-appearance">Görünüm</div>
       <div class="sc-settings-nav-item" data-panel="panel-shortcuts">Tuş Atamaları</div>
+      <div class="sc-settings-nav-item" data-panel="panel-vencord">Vencord</div>
       <div class="sc-settings-nav-item" data-panel="panel-permissions">İzinler ve Kontroller</div>
       <div class="sc-settings-nav-item" data-panel="panel-about">Hakkında ve Güncelleme</div>
     </nav>
@@ -56,16 +57,6 @@
         <div class="sc-divider"></div>
 
         <label class="sc-toggle-row">
-          <input type="checkbox" id="toggle-quic" />
-          <span>
-            <strong>QUIC devre dışı</strong>
-            <div class="sc-engine-desc">DPI aşım motorları yalnızca TCP trafiğini kapsar, QUIC (UDP) üzerinden hiçbir koruma sağlamaz — bazı ağlarda QUIC'in bozulup "ERR_QUIC_PROTOCOL_ERROR" hatasına yol açtığı görülebilir. Açmak Discord'u doğrudan TCP/TLS'e (DPI motorlarının kapsama alanına) düşürür. Değişikliğin uygulanması için programın yeniden başlatılması gerekir.</div>
-          </span>
-        </label>
-
-        <div class="sc-divider"></div>
-
-        <label class="sc-toggle-row">
           <input type="checkbox" id="toggle-open-links-externally" />
           <span>
             <strong>Bağlantıları varsayılan sistem tarayıcısında aç</strong>
@@ -95,13 +86,14 @@
 
         <div class="sc-divider"></div>
 
-        <label class="sc-toggle-row" id="row-vencord">
-          <input type="checkbox" id="toggle-vencord" />
+        <label class="sc-toggle-row">
+          <input type="checkbox" id="toggle-quic" />
           <span>
-            <strong>Vencord'u etkinleştir (Deneysel)</strong>
-            <div class="sc-engine-desc"><strong>Uyarı:</strong> Discord'un Hizmet Şartları üçüncü taraf istemci değişikliklerini yasaklıyor — bu, DPI aşımından tamamen ayrı bir risktir ve hesabınızda aksiyona (kısıtlama/askıya alma) yol açabilir. Yalnızca riski anlıyorsanız açın. Vencord (GPL-3.0, github.com/Vendicated/Vencord) Discord'a özel tema/eklenti desteği ekler. Değişikliğin uygulanması için Discord webview'inin yeniden yüklenmesi gerekir.</div>
+            <strong>QUIC'i devre dışı bırak</strong>
+            <div class="sc-engine-desc">DPI aşım motorları yalnızca TCP trafiğini kapsar, QUIC (UDP) üzerinden hiçbir koruma sağlamaz — bazı ağlarda QUIC'in bozulup "ERR_QUIC_PROTOCOL_ERROR" hatasına yol açtığı görülebilir. Açmak Discord'u doğrudan TCP/TLS'e (DPI motorlarının kapsama alanına) düşürür. Değişikliğin uygulanması için programın yeniden başlatılması gerekir.</div>
           </span>
         </label>
+
       </section>
 
       <section id="panel-dpi" class="sc-panel" hidden>
@@ -472,6 +464,25 @@
             </div>
           </div>
         </div>
+      </section>
+
+      <section id="panel-vencord" class="sc-panel" hidden>
+        <h1>Vencord</h1>
+
+        <label class="sc-toggle-row" id="row-vencord">
+          <input type="checkbox" id="toggle-vencord" />
+          <span>
+            <strong>Vencord'u etkinleştir</strong>
+            <div class="sc-engine-desc">Vencord Discord'a özel tema/eklenti desteği ekler.</div>
+          </span>
+        </label>
+
+        <div class="sc-divider"></div>
+
+        <button id="btn-open-vencord-settings" class="sc-btn sc-btn--primary" hidden>Vencord Ayarlarını Göster</button>
+
+        <p class="sc-hint">Vencord Durumu: <strong id="vencord-status">—</strong></p>
+        <p class="sc-hint">Vencord Sürümü: <strong id="vencord-version">—</strong></p>
       </section>
 
       <section id="panel-about" class="sc-panel" hidden>

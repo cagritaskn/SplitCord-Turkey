@@ -57,12 +57,19 @@ function buildVencord() {
     console.log('[vencord] web hedefi derleniyor (pnpm buildWebStandalone)...');
     execFileSync('pnpm', ['buildWebStandalone'], { cwd: srcDir, stdio: 'inherit', shell: true });
 
+    // Ayarlar > Vencord'daki "Vencord Sürümü" satırı için -- Vencord'un çalışma zamanı
+    // API'sinden (belgelenmemiş) okumak yerine derleme anında sabit bir dosyaya yazılıyor
+    // (bkz. ipc.js app:get-vencord-version).
+    const vencordPackageJson = JSON.parse(fs.readFileSync(path.join(srcDir, 'package.json'), 'utf8'));
+    const versionInfo = { version: vencordPackageJson.version, commit: VENCORD_COMMIT };
+
     const distDir = path.join(srcDir, 'dist');
     for (const outDir of OUT_DIRS) {
       fs.mkdirSync(outDir, { recursive: true });
       for (const file of ARTIFACTS) {
         fs.copyFileSync(path.join(distDir, file), path.join(outDir, file));
       }
+      fs.writeFileSync(path.join(outDir, 'version.json'), JSON.stringify(versionInfo, null, 2));
       console.log(`[vencord] tamam -> ${outDir}`);
     }
   } finally {

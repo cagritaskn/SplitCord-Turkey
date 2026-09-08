@@ -874,6 +874,9 @@ const centerTitleToggle = document.getElementById('toggle-center-title');
 const rowCenterTitle = document.getElementById('row-center-title');
 const disableFalseVoiceWarningToggle = document.getElementById('toggle-disable-false-voice-warning');
 const vencordToggle = document.getElementById('toggle-vencord');
+const vencordStatusEl = document.getElementById('vencord-status');
+const vencordVersionEl = document.getElementById('vencord-version');
+const btnOpenVencordSettings = document.getElementById('btn-open-vencord-settings');
 const dnsProvidersListEl = document.getElementById('dns-providers-list');
 const unsavedBar = document.getElementById('unsaved-bar');
 const btnSaveChanges = document.getElementById('btn-save-changes');
@@ -900,7 +903,6 @@ const initialGeneral = {
   showTitle: null,
   centerTitle: null,
   disableFalseVoiceWarning: null,
-  vencordEnabled: null,
 };
 let pendingGeneral = {};
 
@@ -1198,10 +1200,17 @@ async function initDisableFalseVoiceWarningToggle() {
   });
 }
 
-// KULLANICI TALEBİ: "Vencord'u etkinleştir" -- diğer tüm Genel toggle'larla AYNI ertelenmiş
-// kaydetme deseni. Gerçek enjeksiyon kararı webview'in kendi preload'unda document-start'ta
-// verildiği için kayıttan sonra titlebar.js'teki onVencordEnabledChanged dinleyicisi
-// webview.reload() ile yeni navigasyonu tetikliyor (bkz. ipc.js app:set-vencord-enabled).
+// KULLANICI TALEBİ: Vencord paneli DİĞER Genel toggle'lardan FARKLI çalışıyor -- ertelenmiş
+// kaydetme (unsaved-bar) YOK, switch'e her tıklandığında ANINDA onay isteniyor ve cevaba
+// göre HEMEN uygulanıyor ("Evet" -> kaydedilip webview yeniden yüklenir, "Hayır"/kapatma ->
+// switch eski haline döner, hiçbir şey değişmez). Onay metni ve sesli sohbet uyarısı ana
+// süreçte (bkz. ipc.js app:request-vencord-toggle) oluşturuluyor çünkü sesli durum kontrolü
+// (voiceState) orada.
+function updateVencordStatusDisplay(enabled) {
+  if (vencordStatusEl) vencordStatusEl.textContent = enabled ? 'Aktif' : 'Pasif';
+  if (btnOpenVencordSettings) btnOpenVencordSettings.hidden = !enabled;
+}
+
 async function initVencordToggle() {
   if (!vencordToggle) return;
   let value = vencordToggle.checked;
@@ -1212,18 +1221,39 @@ async function initVencordToggle() {
     console.error(err);
     window.splitcord.log('get-vencord-enabled-error', { error: err.message });
   }
-  initialGeneral.vencordEnabled = value;
+  updateVencordStatusDisplay(value);
 
-  vencordToggle.addEventListener('change', () => {
-    if (vencordToggle.checked === initialGeneral.vencordEnabled) {
-      delete pendingGeneral.vencordEnabled;
-    } else {
-      pendingGeneral.vencordEnabled = vencordToggle.checked;
+  try {
+    const version = await window.splitcord.app.getVencordVersion();
+    if (vencordVersionEl) vencordVersionEl.textContent = version ?? 'Bilinmiyor';
+  } catch (err) {
+    console.error(err);
+    if (vencordVersionEl) vencordVersionEl.textContent = 'Bilinmiyor';
+  }
+
+  vencordToggle.addEventListener('change', async () => {
+    const desired = vencordToggle.checked;
+    vencordToggle.disabled = true;
+    window.splitcord.log('vencord-toggle-requested', { desired });
+    try {
+      const result = await window.splitcord.app.requestVencordToggle(desired);
+      vencordToggle.checked = result.enabled;
+      updateVencordStatusDisplay(result.enabled);
+      window.splitcord.log('vencord-toggle-result', result);
+    } catch (err) {
+      console.error(err);
+      window.splitcord.log('vencord-toggle-error', { error: err.message });
+      vencordToggle.checked = !desired;
+    } finally {
+      vencordToggle.disabled = false;
     }
-    window.splitcord.log('vencord-toggle-changed', { checked: vencordToggle.checked });
-    updateUnsavedBar();
   });
 }
+
+btnOpenVencordSettings?.addEventListener('click', () => {
+  window.splitcord.log('open-vencord-settings-click', {});
+  window.splitcord.app.openVencordSettings().catch((err) => console.error(err));
+});
 
 // --- Görünüm > Tema seçici (anında uygulanır, DPI Otomatik/Manuel toggle'ıyla aynı
 // desen — bir renk paletini "önizleyip sonra kaydet" değil, doğrudan seçmek daha
@@ -1315,11 +1345,6 @@ btnSaveChanges.addEventListener('click', async () => {
       initialGeneral.disableFalseVoiceWarning = pendingGeneral.disableFalseVoiceWarning;
       delete pendingGeneral.disableFalseVoiceWarning;
     }
-    if ('vencordEnabled' in pendingGeneral) {
-      await window.splitcord.app.setVencordEnabled(pendingGeneral.vencordEnabled);
-      initialGeneral.vencordEnabled = pendingGeneral.vencordEnabled;
-      delete pendingGeneral.vencordEnabled;
-    }
     if ('gpuAcceleration' in pendingGeneral) {
       // ipc.js artık burada bir "yeniden başlatılsın mı?" onay diyaloğu gösteriyor.
       // Onaylanırsa uygulama gerçekten kapanıp yeniden açılacak (bu pencere de
@@ -1373,7 +1398,6 @@ btnDiscardChanges.addEventListener('click', () => {
   if ('showTitle' in pendingGeneral) showTitleToggle.checked = initialGeneral.showTitle;
   if ('centerTitle' in pendingGeneral) centerTitleToggle.checked = initialGeneral.centerTitle;
   if ('disableFalseVoiceWarning' in pendingGeneral) disableFalseVoiceWarningToggle.checked = initialGeneral.disableFalseVoiceWarning;
-  if ('vencordEnabled' in pendingGeneral) vencordToggle.checked = initialGeneral.vencordEnabled;
   pendingGeneral = {};
   updateStartInBackgroundVisibility();
   updateCenterTitleVisibility();
