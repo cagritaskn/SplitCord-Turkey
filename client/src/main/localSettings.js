@@ -42,6 +42,11 @@ const DEFAULTS = {
   // taramaları gibi göreceli olarak pahalı işler devre dışı kalır (bkz. ipc.js,
   // dynamicColor.js, theme.css performance-mode kuralı).
   performanceMode: false,
+  // KULLANICI TALEBİ: Ayarlar > Görünüm'de açılınca özel titlebar'a (bkz. titlebar.css
+  // .sc-titlebar) CSS "zoom: 0.5" uygulanır -- titlebar'ın layout boyutu (yüksekliği dahil)
+  // GERÇEKTEN yarıya iner, içindeki her şey (logo, başlık metni, butonlar) orantılı olarak
+  // küçülür; #content-area zaten flex:1 olduğu için boşalan alanı otomatik dolduruyor.
+  smallTitlebar: false,
   // Ayarlar > Tuş Atamaları'ndaki ana anahtar — kapalıyken aşağıdaki hiçbir kombinasyon
   // sistem genelinde kayıtlı olmuyor (bkz. shortcuts.js applyShortcutsFromSettings).
   globalShortcutsEnabled: true,

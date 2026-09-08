@@ -933,6 +933,15 @@ function applyPerformanceModeAttr(enabled) {
 window.splitcord.app.getPerformanceMode().then(applyPerformanceModeAttr).catch(() => {});
 window.splitcord.onPerformanceModeChanged?.(applyPerformanceModeAttr);
 
+// --- KULLANICI TALEBİ: Daha küçük başlık çubuğu -- titlebar.css'teki
+// [data-small-titlebar] .sc-titlebar { zoom: 0.5 } kuralını tetikler. ---
+function applySmallTitlebarAttr(enabled) {
+  if (enabled) document.documentElement.setAttribute('data-small-titlebar', '');
+  else document.documentElement.removeAttribute('data-small-titlebar');
+}
+window.splitcord.app.getSmallTitlebar().then(applySmallTitlebarAttr).catch(() => {});
+window.splitcord.onSmallTitlebarChanged?.(applySmallTitlebarAttr);
+
 // --- Bildirim rozeti (tray ikonu + görev çubuğu ikonu) ---
 // Ana süreçte piksel çizim/kompozisyon API'si yok — bu yüzden ikonları bir <canvas> ile
 // burada (renderer'da) çizip PNG data URL olarak main sürece gönderiyoruz. capturePage()

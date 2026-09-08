@@ -868,6 +868,7 @@ const openLinksExternallyToggle = document.getElementById('toggle-open-links-ext
 const linkOpenerNewWindowToggle = document.getElementById('toggle-link-opener-new-window');
 const performanceModeToggle = document.getElementById('toggle-performance-mode');
 const notificationBadgeToggle = document.getElementById('toggle-notification-badge');
+const smallTitlebarToggle = document.getElementById('toggle-small-titlebar');
 const disableFalseVoiceWarningToggle = document.getElementById('toggle-disable-false-voice-warning');
 const dnsProvidersListEl = document.getElementById('dns-providers-list');
 const unsavedBar = document.getElementById('unsaved-bar');
@@ -891,6 +892,7 @@ const initialGeneral = {
   linkOpenerNewWindow: null,
   performanceMode: null,
   notificationBadge: null,
+  smallTitlebar: null,
   disableFalseVoiceWarning: null,
 };
 let pendingGeneral = {};
@@ -1092,6 +1094,28 @@ async function initNotificationBadgeToggle() {
   });
 }
 
+async function initSmallTitlebarToggle() {
+  let value = smallTitlebarToggle.checked;
+  try {
+    value = await window.splitcord.app.getSmallTitlebar();
+    smallTitlebarToggle.checked = value;
+  } catch (err) {
+    console.error(err);
+    window.splitcord.log('get-small-titlebar-error', { error: err.message });
+  }
+  initialGeneral.smallTitlebar = value;
+
+  smallTitlebarToggle.addEventListener('change', () => {
+    if (smallTitlebarToggle.checked === initialGeneral.smallTitlebar) {
+      delete pendingGeneral.smallTitlebar;
+    } else {
+      pendingGeneral.smallTitlebar = smallTitlebarToggle.checked;
+    }
+    window.splitcord.log('small-titlebar-toggle-changed', { checked: smallTitlebarToggle.checked });
+    updateUnsavedBar();
+  });
+}
+
 async function initDisableFalseVoiceWarningToggle() {
   let value = disableFalseVoiceWarningToggle.checked;
   try {
@@ -1183,6 +1207,11 @@ btnSaveChanges.addEventListener('click', async () => {
       initialGeneral.notificationBadge = pendingGeneral.notificationBadge;
       delete pendingGeneral.notificationBadge;
     }
+    if ('smallTitlebar' in pendingGeneral) {
+      await window.splitcord.app.setSmallTitlebar(pendingGeneral.smallTitlebar);
+      initialGeneral.smallTitlebar = pendingGeneral.smallTitlebar;
+      delete pendingGeneral.smallTitlebar;
+    }
     if ('disableFalseVoiceWarning' in pendingGeneral) {
       await window.splitcord.app.setDisableFalseVoiceWarning(pendingGeneral.disableFalseVoiceWarning);
       initialGeneral.disableFalseVoiceWarning = pendingGeneral.disableFalseVoiceWarning;
@@ -1237,6 +1266,7 @@ btnDiscardChanges.addEventListener('click', () => {
   if ('linkOpenerNewWindow' in pendingGeneral) linkOpenerNewWindowToggle.checked = initialGeneral.linkOpenerNewWindow;
   if ('performanceMode' in pendingGeneral) performanceModeToggle.checked = initialGeneral.performanceMode;
   if ('notificationBadge' in pendingGeneral) notificationBadgeToggle.checked = initialGeneral.notificationBadge;
+  if ('smallTitlebar' in pendingGeneral) smallTitlebarToggle.checked = initialGeneral.smallTitlebar;
   if ('disableFalseVoiceWarning' in pendingGeneral) disableFalseVoiceWarningToggle.checked = initialGeneral.disableFalseVoiceWarning;
   pendingGeneral = {};
   updateStartInBackgroundVisibility();
@@ -2075,6 +2105,17 @@ function applyPerformanceModeAttr(enabled) {
 window.splitcord.app.getPerformanceMode().then(applyPerformanceModeAttr).catch(() => {});
 window.splitcord.onPerformanceModeChanged?.(applyPerformanceModeAttr);
 
+// KULLANICI TALEBİ: Daha küçük başlık çubuğu -- ayarlar penceresi de AYNI titlebar.css/
+// .sc-titlebar yapısını kullandığı için titlebar.js'teki AYNI [data-small-titlebar]
+// deseni burada da uygulanıyor (kaydedildiği anda hem ana pencere hem bu pencere anlık
+// güncelleniyor, bkz. ipc.js app:set-small-titlebar'ın çifte webContents.send'i).
+function applySmallTitlebarAttr(enabled) {
+  if (enabled) document.documentElement.setAttribute('data-small-titlebar', '');
+  else document.documentElement.removeAttribute('data-small-titlebar');
+}
+window.splitcord.app.getSmallTitlebar().then(applySmallTitlebarAttr).catch(() => {});
+window.splitcord.onSmallTitlebarChanged?.(applySmallTitlebarAttr);
+
 window.splitcord.log('settings-window-loaded', {});
 
 // Her ihtimale karşı: iki anahtar da yüklendikten sonra bar'ın kesinlikle temiz
@@ -2088,6 +2129,7 @@ Promise.all([
   initLinkOpenerNewWindowToggle(),
   initPerformanceModeToggle(),
   initNotificationBadgeToggle(),
+  initSmallTitlebarToggle(),
   initDisableFalseVoiceWarningToggle(),
 ]).then(() => updateUnsavedBar());
 initThemePicker();

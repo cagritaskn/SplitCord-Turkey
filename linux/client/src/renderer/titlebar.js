@@ -10,6 +10,14 @@ window.splitcord.onShowConfirmModal(async ({ id, ...options }) => {
   window.splitcord.sendConfirmModalResult(id, choice);
 });
 
+// PORT_PLAN_2.md AP-16 (2026-09-09) — DPI motoru tükendiğinde (bkz. refreshConnection'daki
+// 'exhausted' dalı) yalnızca AppImage'da bağımlılık kontrolü tetiklemek için gerekiyor.
+let packagingKind = 'deb';
+window.splitcord.app
+  .getPackagingKind()
+  .then((kind) => { packagingKind = kind; })
+  .catch((err) => window.splitcord.log?.('get-packaging-kind-error', { error: err.message }));
+
 document.getElementById('btn-minimize')?.addEventListener('click', () => window.splitcord.window.minimize());
 document.getElementById('btn-maximize')?.addEventListener('click', () => window.splitcord.window.toggleMaximize());
 document.getElementById('btn-close')?.addEventListener('click', () => window.splitcord.window.close());
@@ -207,6 +215,10 @@ const btnStatusDisableQuic = document.getElementById('btn-status-disable-quic');
 const btnStatusInstallService = document.getElementById('btn-status-install-service');
 const btnStatusRejectUnstableArgs = document.getElementById('btn-status-reject-unstable-args');
 const btnStatusRetryManual = document.getElementById('btn-status-retry-manual');
+const btnStatusDependencyIssue = document.getElementById('btn-status-dependency-issue');
+// 'exhausted' durumunda bir kez hesaplanıp btnStatusDependencyIssue'nun click handler'ında
+// kullanılıyor (bkz. aşağıdaki maybeGetDependencyDiagnostic).
+let lastDependencyDiagnostic = null;
 
 // isError=false (varsayılan): bir şey hâlâ deneniyor demektir, spinner döner.
 // isError=true: kesin/geçici olarak duraklamış bir durum (kullanıcı elle Yenile'ye
@@ -226,6 +238,7 @@ function showStatus(message, isError = false) {
     btnStatusInstallService,
     btnStatusRejectUnstableArgs,
     btnStatusRetryManual,
+    btnStatusDependencyIssue,
   ].forEach((btn) => {
     if (btn) btn.hidden = true;
   });
@@ -342,6 +355,51 @@ btnStatusOpenPermissions?.addEventListener('click', () => {
   window.splitcord.log?.('status-open-permissions-click', {});
   window.splitcord.window.openSettings('panel-permissions');
 });
+
+// PORT_PLAN_2.md AP-16 — bkz. maybeGetDependencyDiagnostic'in yazdığı lastDependencyDiagnostic.
+btnStatusDependencyIssue?.addEventListener('click', async () => {
+  if (!lastDependencyDiagnostic?.hasIssue) return;
+  window.splitcord.log?.('status-dependency-issue-click', {});
+  const choice = await window.showConfirmModal({
+    title: lastDependencyDiagnostic.title,
+    message: lastDependencyDiagnostic.message,
+    detail: lastDependencyDiagnostic.detail,
+    buttons: ['Tamam', 'Sorun Bildir'],
+    defaultId: 0,
+    cancelId: 0,
+  });
+  if (choice === 1) {
+    window.splitcord.log?.('dependency-issue-report-click', {});
+    try {
+      await window.splitcord.app.openIssuePage({
+        title: lastDependencyDiagnostic.issueTitle,
+        body: lastDependencyDiagnostic.issueBody,
+      });
+    } catch (err) {
+      window.splitcord.log?.('dependency-issue-report-error', { error: err.message });
+    }
+  }
+});
+
+// PORT_PLAN_2.md AP-16: yalnızca AppImage'da VE motor gerçekten tükendiğinde (bkz.
+// refreshConnection'daki 'exhausted' dalı) çağrılıyor -- /dependency-check'i sorup gerçek bir
+// sorun varsa diyalog içeriğini hazırlıyor, YOKSA (ör. sorun gerçekten ağ/ISP kaynaklıysa) hiçbir
+// şey göstermiyor -- yanlış alarmla kullanıcıyı yormamak için.
+async function maybeGetDependencyDiagnostic() {
+  lastDependencyDiagnostic = null;
+  if (packagingKind !== 'appimage') return false;
+  try {
+    const result = await window.splitcord.dpi.dependencyCheck();
+    const diagnostic = window.buildDependencyDiagnostic(result);
+    if (diagnostic.hasIssue) {
+      lastDependencyDiagnostic = diagnostic;
+      return true;
+    }
+  } catch (err) {
+    window.splitcord.log?.('dependency-check-error', { error: err.message });
+  }
+  return false;
+}
 
 // did-fail-load'ın vazgeçme dalının (aşağıda) gösterdiği "Argüman Setini Yasakla" düğmesi
 // hangi motoru hedefleyecek -- düğme tıklanana kadar bu değer korunuyor (bir sonraki
@@ -557,7 +615,13 @@ async function refreshConnection() {
         [btnStatusOpenPermissions],
       );
     } else if (status.autoScanResult === 'exhausted') {
-      showStatusWithActions('Çalışan hiçbir ayar bulunamadı.', [btnStatusRetryAuto, btnStatusManualSetup]);
+      // PORT_PLAN_2.md AP-16: yalnızca AppImage'da VE gerçek bir bağımlılık sorunu tespit
+      // edilirse ek bir buton gösteriyoruz -- ağ/ISP kaynaklı gerçek bir tükenmede (dependency
+      // sorunu YOKSA) mesaj/buton listesi ÖNCEKİYLE birebir aynı kalıyor.
+      const hasDependencyIssue = await maybeGetDependencyDiagnostic();
+      const actions = [btnStatusRetryAuto, btnStatusManualSetup];
+      if (hasDependencyIssue) actions.push(btnStatusDependencyIssue);
+      showStatusWithActions('Çalışan hiçbir ayar bulunamadı.', actions);
     } else if (startupGraceChecksRemaining > 0) {
       // Henüz kesin bir sonuç (running/antivirus/exhausted) yok -- açılış sonrası olası
       // startConfiguredEngine() yarışını (yukarıdaki not) atlatmak için terminal UI'ı
@@ -893,6 +957,15 @@ function applyPerformanceModeAttr(enabled) {
 }
 window.splitcord.app.getPerformanceMode().then(applyPerformanceModeAttr).catch(() => {});
 window.splitcord.onPerformanceModeChanged?.(applyPerformanceModeAttr);
+
+// --- KULLANICI TALEBİ: Daha küçük başlık çubuğu -- titlebar.css'teki
+// [data-small-titlebar] .sc-titlebar { zoom: 0.5 } kuralını tetikler. ---
+function applySmallTitlebarAttr(enabled) {
+  if (enabled) document.documentElement.setAttribute('data-small-titlebar', '');
+  else document.documentElement.removeAttribute('data-small-titlebar');
+}
+window.splitcord.app.getSmallTitlebar().then(applySmallTitlebarAttr).catch(() => {});
+window.splitcord.onSmallTitlebarChanged?.(applySmallTitlebarAttr);
 
 // --- Bildirim rozeti (tray ikonu + görev çubuğu ikonu) ---
 // Ana süreçte piksel çizim/kompozisyon API'si yok — bu yüzden ikonları bir <canvas> ile

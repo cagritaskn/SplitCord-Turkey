@@ -617,6 +617,20 @@ function registerIpcHandlers() {
     return enabled;
   });
 
+  // KULLANICI TALEBİ: Ayarlar > Görünüm'deki "Daha küçük başlık çubuğu" -- performanceMode
+  // ile AYNI yayın deseni (hem ana pencereye hem açıksa ayarlar penceresine gönderiliyor,
+  // ikisi de kendi titlebar.js'inde dinliyor).
+  ipcMain.handle('app:get-small-titlebar', () => readLocalSettings().smallTitlebar);
+  ipcMain.handle('app:set-small-titlebar', (_event, enabled) => {
+    logEvent('set-small-titlebar', { enabled });
+    writeLocalSettings({ smallTitlebar: enabled });
+    getMainWindow()?.webContents.send('app:small-titlebar-changed', enabled);
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.webContents.send('app:small-titlebar-changed', enabled);
+    }
+    return enabled;
+  });
+
   ipcMain.handle('app:get-theme-mode', () => readLocalSettings().themeMode);
   ipcMain.handle('app:set-theme-mode', (_event, mode) => {
     logEvent('set-theme-mode', { mode });

@@ -68,6 +68,8 @@ contextBridge.exposeInMainWorld('splitcord', {
     setLinkOpenerNewWindow: (enabled) => ipcRenderer.invoke('app:set-link-opener-new-window', enabled),
     getPerformanceMode: () => ipcRenderer.invoke('app:get-performance-mode'),
     setPerformanceMode: (enabled) => ipcRenderer.invoke('app:set-performance-mode', enabled),
+    getSmallTitlebar: () => ipcRenderer.invoke('app:get-small-titlebar'),
+    setSmallTitlebar: (enabled) => ipcRenderer.invoke('app:set-small-titlebar', enabled),
     getProtocolHandlerStatus: () => ipcRenderer.invoke('app:get-protocol-handler-status'),
     getControlsIssueStatus: () => ipcRenderer.invoke('app:get-controls-issue-status'),
     getIgnoredControlIssues: () => ipcRenderer.invoke('app:get-ignored-control-issues'),
@@ -141,6 +143,11 @@ contextBridge.exposeInMainWorld('splitcord', {
     const listener = (_event, enabled) => callback(enabled);
     ipcRenderer.on('app:performance-mode-changed', listener);
     return () => ipcRenderer.removeListener('app:performance-mode-changed', listener);
+  },
+  onSmallTitlebarChanged: (callback) => {
+    const listener = (_event, enabled) => callback(enabled);
+    ipcRenderer.on('app:small-titlebar-changed', listener);
+    return () => ipcRenderer.removeListener('app:small-titlebar-changed', listener);
   },
   onDynamicColorSampled: (callback) => {
     const listener = (_event, colors) => callback(colors);

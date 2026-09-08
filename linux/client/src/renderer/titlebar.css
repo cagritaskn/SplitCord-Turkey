@@ -97,3 +97,16 @@
 .sc-titlebar-btn--accent:hover {
   background: #1a8245;
 }
+
+/* KULLANICI TALEBİ: Ayarlar > Görünüm'deki "Daha küçük başlık çubuğu" -- "zoom" (Chromium'a
+   özgü, standart değil ama Electron'un tamamen desteklediği) bilerek "transform: scale"
+   yerine seçildi: zoom, öğenin GERÇEK layout boyutunu (yüksekliği dahil) küçültüyor, bu
+   yüzden #content-area'nın (flex:1) boşalan alanı otomatik doldurması için ekstra bir
+   hesaplama/telafi gerekmiyor -- transform ile bu ekstra bir sarmalayıcı + yükseklik
+   hesaplaması gerektirirdi. İkisi de (index.html VE settings.html) aynı titlebar.css'i ve
+   aynı .sc-titlebar yapısını kullandığı için bu tek kural ikisine de uygulanıyor.
+   html[data-small-titlebar] hem index.html'de (titlebar.js) hem settings.html'de
+   (settings.js) AYNI şekilde ayarlanıyor. */
+html[data-small-titlebar] .sc-titlebar {
+  zoom: 0.5;
+}
