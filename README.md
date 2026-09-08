@@ -12,7 +12,7 @@
 
 Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'i kurup kullanmaya başlayabilirsiniz.
 
-1. **[SplitCord-Turkey-Setup-1.0.0.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.0/SplitCord-Turkey-Setup-1.0.0.exe)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
+1. **[SplitCord-Turkey-Setup-1.0.1.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.1/SplitCord-Turkey-Setup-1.0.1.exe)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
 2. İndirilen dosyayı çalıştırın. SmartScreen uyarısı görürseniz **(Windows kişisel bilgisayarınızı korudu başlıklı)** pencerede bulunan **Ek bilgi** kısmına tıklayıp daha sonra **Yine de çalıştır** butonuna tıklayın. Set-up, arka planda çalışacak DPI aşım hizmetini (SplitCordDpiService) kaydedebilmek için yönetici izni isteyebilir; kurulum tamamlandıktan sonra uygulama hiçbir zaman yükseltilmiş yetkiyle çalışmaz (Yönetici izni istemez).
 3. Kurulum bitince SplitCord-Turkey'i çalıştırın.
 4. İlk açılışta uygulama sizin için en uygun DPI aşım motorunu ve ayarını bulmak amacıyla Zapret, Zapret2, ByeDPI ve GoodbyeDPI'yi sırayla dener; bu tarama birkaç dakika sürebilir. Bu süre boyunca "Bağlantı hazırlanıyor…" ekranını görmeniz normaldir, taramanın bitmesini bekleyin.
@@ -27,10 +27,10 @@ Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'
 
 SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint'te test edildi) `.deb` paketi olarak sunulan bir Linux sürümü de bulunur. Motor seti Windows'tan biraz farklıdır: WinDivert yerine NFQUEUE/iptables kullanılır, GoodbyeDPI Linux'a özgü bir karşılığı olmadığı için bulunmaz — Otomatik modun motor sırası **Zapret → Zapret2 → ByeDPI**'dir.
 
-1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından [SplitCord-Turkey-Linux-1.0.0-AMD64.deb](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.0/SplitCord-Turkey-Linux-1.0.0-AMD64.deb) dosyasını indirin.
+1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından [SplitCord-Turkey-Linux-1.0.1-AMD64.deb](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.1/SplitCord-Turkey-Linux-1.0.1-AMD64.deb) dosyasını indirin.
 2. Paketi kurun:
    ```bash
-   sudo dpkg -i SplitCord-Turkey-Linux-1.0.0-AMD64.deb
+   sudo dpkg -i SplitCord-Turkey-Linux-1.0.1-AMD64.deb
    ```
    ya da 
    Linux dağıtımınız destekliyorsa .deb dosyasına çift tıklayıp çalıştırarak kurun.
@@ -87,19 +87,31 @@ Ayarlardaki Hakkında ve Güncelleme bölümünde bulunan **Tüm Ayarları Sıf�
 - **Kolay kaldırma.** Windows'un dahili program ekleme ve kaldırma menülerinden SplitCord-Turkey'i kolaylıkla kaldırabilirsiniz; kaldırma işlemi hizmeti, tüm DPI aşım süreçlerini ve WinDivert sürücü kayıtlarını da tam olarak temizler.
 - **Kendi kendine kurtarma.** Discord uzun süre bağlanamadığında, Discord'un kendi yükleme ekranında beliren bir butonla mevcut ayarı yasaklayıp Otomatik moddan sıfırdan bir tarama başlatabilirsiniz.
 - **Program içinden davet bağlantısı açma.** Discord davet bağlantılarını programın başlık çubuğunda bulunan "+" butonu ile kullanarak davetleri sistem geneli aşım olmayan durumlarda kolayca açabilirsiniz.
+- **İsteğe bağlı Vencord entegrasyonu.** Ayarlar > Vencord'dan, Discord'a özel tema ve eklenti (plugin) desteği ekleyen [Vencord](https://github.com/Vendicated/Vencord)'u etkinleştirebilirsiniz. Discord'un Hizmet Şartları üçüncü taraf istemci değişikliklerini yasaklayabildiği için etkinleştirme/devre dışı bırakma öncesi net bir risk uyarısıyla onay istenir (sesli sohbetteyken uygulanırsa bağlantınızın kısa süreliğine kesilebileceği de ayrıca belirtilir). Vencord'un kendi ayarlarını Discord'un Kullanıcı Ayarları içinden açan bir kısayol da eklenir. Vencord'un QuickCSS düzenleyicisi ve Bulut Entegrasyonu gibi bazı özellikleri bizim mimarimizde desteklenmez; bunlara erişmeye çalıştığınızda bunu belirten bir bilgi kutusu gösterilir.
 
 ---
 
 ## Nasıl Çalışır
 
-SplitCord-Turkey iki ayrı bileşenden oluşur:
+SplitCord-Turkey her platformda iki ayrı bileşenden oluşur: arka planda çalışan bir **DPI aşım hizmeti** ve Discord'u saran, hiçbir zaman yükseltilmiş yetkiyle çalışmayan bir **Electron istemcisi**. İstemci, motor seçimi ve durumu için yerel bir REST API (`127.0.0.1` üzerinde) üzerinden hizmetle konuşur; kendi başına yetkilendirme yapmaz ve hizmet düzeyinde çalışmaz.
 
-- **SplitCordDpiService** — SYSTEM yetkisiyle arka planda çalışan bir Windows Service. Zapret/Zapret2/ByeDPI/GoodbyeDPI (Linux'ta bulunmaz) süreçlerini yönetir, yerel bir REST API (`127.0.0.1` üzerinde) sunar. Kurulum sırasında yalnızca **bir kez** yönetici izni ister; sonrasında hiçbir zaman tekrar UAC istemi çıkmaz. Ayrıca bu hizmet yalnızca SplitCord-Turkey çalışırken işlevini sürdürür.
-- **SplitCord-Turkey İstemcisi** — Discord'u saran, hiçbir zaman yükseltilmiş yetkiyle çalışmayan Electron uygulaması. DPI motor seçimi ve durumu için yerel API üzerinden servisle konuşur, kendi başına yetkilendirme yapmaz ve hizmet düzeyinde çalışmaz.
+Her iki platformda da Chromium'un yerleşik **ECH (Encrypted Client Hello)** desteği etkinleştirilir — bu, TLS ClientHello'daki SNI (hangi siteye bağlanıldığı) bilgisini şifreleyerek DPI'nin yalnızca SNI'ye bakarak engellemesini zorlaştıran ek bir katmandır. Discord/Cloudflare tarafında gerçek bir ECH config yayınlanmıyorsa bağlantı hiç bozulmadan, sessizce eski (ECH'siz) TLS'e düşer.
 
-ByeDPI aktifken yalnızca bu uygulamanın trafiği, kendi başlattığı bir SOCKS5 proxy üzerinden yönlendirilir (sisteminizin geri kalanı etkilenmez). Zapret, Zapret2 ve GoodbyeDPI ise WinDivert sürücüsü ile sistem genelinde çalışır; bu üç motordan aynı anda yalnızca biri aktif olabilir.
+### Windows
+
+**SplitCordDpiService**, SYSTEM yetkisiyle arka planda çalışan bir Windows Service'tir. Zapret, Zapret2, ByeDPI ve GoodbyeDPI süreçlerini yönetir. Kurulum sırasında yalnızca **bir kez** yönetici izni ister; sonrasında hiçbir zaman tekrar UAC istemi çıkmaz. Bu hizmet yalnızca SplitCord-Turkey çalışırken işlevini sürdürür.
+
+ByeDPI aktifken yalnızca bu uygulamanın trafiği, kendi başlattığı bir SOCKS5 proxy üzerinden yönlendirilir (sisteminizin geri kalanı etkilenmez). Zapret, Zapret2 ve GoodbyeDPI ise **WinDivert** sürücüsü ile sistem genelinde çalışır; bu üç motordan aynı anda yalnızca biri aktif olabilir.
 
 Otomatik modun giriş noktası **Zapret**'tir: önceden bilinen, hızlıca denenen sabit bir strateji listesi kullanır. Zapret tükenirse sırasıyla **Zapret2** (bol-van/zapret2 projesinin resmi keşif aracı olan **blockcheck2**'yi kullanarak discord.com için gerçekten çalışan bir strateji arar, hem metin/TLS hem de sesli (UDP/STUN) bağlantıyı doğrular — sabit listeye kıyasla çok daha kapsamlı ama daha uzun sürebilir), ByeDPI ve GoodbyeDPI denenir.
+
+### Linux
+
+Arka plan hizmeti bir **systemd birimi** olarak çalışır. Motor seti Windows'tan biraz farklıdır: WinDivert yerine **NFQUEUE/iptables** kullanılır, GoodbyeDPI'nin Linux'a özgü bir karşılığı olmadığı için bulunmaz.
+
+ByeDPI, Windows'takiyle aynı şekilde yalnızca bu uygulamanın trafiğini kapsayan yerel bir SOCKS5 proxy'sidir. Zapret ve Zapret2 ise NFQUEUE/iptables kuralları ile sistem genelinde çalışır; bu iki motordan aynı anda yalnızca biri aktif olabilir.
+
+Otomatik modun motor sırası **Zapret → Zapret2 → ByeDPI**'dir — mantık Windows ile birebir aynıdır (Zapret sabit strateji listesiyle başlar, tükenirse Zapret2'nin blockcheck2 taraması, o da tükenirse ByeDPI devreye girer), yalnızca GoodbyeDPI adımı eksiktir. AppImage sürümünde ayrıca bir bağımlılık kontrolü katmanı bulunur (bkz. [AppImage kullanım rehberi](resources/APPIMAGE.md)).
 
 ---
 
@@ -107,9 +119,10 @@ Otomatik modun giriş noktası **Zapret**'tir: önceden bilinen, hızlıca denen
 
 - **DPI Aşımı:** Otomatik/Manuel mod seçimi, motor kartları, gelişmiş argüman düzenleme, DNS protokolü sırası ve sağlayıcıları, Zapret2 blockcheck2 tarama zamanaşımı, yeniden arama başlatma ve reddedilen ayar listeleri.
 - **İzinler ve Kontroller:** Güvenlik duvarı izinleri, resmi Discord uygulamasıyla çakışma kontrolü, Kaspersky/ESET tespiti, çakışabilecek hizmetlerin ve harici DPI süreçlerinin listesi ile ses bağlantısı kontrolleri.
-- **Genel:** Otomatik başlatma, bildirim rozeti, performans modu, bağlantıları sistem tarayıcısında açma, QUIC devre dışı bırakma ve benzeri genel tercihler.
+- **Genel:** Otomatik başlatma, bildirim rozeti, performans modu, bağlantıları sistem tarayıcısında açma, QUIC'i devre dışı bırakma ve benzeri genel tercihler.
 - **Görünüm:** Discord temasından otomatik renk örnekleme veya sabit tema ön ayarları.
 - **Tuş Atamaları:** Sesi kapatma/açma, sağırlaştırma ve pencereyi öne getirme için genel (uygulama arka plandayken de çalışan) kısayollar.
+- **Vencord:** Vencord'u onaylı şekilde etkinleştirme/devre dışı bırakma, Vencord'un kendi ayarlarını açma, durum ve sürüm bilgisi.
 - **Hakkında ve Güncelleme:** Sürüm bilgisi, güncelleme kontrolü, tanılama günlüğü dosya konumunu açma ve tüm ayarları sıfırlama.
 
 ---
@@ -124,6 +137,9 @@ Otomatik modun giriş noktası **Zapret**'tir: önceden bilinen, hızlıca denen
 
 > [!IMPORTANT]
 > Discord Rich Presence desteği, Discord'un web JS paketindeki dahili modülleri sabit imzalara göre bulan bir köprü script'ine dayanır. Discord kendi web paketini güncellediğinde bu köprü geçici olarak bozulabilir; böyle bir durumda yalnızca Rich Presence etkilenir, uygulamanın geri kalanı sorunsuz çalışmaya devam eder.
+
+> [!WARNING]
+> **Vencord** varsayılan olarak KAPALIDIR ve DPI aşımından tamamen ayrı bir risk taşır: Discord'un Hizmet Şartları üçüncü taraf istemci değişikliklerini yasaklayabiliyor. Etkinleştirmeden önce uygulama içinde bu risk açıkça belirtilir ve onayınız istenir — etkinleştirmek tamamen isteğe bağlıdır ve sorumluluk kullanıcıya aittir. Sorun çıkarabileceği düşünülen bazı Vencord eklentileri varsayılan olarak devre dışı bırakılmıştır.
 
 ---
 
@@ -186,12 +202,18 @@ Linux sürümü de aynı şekilde kaynak koddan derlenebilir; kaynak dosyalar `l
    node ../scripts/fetch-binaries.js
    ```
 
-3. **`.deb` paketini oluşturun** (bu adım, .NET servisini de otomatik olarak derler)
+3. **Paketleri oluşturun** (bu adım, .NET servisini de otomatik olarak derler; hem `.deb` hem AppImage aynı anda üretilir)
    ```bash
    npm run dist
    ```
 
 4. Oluşan `linux/client/dist/SplitCord-Turkey-Linux-*.deb` dosyasını `sudo dpkg -i` ile kurun.
+
+### AppImage Derleme
+
+Yukarıdaki `npm run dist` komutu, Debian/Ubuntu tabanlı olmayan dağıtımlar (Arch, Fedora, openSUSE gibi) için `linux/client/dist/SplitCord-Turkey-Linux-*.AppImage` dosyasını da **aynı anda ve ek bir komuta gerek olmadan** üretir — çıktı, kaynak koddan derleme yapılan **gerçek bir Linux makinesinde** oluşturulmalıdır (electron-builder, AppImage'ı paketlemek için gerekli `mksquashfs` gibi Linux'a özgü araçları kendi içinde indirir, bu yüzden Windows'tan çapraz derleme yapılamaz).
+
+AppImage'ın kurulum gerektirmeyen yapısı, bağımlılık kontrolleri ve dağıtıma özgü notlar için [AppImage kullanım rehberine](resources/APPIMAGE.md) bakabilirsiniz.
 
 ---
 
@@ -206,6 +228,7 @@ Linux sürümü de aynı şekilde kaynak koddan derlenebilir; kaynak dosyalar `l
 - **[nextdns](https://github.com/nextdns/nextdns)** by **[NextDNS](https://github.com/nextdns)**
 - **[WinDivert](https://github.com/basil00/WinDivert)** by **[basil00](https://github.com/basil00)**
 - **[arRPC](https://github.com/OpenAsar/arrpc)** by **[OpenAsar](https://github.com/OpenAsar)**
+- **[Vencord](https://github.com/Vendicated/Vencord)** by **[Vendicated](https://github.com/Vendicated)**
 - **[Electron](https://github.com/electron/electron)**
 
 ---
