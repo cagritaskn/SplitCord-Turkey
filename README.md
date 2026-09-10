@@ -236,6 +236,7 @@ AppImage'ın kurulum gerektirmeyen yapısı, bağımlılık kontrolleri ve dağ�
 - Yazılımın geliştirilmesine katkıda bulunan **[Techolay.net](https://techolay.net/sosyal/)** kurucusu **[Recep Baltaş](https://www.youtube.com/@Techolay/)**'a çok teşekkür ederim.
 
 ### Test Edenler:
+- [git-phan](https://github.com/git-phan) - Debugging
 - [alperenkrpnr](https://github.com/alperenkrpnr) - Debugging
 - nexos - Vodafone
 - dominos41 - Kablonet
