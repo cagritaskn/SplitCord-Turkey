@@ -873,6 +873,7 @@ const showTitleToggle = document.getElementById('toggle-show-title');
 const centerTitleToggle = document.getElementById('toggle-center-title');
 const rowCenterTitle = document.getElementById('row-center-title');
 const disableFalseVoiceWarningToggle = document.getElementById('toggle-disable-false-voice-warning');
+const disableSpellcheckHighlightToggle = document.getElementById('toggle-disable-spellcheck-highlight');
 const vencordToggle = document.getElementById('toggle-vencord');
 const vencordStatusEl = document.getElementById('vencord-status');
 const vencordVersionEl = document.getElementById('vencord-version');
@@ -903,6 +904,7 @@ const initialGeneral = {
   showTitle: null,
   centerTitle: null,
   disableFalseVoiceWarning: null,
+  disableSpellcheckHighlight: null,
 };
 let pendingGeneral = {};
 
@@ -1200,6 +1202,28 @@ async function initDisableFalseVoiceWarningToggle() {
   });
 }
 
+async function initDisableSpellcheckHighlightToggle() {
+  let value = disableSpellcheckHighlightToggle.checked;
+  try {
+    value = await window.splitcord.app.getDisableSpellcheckHighlight();
+    disableSpellcheckHighlightToggle.checked = value;
+  } catch (err) {
+    console.error(err);
+    window.splitcord.log('get-disable-spellcheck-highlight-error', { error: err.message });
+  }
+  initialGeneral.disableSpellcheckHighlight = value;
+
+  disableSpellcheckHighlightToggle.addEventListener('change', () => {
+    if (disableSpellcheckHighlightToggle.checked === initialGeneral.disableSpellcheckHighlight) {
+      delete pendingGeneral.disableSpellcheckHighlight;
+    } else {
+      pendingGeneral.disableSpellcheckHighlight = disableSpellcheckHighlightToggle.checked;
+    }
+    window.splitcord.log('disable-spellcheck-highlight-toggle-changed', { checked: disableSpellcheckHighlightToggle.checked });
+    updateUnsavedBar();
+  });
+}
+
 // KULLANICI TALEBİ: Vencord paneli DİĞER Genel toggle'lardan FARKLI çalışıyor -- ertelenmiş
 // kaydetme (unsaved-bar) YOK, switch'e her tıklandığında ANINDA onay isteniyor ve cevaba
 // göre HEMEN uygulanıyor ("Evet" -> kaydedilip webview yeniden yüklenir, "Hayır"/kapatma ->
@@ -1345,6 +1369,11 @@ btnSaveChanges.addEventListener('click', async () => {
       initialGeneral.disableFalseVoiceWarning = pendingGeneral.disableFalseVoiceWarning;
       delete pendingGeneral.disableFalseVoiceWarning;
     }
+    if ('disableSpellcheckHighlight' in pendingGeneral) {
+      await window.splitcord.app.setDisableSpellcheckHighlight(pendingGeneral.disableSpellcheckHighlight);
+      initialGeneral.disableSpellcheckHighlight = pendingGeneral.disableSpellcheckHighlight;
+      delete pendingGeneral.disableSpellcheckHighlight;
+    }
     if ('gpuAcceleration' in pendingGeneral) {
       // ipc.js artık burada bir "yeniden başlatılsın mı?" onay diyaloğu gösteriyor.
       // Onaylanırsa uygulama gerçekten kapanıp yeniden açılacak (bu pencere de
@@ -1398,6 +1427,7 @@ btnDiscardChanges.addEventListener('click', () => {
   if ('showTitle' in pendingGeneral) showTitleToggle.checked = initialGeneral.showTitle;
   if ('centerTitle' in pendingGeneral) centerTitleToggle.checked = initialGeneral.centerTitle;
   if ('disableFalseVoiceWarning' in pendingGeneral) disableFalseVoiceWarningToggle.checked = initialGeneral.disableFalseVoiceWarning;
+  if ('disableSpellcheckHighlight' in pendingGeneral) disableSpellcheckHighlightToggle.checked = initialGeneral.disableSpellcheckHighlight;
   pendingGeneral = {};
   updateStartInBackgroundVisibility();
   updateCenterTitleVisibility();
@@ -1409,14 +1439,65 @@ btnDiscardChanges.addEventListener('click', () => {
 const shortcutsEnabledToggle = document.getElementById('toggle-shortcuts-enabled');
 const shortcutsList = document.getElementById('shortcuts-list');
 const shortcutsHint = document.getElementById('shortcuts-hint');
-const SHORTCUT_ACTIONS = ['toggleMute', 'toggleDeafen', 'disconnect', 'bringToFront', 'minimizeToTray'];
+const SHORTCUT_ACTIONS = ['pushToTalk', 'pushToMute', 'toggleMute', 'toggleDeafen', 'disconnect', 'bringToFront', 'minimizeToTray', 'toggleCamera', 'toggleScreenShare', 'navigateForward', 'navigateBack'];
+// KULLANICI TALEBİ: Bas Konuş/Susturmak İçin Bas -- basılı-tutma (hold) semantiğiyle
+// çalışıyor, tek tuş basımıyla DEĞİL. Bu ikisi normal accelerator kaydını (en az bir
+// değiştirici zorunluluğu, Ctrl+Alt+Shift+X formatı) hiç kullanmıyor -- startRecordingHold
+// ile TEK bir tuşa veya mouse tuşuna basılıp bırakılması yeterli (bkz. inputHook.js
+// main process tarafındaki "Key:<DOMCode>"/"MouseN" formatı).
+const HOLD_ACTIONS = ['pushToTalk', 'pushToMute'];
 let currentShortcuts = {};
 let recordingAction = null;
 let recordingKeydownHandler = null;
+let recordingMousedownHandler = null;
 
-function formatAccelerator(accelerator) {
-  if (!accelerator) return 'Atanmamış';
-  return accelerator.replace('CommandOrControl', 'Ctrl');
+// DOM KeyboardEvent.code -> okunabilir Türkçe/İngilizce etiket -- yalnızca Bas
+// Konuş/Susturmak İçin Bas kaydı için, inputHook.js'teki DOM_CODE_TO_UIOHOOK ile
+// AYNI kod kümesini kapsıyor (orada desteklenmeyen bir kod burada kaydedilirse main
+// process sessizce yok sayardı, bu yüzden ikisi senkron tutulmalı).
+const HOLD_KEY_CODE_LABELS = {
+  Backspace: 'Backspace', Tab: 'Tab', Enter: 'Enter', CapsLock: 'Caps Lock', Escape: 'Esc',
+  Space: 'Boşluk', PageUp: 'Page Up', PageDown: 'Page Down', End: 'End', Home: 'Home',
+  ArrowLeft: 'Sol Ok', ArrowUp: 'Yukarı Ok', ArrowRight: 'Sağ Ok', ArrowDown: 'Aşağı Ok',
+  Insert: 'Insert', Delete: 'Delete',
+  Digit0: '0', Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5',
+  Digit6: '6', Digit7: '7', Digit8: '8', Digit9: '9',
+  Numpad0: 'Numpad 0', Numpad1: 'Numpad 1', Numpad2: 'Numpad 2', Numpad3: 'Numpad 3',
+  Numpad4: 'Numpad 4', Numpad5: 'Numpad 5', Numpad6: 'Numpad 6', Numpad7: 'Numpad 7',
+  Numpad8: 'Numpad 8', Numpad9: 'Numpad 9', NumpadMultiply: 'Numpad *', NumpadAdd: 'Numpad +',
+  NumpadSubtract: 'Numpad -', NumpadDecimal: 'Numpad .', NumpadDivide: 'Numpad /',
+  NumpadEnter: 'Numpad Enter',
+  F1: 'F1', F2: 'F2', F3: 'F3', F4: 'F4', F5: 'F5', F6: 'F6', F7: 'F7', F8: 'F8', F9: 'F9',
+  F10: 'F10', F11: 'F11', F12: 'F12', F13: 'F13', F14: 'F14', F15: 'F15', F16: 'F16',
+  F17: 'F17', F18: 'F18', F19: 'F19', F20: 'F20', F21: 'F21', F22: 'F22', F23: 'F23', F24: 'F24',
+  Semicolon: ';', Equal: '=', Comma: ',', Minus: '-', Period: '.', Slash: '/', Backquote: '`',
+  BracketLeft: '[', Backslash: '\\', BracketRight: ']', Quote: "'",
+  ControlLeft: 'Sol Ctrl', ControlRight: 'Sağ Ctrl', AltLeft: 'Sol Alt', AltRight: 'Sağ Alt',
+  ShiftLeft: 'Sol Shift', ShiftRight: 'Sağ Shift', MetaLeft: 'Sol Win', MetaRight: 'Sağ Win',
+  NumLock: 'Num Lock', ScrollLock: 'Scroll Lock', PrintScreen: 'Print Screen', Pause: 'Pause/Break',
+};
+for (let i = 0; i < 26; i++) {
+  const letter = String.fromCharCode(65 + i);
+  HOLD_KEY_CODE_LABELS[`Key${letter}`] = letter;
+}
+const MOUSE_BINDING_LABELS = { Mouse3: 'Mouse 3 (Orta Tık)', Mouse4: 'Mouse 4', Mouse5: 'Mouse 5' };
+
+function formatAccelerator(value) {
+  if (!value) return 'Atanmamış';
+  if (MOUSE_BINDING_LABELS[value]) return MOUSE_BINDING_LABELS[value];
+  if (value.startsWith('Key:')) return HOLD_KEY_CODE_LABELS[value.slice(4)] || value.slice(4);
+  return value.replace('CommandOrControl', 'Ctrl');
+}
+
+// DOM MouseEvent.button -> "MouseN" -- inputHook.js'teki libuiohook eşlemesiyle
+// AYNI (canlı doğrulanmış): DOM 1 (orta tık) -> uiohook buton 3, DOM 3 (dördüncü
+// buton/XBUTTON1) -> uiohook buton 4, DOM 4 (beşinci buton/XBUTTON2) -> uiohook 5.
+// Sol/sağ tık (0/2) KASITLI OLARAK hariç -- bunları kısayola bağlamak tehlikeli olurdu.
+function mouseButtonBinding(button) {
+  if (button === 1) return 'Mouse3';
+  if (button === 3) return 'Mouse4';
+  if (button === 4) return 'Mouse5';
+  return null;
 }
 
 function renderShortcutRow(action) {
@@ -1432,7 +1513,8 @@ function renderAllShortcutRows() {
 
 // Global kısayol için en az bir değiştirici (Ctrl/Alt/Shift/Win) zorunlu tutuluyor —
 // aksi halde sıradan yazarken bile tetiklenecek, sistem genelinde tehlikeli bir
-// kombinasyon (ör. yalnızca "A") kaydedilebilirdi.
+// kombinasyon (ör. yalnızca "A") kaydedilebilirdi. TEK İSTİSNA: STANDALONE_ALLOWED_CODES
+// (aşağıda) -- klavyelerde yazarken kullanılmayan, ayrık işlevsel tuşlar.
 const SHORTCUT_SPECIAL_KEY_MAP = {
   ' ': 'Space',
   ArrowUp: 'Up',
@@ -1448,7 +1530,27 @@ const SHORTCUT_SPECIAL_KEY_MAP = {
   Tab: 'Tab',
   Backspace: 'Backspace',
   Enter: 'Return',
+  // Electron'un Accelerator format dokümantasyonundaki (docs/api/accelerator.md) tam
+  // isimler -- ilk harf büyük, gerisi küçük ("Capslock", "Numlock", "Scrolllock") --
+  // bu üçü Ctrl/Alt/Shift'le KOMBİN halinde de kullanılabiliyor (bkz. STANDALONE_ALLOWED_CODES,
+  // bu üçü AYRICA değiştiricisiz de atanabiliyor).
+  CapsLock: 'Capslock',
+  NumLock: 'Numlock',
+  ScrollLock: 'Scrolllock',
 };
+
+// KULLANICI TALEBİ: F1-F12, Insert, Home, Scroll Lock, Num Lock, Caps Lock ve Pause/Break
+// -- değiştirici (Ctrl/Alt/Shift) OLMADAN da tek başına atanabiliyor, çünkü bunlar normal
+// yazı yazarken YANLIŞLIKLA basılma riski taşımayan, klavyelerde ayrık/işlevsel tuşlar.
+// DOM KeyboardEvent.code değerleriyle eşleşiyor (event.key DEĞİL). Bu liste, kaydı
+// inputHook.js'in "Key:<DOMCode>" basma-yoluna (uiohook) yönlendiriyor -- Electron'un
+// globalShortcut'ı zaten Pause için hiç accelerator adı sunmuyor (bkz. inputHook.js'teki
+// ayrıntılı not), bu yüzden TÜM standalone tuşlar (F1-F12 dahil) tutarlılık için AYNI
+// uiohook yolundan geçiyor, yalnızca Pause için değil.
+const STANDALONE_ALLOWED_CODES = new Set([
+  'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
+  'Insert', 'Home', 'ScrollLock', 'NumLock', 'CapsLock', 'Pause',
+]);
 
 function acceleratorKeyFromEvent(event) {
   const key = event.key;
@@ -1467,6 +1569,10 @@ function stopRecording(action, keepCustomLabel) {
   if (recordingKeydownHandler) {
     window.removeEventListener('keydown', recordingKeydownHandler, true);
     recordingKeydownHandler = null;
+  }
+  if (recordingMousedownHandler) {
+    window.removeEventListener('mousedown', recordingMousedownHandler, true);
+    recordingMousedownHandler = null;
   }
   recordingAction = null;
   if (!keepCustomLabel) renderShortcutRow(action);
@@ -1521,6 +1627,13 @@ function startRecording(action) {
     if (event.metaKey) parts.push('Super');
 
     if (parts.length === 0) {
+      // KULLANICI TALEBİ: F1-F12/Insert/Home/Scroll Lock/Num Lock/Caps Lock/Pause Break
+      // değiştiricisiz de atanabiliyor (bkz. STANDALONE_ALLOWED_CODES tanımındaki not) --
+      // inputHook.js'in "Key:" basma-yoluyla kaydediliyor, globalShortcut'a hiç uğramıyor.
+      if (STANDALONE_ALLOWED_CODES.has(event.code)) {
+        finishRecording(action, btn, `Key:${event.code}`);
+        return;
+      }
       btn.textContent = 'En az bir değiştirici tuş gerekli (Ctrl/Alt/Shift)…';
       return;
     }
@@ -1534,11 +1647,64 @@ function startRecording(action) {
     parts.push(mainKey);
     finishRecording(action, btn, parts.join('+'));
   };
+  // KULLANICI TALEBİ: İleri git/Geri git gibi eylemler klavye kombinasyonu YERİNE
+  // doğrudan bir mouse tuşuna (varsayılan Mouse4/5) da bağlanabiliyor -- bu genel
+  // kayıt akışına eklendi ki herhangi bir eylem isteğe bağlı olarak mouse tuşuna da
+  // atanabilsin (değiştirici tuş zorunluluğu mouse tuşları için anlamsız/uygulanmıyor).
+  recordingMousedownHandler = (event) => {
+    const mouseBinding = mouseButtonBinding(event.button);
+    if (!mouseBinding) return;
+    event.preventDefault();
+    event.stopPropagation();
+    finishRecording(action, btn, mouseBinding);
+  };
   window.addEventListener('keydown', recordingKeydownHandler, true);
+  window.addEventListener('mousedown', recordingMousedownHandler, true);
+}
+
+// KULLANICI TALEBİ: Bas Konuş / Susturmak İçin Bas -- normal accelerator kaydından
+// FARKLI: değiştirici tuş ZORUNLU DEĞİL (tek başına bir tuş -- ör. Right Shift veya
+// CapsLock -- ya da bir mouse tuşu geçerli), çünkü bunlar basılı-tutma (hold) eylemleri,
+// bir kombinasyon değil. Sonuç doğrudan "Key:<DOMCode>" veya "MouseN" olarak saklanıyor
+// (bkz. inputHook.js main process tarafındaki karşılığı).
+function startRecordingHold(action) {
+  if (recordingAction) stopRecording(recordingAction, false);
+  recordingAction = action;
+  const btn = shortcutsList.querySelector(`.sc-shortcut-input[data-action="${action}"]`);
+  btn.textContent = 'Bir tuşa veya mouse tuşuna basın… (Esc: iptal)';
+  btn.classList.add('sc-shortcut-recording');
+  shortcutsHint.textContent = '';
+
+  recordingKeydownHandler = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === 'Escape') {
+      stopRecording(action, false);
+      return;
+    }
+    if (!(event.code in HOLD_KEY_CODE_LABELS)) {
+      btn.textContent = 'Desteklenmeyen tuş, başka bir tuş deneyin…';
+      return;
+    }
+    finishRecording(action, btn, `Key:${event.code}`);
+  };
+  recordingMousedownHandler = (event) => {
+    const mouseBinding = mouseButtonBinding(event.button);
+    if (!mouseBinding) return;
+    event.preventDefault();
+    event.stopPropagation();
+    finishRecording(action, btn, mouseBinding);
+  };
+  window.addEventListener('keydown', recordingKeydownHandler, true);
+  window.addEventListener('mousedown', recordingMousedownHandler, true);
 }
 
 shortcutsList?.querySelectorAll('.sc-shortcut-input').forEach((btn) => {
-  btn.addEventListener('click', () => startRecording(btn.dataset.action));
+  btn.addEventListener('click', () => {
+    const action = btn.dataset.action;
+    if (HOLD_ACTIONS.includes(action)) startRecordingHold(action);
+    else startRecording(action);
+  });
 });
 
 shortcutsList?.querySelectorAll('.sc-shortcut-clear').forEach((btn) => {
@@ -2264,6 +2430,7 @@ Promise.all([
   initShowTitleToggle(),
   initCenterTitleToggle(),
   initDisableFalseVoiceWarningToggle(),
+  initDisableSpellcheckHighlightToggle(),
   initVencordToggle(),
 ]).then(() => updateUnsavedBar());
 initThemePicker();

@@ -69,6 +69,18 @@ const DEFAULTS = {
     disconnect: '',
     bringToFront: 'CommandOrControl+Shift+H',
     minimizeToTray: '',
+    toggleCamera: '',
+    toggleScreenShare: '',
+    // KULLANICI TALEBİ: İleri git/Geri git -- varsayılan olarak mouse'un ekstra
+    // tuşlarına atanmış (bkz. inputHook.js "Mouse4"/"Mouse5" formatı). DİKKAT: bu,
+    // standart OS/tarayıcı kuralının (Mouse4=geri, Mouse5=ileri) TERSİ -- kullanıcının
+    // kendi açık talebiyle Mouse4=ileri, Mouse5=geri olarak ayarlandı.
+    navigateForward: 'Mouse4',
+    navigateBack: 'Mouse5',
+    // KULLANICI TALEBİ: Bas Konuş / Susturmak İçin Bas -- varsayılan atanmamış (bkz.
+    // shortcuts.js holdActionsMap, inputHook.js "Key:<DOMCode>" formatı).
+    pushToTalk: '',
+    pushToMute: '',
   },
   // Ayarlar > Genel'de kapatılabilir — açıkken (varsayılan) tray ikonu "standart"
   // durumdayken (ses kanalında değilken) okunmamış Discord bildirimi varsa ikona kırmızı
@@ -92,6 +104,14 @@ const DEFAULTS = {
   // henüz konuşmadığında da tetikleniyor) yine de gerçek bir mikrofon sorununu
   // gizleyebileceği için varsayılan KAPALI — kullanıcı bilinçli olarak açmalı.
   disableFalseVoiceWarning: false,
+  // KULLANICI TALEBİ: Ayarlar > Genel'deki "Hatalı metinleri vurgulamayı devre dışı
+  // bırak" -- Chromium'un yerleşik yazım denetleyicisi sohbet kutusunda hatalı/tanınmayan
+  // kelimelerin altını kırmızı zikzak çizgiyle çiziyordu. VARSAYILAN AÇIK (yazım denetimi
+  // varsayılan olarak KAPALI/gösterilmiyor) -- kullanıcı isterse kapatıp (yazım denetimini
+  // AÇIP) geri getirebilir. session.setSpellCheckerEnabled() ile uygulanıyor (bkz.
+  // permissions.js applySpellcheckSetting) -- yeniden başlatma GEREKMİYOR, QUIC'in aksine
+  // runtime'da anında etkili.
+  disableSpellcheckHighlight: true,
   // Ayarlar > Genel'de (ya da webview'de ERR_QUIC_PROTOCOL_ERROR alındığında çıkan
   // "QUIC'i Devre Dışı Bırak" butonundan) kapatılabilir. Zapret2/Zapret'in NFQUEUE
   // kuralları yalnızca TCP'yi hedefliyor, QUIC (UDP:443) hiçbir DPI aşım
@@ -114,10 +134,23 @@ const DEFAULTS = {
   vencordEnabled: false,
 };
 
+// GERÇEK BUG (canlı testte bulundu): düz {...DEFAULTS, ...saved} yalnızca BİRİNCİ
+// seviyeyi birleştiriyor -- "shortcuts" gibi iç içe bir nesne varsa, saved.shortcuts
+// DEFAULTS.shortcuts'ın TAMAMININ yerini alır (deep merge DEĞİL). Yani mevcut bir
+// kurulumda daha önce kaydedilmiş bir local-settings.json varsa ve biz DEFAULTS.shortcuts'a
+// SONRADAN yeni bir eylem eklersek (ör. navigateForward: 'Mouse4'), o eylem eski
+// kullanıcılarda hiç var olmaz (undefined -> "atanmamış" gibi davranır, varsayılanı
+// asla görmez) -- saved.shortcuts'ta hiç yokken DEFAULTS.shortcuts'ta olan bir anahtar
+// sessizce kaybolur. Bu yüzden "shortcuts" özel olarak bir seviye derin birleştiriliyor.
 function readLocalSettings() {
   try {
     const raw = fs.readFileSync(getSettingsPath(), 'utf8');
-    return { ...DEFAULTS, ...JSON.parse(raw) };
+    const saved = JSON.parse(raw);
+    return {
+      ...DEFAULTS,
+      ...saved,
+      shortcuts: { ...DEFAULTS.shortcuts, ...(saved.shortcuts || {}) },
+    };
   } catch {
     return { ...DEFAULTS };
   }

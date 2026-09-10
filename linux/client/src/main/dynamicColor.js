@@ -190,10 +190,15 @@ let mainWindowRef = null;
 let resampleTimer = null;
 let settleTimers = [];
 let lastPalette = null;
-let onPaletteChanged = null;
+// GERÇEK BUG RİSKİ (önlendi): eskiden tek bir değişkene atanıyordu (setOnPaletteChanged
+// her çağrıldığında ÖNCEKİ dinleyiciyi SİLİYORDU) -- window.js'in nativeTheme senkronu
+// eklenince bu, ipc.js'teki ayarlar penceresi canlı renk güncellemesini KIRARDI (ikisi de
+// kendi dinleyicisini kaydediyor). voiceState.js'teki stateChangedListeners ile aynı
+// desene (dizi) geçirildi -- artık birden fazla bağımsız dinleyici sorunsuz birlikte çalışıyor.
+let paletteChangedListeners = [];
 
 function setOnPaletteChanged(callback) {
-  onPaletteChanged = callback;
+  paletteChangedListeners.push(callback);
 }
 
 function getLastPalette() {
@@ -319,7 +324,7 @@ function applyStaticTheme(mode) {
   if (mainWindowRef && !mainWindowRef.isDestroyed()) {
     mainWindowRef.webContents.send('app:dynamic-color-sampled', palette);
   }
-  if (onPaletteChanged) onPaletteChanged(palette);
+  paletteChangedListeners.forEach((listener) => listener(palette));
 }
 
 function setWebviewWebContents(webContents, mainWindow) {
@@ -332,6 +337,11 @@ async function sampleAndApply() {
   const settings = readLocalSettings();
   if (settings.themeMode !== 'automatic') return;
   if (!mainWindowRef || mainWindowRef.isDestroyed() || !mainWindowRef.isVisible()) return;
+  // KULLANICI TALEBİ: tam ekran oyunlarda FPS düşüşü -- Performans Modu açıkken VE
+  // pencere odaksızken (ör. bir oyunun arkasında açık kalması) örneklemeyi atlıyoruz;
+  // odaklanınca (bkz. startDynamicColorSampling'teki 'focus' dinleyicisi) hemen yeniden
+  // örnekleniyor, bu yüzden en fazla bir sonraki odaklanmaya kadar bayat renk kalır.
+  if (settings.performanceMode && !mainWindowRef.isFocused()) return;
 
   try {
     const raw = await webviewWebContents.executeJavaScript(SAMPLE_SCRIPT);
@@ -351,7 +361,7 @@ async function sampleAndApply() {
     logEvent('dynamic-color-applied', { sampled: { r, g, b }, palette });
 
     mainWindowRef.webContents.send('app:dynamic-color-sampled', palette);
-    if (onPaletteChanged) onPaletteChanged(palette);
+    paletteChangedListeners.forEach((listener) => listener(palette));
   } catch (err) {
     logEvent('dynamic-color-sample-error', { error: err.message });
   }
@@ -366,6 +376,11 @@ let themeChangeDebounce = null;
 
 function startDynamicColorSampling(webContents, mainWindow) {
   setWebviewWebContents(webContents, mainWindow);
+
+  // Performans Modu + odaksızken sampleAndApply() atlanıyor (yukarıdaki not) -- pencere
+  // yeniden odaklanınca bir sonraki zamanlanmış turu (1 sn / 10 sn) beklemeden hemen
+  // güncel rengi yakalıyoruz.
+  mainWindow.on('focus', () => sampleAndApply());
 
   webContents.on('did-finish-load', () => {
     clearSettleTimers();

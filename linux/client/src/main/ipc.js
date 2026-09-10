@@ -19,6 +19,9 @@ const { applyShortcutsFromSettings } = require('./shortcuts');
 const { installDpiService, uninstallDpiService, isInstallerBundled } = require('./serviceInstaller');
 const { uninstallApp: uninstallAppPackage } = require('./appUninstaller');
 const { isAppImage, getPackagingKind } = require('./packagingInfo');
+const { loadAppIcon } = require('./icon');
+const backgroundPriority = require('./backgroundPriority');
+const { applySpellcheckSetting } = require('./permissions');
 
 let settingsWindow = null;
 // Ayarlar penceresindeki kaydedilmemiş değişiklik durumu, renderer'dan
@@ -597,6 +600,9 @@ function registerIpcHandlers() {
       width: 1280,
       height: 860,
       parent: getMainWindow() || undefined,
+      // GERÇEK BUG (canlı bulundu, ekran paylaşımı seçicisiyle aynı kök neden): icon
+      // verilmezse taskbar'da Electron'un varsayılan simgesi görünüyordu.
+      icon: loadAppIcon(path.join(__dirname, '..', '..', 'resources', 'icon.png')),
       webPreferences: {
         partition: 'persist:discord',
         contextIsolation: true,
@@ -632,9 +638,11 @@ function registerIpcHandlers() {
   ipcMain.handle('app:set-performance-mode', (_event, enabled) => {
     logEvent('set-performance-mode', { enabled });
     writeLocalSettings({ performanceMode: enabled });
-    // dynamicColor.js kendi zamanlama döngüsünde bir sonraki turda bu ayarı okuyup
-    // örnekleme sıklığını (1 sn / 10 sn) buna göre ayarlıyor — burada ekstra bir
-    // müdahaleye gerek yok.
+    // dynamicColor.js/voiceState.js kendi zamanlama döngülerinde bir sonraki turda bu
+    // ayarı okuyup davranışlarını buna göre ayarlıyor — ekstra müdahaleye gerek yok.
+    // backgroundPriority.js İSTİSNA: odak/blur olayı beklemeden, kullanıcı performans
+    // modunu oyun sırasında (pencere zaten odaksızken) AÇARSA/KAPATIRSA hemen etkili olsun.
+    backgroundPriority.reevaluate();
     getMainWindow()?.webContents.send('app:performance-mode-changed', enabled);
     if (settingsWindow && !settingsWindow.isDestroyed()) {
       settingsWindow.webContents.send('app:performance-mode-changed', enabled);
@@ -975,6 +983,17 @@ function registerIpcHandlers() {
   ipcMain.handle('app:set-disable-false-voice-warning', (_event, enabled) => {
     writeLocalSettings({ disableFalseVoiceWarning: enabled });
     logEvent('set-disable-false-voice-warning', { enabled });
+    return enabled;
+  });
+
+  // KULLANICI TALEBİ: Ayarlar > Genel > "Hatalı metinleri vurgulamayı devre dışı bırak"
+  // -- QUIC'in aksine yeniden başlatma GEREKMİYOR, session.setSpellCheckerEnabled()
+  // runtime'da anında etkili (bkz. permissions.js applySpellcheckSetting).
+  ipcMain.handle('app:get-disable-spellcheck-highlight', () => readLocalSettings().disableSpellcheckHighlight ?? true);
+  ipcMain.handle('app:set-disable-spellcheck-highlight', (_event, enabled) => {
+    writeLocalSettings({ disableSpellcheckHighlight: enabled });
+    logEvent('set-disable-spellcheck-highlight', { enabled });
+    applySpellcheckSetting(enabled);
     return enabled;
   });
 

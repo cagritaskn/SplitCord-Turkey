@@ -4,7 +4,7 @@ const { app } = require('electron');
 const { createMainWindow, getMainWindow } = require('./window');
 const { applyShortcutsFromSettings, unregisterGlobalShortcuts } = require('./shortcuts');
 const { createTray } = require('./tray');
-const { registerPermissions, configureBrowserIdentity } = require('./permissions');
+const { registerPermissions, configureBrowserIdentity, applySpellcheckSetting } = require('./permissions');
 const { registerIpcHandlers } = require('./ipc');
 const { applyDpiProxy } = require('./dpiProxy');
 const { startConfiguredEngine, registerShutdownHook } = require('./dpiLifecycle');
@@ -155,6 +155,7 @@ if (!gotSingleInstanceLock) {
     await configureSecureDns();
     registerPermissions();
     configureBrowserIdentity();
+    applySpellcheckSetting(readLocalSettings().disableSpellcheckHighlight);
     registerScreenSharePicker();
     registerShutdownHook();
     registerProtocolHandler();

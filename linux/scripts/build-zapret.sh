@@ -55,4 +55,18 @@ chmod +x "$OUT_DIR/nfq/nfqws"
 # olarak referans verilen dosya -- nfqws ile AYNI dizinde olmali (bkz. yukaridaki not).
 cp "$SRC_DIR/files/fake/tls_clienthello_www_google_com.bin" "$OUT_DIR/nfq/tls_clienthello_www_google_com.bin"
 
+# ZapretEngine.cs'in hostlist disleme bayragi icin kullandigi statik dislama listesi --
+# Windows ile PAYLASILAN TEK kaynaktan (repo koku resources/zapret-lists/splitcord-exclude.txt)
+# kopyalanir, kullanici sikayet geldikce yalnizca o kok dosyayi gunceller. DIKKAT:
+# resources/bin/zapret/lists/list-exclude.txt DEGIL -- o, upstream zapret-discord-youtube
+# ZIP'inin kendi dosyasi (gitignore'lu, her calistirmada sifirdan iniyor); bizimki
+# resources/bin/ DISINDA, commitlenen ayri bir dizinde ve ayri bir isimle tutuluyor.
+ROOT_SPLITCORD_EXCLUDE="$SCRIPT_DIR/../../resources/zapret-lists/splitcord-exclude.txt"
+mkdir -p "$OUT_DIR/lists"
+if [ -f "$ROOT_SPLITCORD_EXCLUDE" ]; then
+  cp "$ROOT_SPLITCORD_EXCLUDE" "$OUT_DIR/lists/splitcord-exclude.txt"
+else
+  echo "UYARI: $ROOT_SPLITCORD_EXCLUDE bulunamadi, hostlist disleme listesi kopyalanamadi" >&2
+fi
+
 echo "[zapret] tamam -> $OUT_DIR/nfq/nfqws"

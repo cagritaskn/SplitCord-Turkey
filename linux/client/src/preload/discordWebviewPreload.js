@@ -54,11 +54,46 @@ const MAIN_WORLD_SCRIPT = `
   if (window.__splitcordPatched) return; // SPA içi yeniden enjeksiyonlarda çift yamayı engelle
   window.__splitcordPatched = true;
 
-  // --- Ekran paylaşımı kalite yaması ---
+  // --- Ekran paylaşımı kalite yaması + kendi sesimizin yankılanması düzeltmesi ---
+  // GERÇEK BUG (kullanıcı raporu): SplitCord-Turkey kullanan biri sistem sesiyle ekran
+  // paylaşımı yaptığında, AYNI kanaldaki DİĞER katılımcılar KENDİ seslerini o paylaşımın
+  // sesinde geri duyuyordu. Kök neden: ses döngü (loopback) yakalaması, paylaşımı yapan
+  // kişinin hoparlöründen çıkan HER SESİ (diğer katılımcıların Discord üzerinden çalınan
+  // sesleri dahil) yakalıyor ve bunu TEKRAR o kişinin paylaşım sesine katıyor -- yani
+  // diğer katılımcılar kendi seslerini bir gecikmeyle geri alıyor (bkz. Vesktop'un aynı
+  // bug'ı için commit'i: Vencord/Vesktop@cb9c55f).
+  //
+  // DİKKAT (Linux'a özgü sınırlama): Chromium'un restrictOwnAudio/loopbackWithoutChrome
+  // desteği yalnızca Windows/macOS/ChromeOS ses backend'lerinde var -- Linux'ta
+  // (PulseAudio/PipeWire) bu bayrağın HİÇBİR ETKİSİ YOK, electron_browser_context.cc bunu
+  // Linux'ta sessizce sade "loopback"e düşürüyor (bkz. #if BUILDFLAG(IS_MAC) ||
+  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS) kontrolü). Yani bu yama Linux'ta ZARARSIZ
+  // ama bu spesifik yankı bug'ını Linux'ta ÇÖZMÜYOR -- yalnızca Windows istemcisinde
+  // gerçek bir düzeltme. Tutarlılık için (ve Chromium ileride Linux desteği eklerse
+  // otomatik faydalanmak için) aynı yama burada da uygulanıyor.
+  //
+  // Electron main process tarafındaki screenSharePicker.js callback'i hâlâ HER ZAMAN
+  // sade "audio: 'loopback'" veriyor -- bunu değiştirmedik. Asıl anahtar, Electron'un
+  // C++ tarafının (ElectronBrowserContext::DisplayMediaDeviceChosen) bunu otomatik olarak
+  // "loopbackWithoutChrome"a (bizim SES ÇIKIŞIMIZ hariç tutulan bir loopback) YÜKSELTMESİ
+  // için isteğin restrictOwnAudio bayrağını taşıması gerekiyor -- bu bayrak SAYFANIN
+  // (Discord'un) kendi getDisplayMedia() ÇAĞRISINDAN geliyor, bizim main process
+  // callback'imizden DEĞİL (bkz. electron/electron#52455, yalnızca Electron 43.4.1+/44+'ta
+  // var). Discord kapalı kaynak olduğu ve bu constraint'i kendi isteğine EKLEYİP
+  // EKLEMEYECEĞİ bizim kontrolümüzde OLMADIĞI için, aşağıda Discord'un KENDİ constraints
+  // nesnesine "audio.restrictOwnAudio: true"yu KENDİMİZ zorla ekliyoruz -- Discord bunu
+  // hiç istemese bile devreye giriyor. Ses hiç istenmemişse (audio: false/undefined)
+  // DOKUNULMUYOR -- olmayan bir sesi icat etmiyoruz.
   const originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia ? navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices) : null;
   if (originalGetDisplayMedia) {
     navigator.mediaDevices.getDisplayMedia = async function patchedGetDisplayMedia(constraints) {
-      const stream = await originalGetDisplayMedia(constraints);
+      const patchedConstraints = constraints ? { ...constraints } : {};
+      if (patchedConstraints.audio) {
+        patchedConstraints.audio = typeof patchedConstraints.audio === 'object'
+          ? { ...patchedConstraints.audio, restrictOwnAudio: true }
+          : { restrictOwnAudio: true };
+      }
+      const stream = await originalGetDisplayMedia(patchedConstraints);
       try {
         const quality = window.__splitcordInternal ? await window.__splitcordInternal.getLastQuality() : null;
         const videoTrack = stream.getVideoTracks()[0];
@@ -91,10 +126,54 @@ const MAIN_WORLD_SCRIPT = `
   let micTrack = null;
   let getUserMediaCallCount = 0;
 
+  // GERÇEK BUG (kullanıcı raporu): Ayarlar > Ses ve Görüntü > Kamera'da hangi kamera
+  // seçilirse seçilsin, AYNI oturum içinde bile hep listedeki İLK kamera çalıştırılmaya
+  // çalışılıyordu. Canlı CDP testiyle kök nedeni bulundu: Discord'un kendi kodu
+  // getUserMedia'ya deviceId'yi DÜZ BİR STRING olarak veriyor (ör.
+  // "video: { width: 387, height: 218, frameRate: 30, deviceId: '<id>' }") -- WebRTC
+  // spesifikasyonuna göre bir MediaTrackConstraints alanındaki düz (sarmalanmamış) bir
+  // değer her zaman yalnızca "ideal" (tercih, ZORUNLU DEĞİL) sayılır. Elektron 31'in eski
+  // Chromium'unda (126) bu "ideal" deviceId pratikte neredeyse her zaman doğru cihazı
+  // seçtiriyordu, ama Electron 44'ün Chromium'unda (152) cihaz seçim "fitness distance"
+  // algoritması diğer ideal alanlarla (width/height/frameRate) birlikteyken artık bunu
+  // güvenilir şekilde onurlandırmıyor -- canlı testte doğrulandı: AYNI ham constraints
+  // nesnesiyle her seferinde listedeki ilk kamera (S23 Ultra) döndü, istenen kamera
+  // (Logi C270) DEĞİL. Çözüm: deviceId düz bir string olarak geldiğinde burada
+  // "{ exact: <id> }" olarak SARMALAYIP zorunlu hale getiriyoruz -- bu, Discord'un kendi
+  // kodunu hiç değiştirmeden (kapalı kaynak, değiştiremeyiz) doğru cihazı garantiliyor;
+  // canlı testte doğrulandı (aynı ham veriyle artık doğru kamera seçiliyor). Ses (mic)
+  // tarafı için de aynı kırılganlık teorik olarak geçerli olabileceğinden simetrik olarak
+  // uygulanıyor. Bu, Chromium'un kendi cihaz seçim davranışı olduğu için Windows'a özgü
+  // DEĞİL -- Linux'ta da aynı şekilde uygulanıyor.
+  function forceExactDeviceId(mediaConstraint) {
+    if (mediaConstraint && typeof mediaConstraint === 'object' && typeof mediaConstraint.deviceId === 'string') {
+      return { ...mediaConstraint, deviceId: { exact: mediaConstraint.deviceId } };
+    }
+    return mediaConstraint;
+  }
+
   const originalGetUserMedia = navigator.mediaDevices.getUserMedia ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices) : null;
   if (originalGetUserMedia) {
     navigator.mediaDevices.getUserMedia = async function patchedGetUserMedia(constraints) {
-      const stream = await originalGetUserMedia(constraints);
+      const patchedConstraints = constraints ? {
+        ...constraints,
+        video: forceExactDeviceId(constraints.video),
+        audio: forceExactDeviceId(constraints.audio),
+      } : constraints;
+      let stream;
+      try {
+        stream = await originalGetUserMedia(patchedConstraints);
+      } catch (err) {
+        // "exact" zorunluluğu istenen cihaz o anda gerçekten yoksa/başka bir uygulama
+        // tarafından kilitliyse OverconstrainedError fırlatabilir -- bu durumda hiç
+        // görüntü/ses ALAMAMAKTANSA, Discord'un ORİJİNAL (ideal, sarmalanmamış) isteğine
+        // düşüp en azından ÇALIŞAN bir cihazla devam ediyoruz.
+        if (err && err.name === 'OverconstrainedError') {
+          stream = await originalGetUserMedia(constraints);
+        } else {
+          throw err;
+        }
+      }
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
         getUserMediaCallCount++;
@@ -650,6 +729,32 @@ injectVencordIfEnabled();
 
     el.appendChild(document.createTextNode(' gidin.'));
     el.dataset.splitcordReplaced = 'true';
+
+    // KULLANICI TALEBİ: yalnızca metin içi bağlantı yetersiz görüldü -- mesajın ALTINA,
+    // doğrudan ayarlar penceresini Tuş Atamaları sekmesinde açan AYRI bir buton ekleniyor
+    // (bkz. setupBanCurrentArgsButton'daki AYNI buton stili -- Discord blurple arka plan).
+    // EL'İN KENDİ ÇOCUĞU olarak ekleniyor (sibling DEĞİL): notice kutusu ikon+metni yan yana
+    // dizen bir flex satırı olabilir -- el'in dışına sibling eklemek butonu ikonun yanına,
+    // "altına" değil "yanına" koyardı. button varsayılan olarak block seviyeli bir kutu
+    // olduğu için el'in İÇİNE eklenince satır metninin hemen altına doğal olarak kayıyor.
+    if (el.querySelector('[data-splitcord-keybinds-settings-btn]')) return;
+    const btn = document.createElement('button');
+    btn.textContent = 'SplitCord-Turkey Tuş Atamaları';
+    btn.setAttribute('data-splitcord-keybinds-settings-btn', 'true');
+    btn.style.display = 'block';
+    btn.style.marginTop = '10px';
+    btn.style.padding = '6px 14px';
+    btn.style.borderRadius = '4px';
+    btn.style.border = 'none';
+    btn.style.background = '#5865F2';
+    btn.style.color = '#fff';
+    btn.style.cursor = 'pointer';
+    btn.style.fontSize = '13px';
+    btn.style.fontFamily = 'inherit';
+    btn.addEventListener('click', () => {
+      ipcRenderer.send('window:open-settings', 'panel-shortcuts');
+    });
+    el.appendChild(btn);
   }
 
   function scanForNotice(root) {
@@ -669,6 +774,121 @@ injectVencordIfEnabled();
         mutation.addedNodes.forEach((node) => {
           if (node.nodeType !== 1) return;
           scanForNotice(node);
+        });
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+  startObserving();
+})();
+
+/**
+ * KULLANICI TALEBİ: Discord'un KENDİ "Bas-Konuş (Sınırlı)" özelliği (Ayarlar > Ses ve
+ * Görüntü > Ses sayfası) SplitCord-Turkey'in GLOBAL Bas-Konuş sisteminden (bkz.
+ * shortcuts.js holdActionsMap/pushToTalk+pushToMute, voiceState.js setMuted) TAMAMEN
+ * BAĞIMSIZ, PARALEL çalışıyordu -- ikisi AYNI ANDA aktifse çakışıyor: Discord'un kendi
+ * PTT'si yalnızca SEKME ÖN PLANDAYKEN çalışan, KENDİ ayrı tuş atamasına bağlı bir JS
+ * seviyesinde "ses kapısı"; bizim sistemimiz ise OS seviyesinde (uiohook, pencere odakta
+ * OLMASA BİLE) çalışıp doğrudan Discord'un GERÇEK sustur switch'ini tetikliyor (bkz.
+ * voiceState.js SET_MUTE_SCRIPT). Discord'un kendi PTT'si AÇIK ama KENDİ tuşu
+ * atanmamışsa, bizim sistemimiz mikrofonu mantıken açsa (sustur switch'ini kapatsa) bile
+ * Discord'un kendi PTT kapısı hiç açılmadığı için ses YİNE DE gitmeyebiliyordu -- iki
+ * ayrı, çakışan "doğruluk kaynağı".
+ *
+ * ÇÖZÜM: Discord'un kendi Bas-Konuş (Sınırlı) switch'ini ZORLA KAPALI tutuyoruz (KAPALIYKEN
+ * Discord "Ses Aktivasyonu" moduna döner, mikrofon sürekli açık kalır ama bizim
+ * setMuted() çağrılarımız GERÇEK sustur switch'ini tetiklediği için nihai sonuç yine
+ * doğru oluyor) ve kullanıcının yanlışlıkla tekrar açmasını önlemek için devre dışı
+ * bırakıyoruz; hem switch'in hem de altındaki "Bas-Konuş Tuş Ataması" satırının yanına
+ * kullanıcıyı SplitCord-Turkey'in KENDİ Tuş Atamaları sayfasına yönlendiren bir not
+ * ekliyoruz.
+ *
+ * DİL BAĞIMSIZ EŞLEŞTİRME: metne değil, Discord'un KENDİ, dilden bağımsız
+ * `data-nav-anchor-key="voice_push_to_talk_setting"` / `"voice_push_to_talk_keybind_setting"`
+ * özniteliklerine bakılıyor (Discord'un bu sayfadaki her ayar satırına verdiği, kendi
+ * arama/derin bağlantı sistemi için kullandığı sabit anchor -- CSS modül hash'lerinden
+ * FARKLI olarak İSTİKRARLI, canlı DOM'da doğrulandı).
+ */
+(function setupPushToTalkOverride() {
+  function forceSwitchOff(row) {
+    const input = row.querySelector('input[type="checkbox"][role="switch"]');
+    if (!input) return;
+    if (input.checked) input.click();
+    input.disabled = true;
+    const label = input.closest('label');
+    if (label) {
+      label.style.opacity = '0.5';
+      label.style.pointerEvents = 'none';
+    }
+  }
+
+  function injectNote(row) {
+    if (row.querySelector('[data-splitcord-ptt-note]')) return;
+    const note = document.createElement('div');
+    note.setAttribute('data-splitcord-ptt-note', 'true');
+    note.style.marginTop = '8px';
+    note.style.fontSize = '12px';
+    note.style.color = 'var(--text-muted, #949ba4)';
+    note.appendChild(
+      document.createTextNode(
+        "Bu ayar, SplitCord-Turkey'in her durumda (pencere arkaplanda olsa bile) çalışan global " +
+          'Bas-Konuş sistemiyle çakıştığı için devre dışı bırakıldı. Tuş atamak için ',
+      ),
+    );
+    const link = document.createElement('a');
+    link.textContent = "SplitCord-Turkey'in Tuş Atamaları ayarlarına";
+    link.href = '#';
+    link.style.cursor = 'pointer';
+    link.style.textDecoration = 'underline';
+    link.style.color = 'var(--text-link, #00a8fc)';
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      ipcRenderer.send('window:open-settings', 'panel-shortcuts');
+    });
+    note.appendChild(link);
+    note.appendChild(document.createTextNode(' git.'));
+    row.appendChild(note);
+  }
+
+  function disableKeybindRow(row) {
+    if (row.dataset.splitcordPttKeybindDisabled === 'true') return;
+    row.dataset.splitcordPttKeybindDisabled = 'true';
+    row.querySelectorAll('input').forEach((input) => { input.disabled = true; });
+    row.querySelectorAll('button').forEach((btn) => {
+      btn.disabled = true;
+      btn.style.opacity = '0.5';
+      btn.style.pointerEvents = 'none';
+    });
+    row.style.opacity = '0.5';
+  }
+
+  function tryApply(row) {
+    if (row.dataset.splitcordPttChecked === 'true') return;
+    row.dataset.splitcordPttChecked = 'true';
+    forceSwitchOff(row);
+    injectNote(row);
+  }
+
+  function scan(root) {
+    if (!root.querySelectorAll) return;
+    if (root.matches?.('[data-nav-anchor-key="voice_push_to_talk_setting"]')) tryApply(root);
+    root.querySelectorAll('[data-nav-anchor-key="voice_push_to_talk_setting"]').forEach(tryApply);
+
+    if (root.matches?.('[data-nav-anchor-key="voice_push_to_talk_keybind_setting"]')) disableKeybindRow(root);
+    root.querySelectorAll('[data-nav-anchor-key="voice_push_to_talk_keybind_setting"]').forEach(disableKeybindRow);
+  }
+
+  function startObserving() {
+    if (!document.body) {
+      setTimeout(startObserving, 50);
+      return;
+    }
+    scan(document.body);
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType !== 1) return;
+          scan(node);
         });
       }
     });

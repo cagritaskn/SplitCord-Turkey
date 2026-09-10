@@ -4,12 +4,26 @@ const { session, desktopCapturer, BrowserWindow, ipcMain } = require('electron')
 const path = require('node:path');
 const { DISCORD_PARTITION, isAllowedOrigin } = require('./permissions');
 const dynamicColor = require('./dynamicColor');
+const { loadAppIcon } = require('./icon');
 
 // Seçici penceresinde en son seçilen kalite/FPS — discordWebviewPreload.js bunu
 // getDisplayMedia() akışı elde edildikten sonra IPC ile okuyup video track'e
 // applyConstraints() ile uyguluyor (Electron'un kendi seçici API'si çözünürlük/FPS
 // kısıtlaması geçirmeye izin vermiyor, bu yüzden bu dolaylı yolu kullanıyoruz).
 let lastQuality = null;
+
+// GERÇEK BUG (kullanıcı raporu): global kısayollardaki bir çift-tetiklenme yüzünden (bkz.
+// shortcuts.js'teki genel debounce) Discord'un "Ekranını Paylaş" butonu tek bir kullanıcı
+// eyleminde İKİ KEZ tıklanabiliyordu -- bu da setDisplayMediaRequestHandler'ı iki kez,
+// dolayısıyla pickSource()'u iki kez çağırıp İKİ AYRI seçici PENCERESİ açıyordu (aşağıdaki
+// pickSource()'taki "ender durum" yorumu bunu zaten öngörmüştü, ama yalnızca SONUÇ
+// çapraz-kirlenmesine karşı korunuyordu, ikinci pencerenin AÇILMASINI engellemiyordu).
+// Sonuç: kullanıcı üstteki (ikinci) pencereyi kapatınca/seçince alttaki (ilk, hâlâ açık)
+// pencere ortaya çıkıyor ve "İptal'e/Başlat'a basmama rağmen pencere geri geliyor" gibi
+// görünüyordu. shortcuts.js'teki debounce kök nedeni (çift tetiklenmeyi) çözüyor, ama bu
+// bayrak yine de ikinci bir savunma katmanı: bir seçici zaten açıkken gelen YENİ bir istek
+// anında reddedilir (ikinci bir pencere ASLA açılmaz).
+let pickerPending = false;
 
 /**
  * Electron, tarayıcıların aksine getDisplayMedia() için kendiliğinden bir "hangi ekranı/
@@ -51,6 +65,13 @@ function registerScreenSharePicker() {
         return;
       }
 
+      if (pickerPending) {
+        console.error('Ekran paylaşımı reddedildi: seçici zaten açık (bkz. yukarıdaki pickerPending notu).');
+        callback(null);
+        return;
+      }
+      pickerPending = true;
+
       const sources = await desktopCapturer.getSources({
         types: ['screen', 'window'],
         // picker.html'deki .source-thumb ile aynı 16:9 oranı — kaynağın gerçek en/boy
@@ -88,6 +109,8 @@ function registerScreenSharePicker() {
     } catch (err) {
       console.error('Ekran paylaşımı seçici hatası:', err);
       callback(null);
+    } finally {
+      pickerPending = false;
     }
   });
 
@@ -136,6 +159,10 @@ function pickSource(sources) {
       resizable: false,
       backgroundColor: '#2b2d31',
       show: false,
+      // GERÇEK BUG (canlı bulundu): icon verilmezse taskbar'da Electron'un varsayılan
+      // simgesi görünüyordu -- ana pencere/tray'de kullanılan marka simgesiyle aynısı
+      // burada da açıkça set ediliyor.
+      icon: loadAppIcon(path.join(__dirname, '..', '..', 'resources', 'icon.png')),
       webPreferences: {
         preload: path.join(__dirname, '..', 'preload', 'screenSharePickerPreload.js'),
         contextIsolation: true,
@@ -168,4 +195,19 @@ function pickSource(sources) {
   });
 }
 
-module.exports = { registerScreenSharePicker };
+// GERÇEK BUG (kullanıcı raporu): pickerPending bayrağı, aynı web sayfası içinden gelen
+// AYNI ANDA (gerçekten eşzamanlı) ikinci bir isteği reddediyordu -- ama Discord'un/
+// Chromium'un getDisplayMedia() çağrılarını SIRAYLA işlediği ortaya çıktı: kullanıcı
+// "Ekranını Paylaş" butonuna arka arkaya (aralıklı da olsa, her biri kendi başına
+// geçerli bir tetiklenme) birden fazla kez bastığında, İKİNCİ istek bizim handler'ımıza
+// yalnızca BİRİNCİSİ (callback'i çağırıp) TAMAMEN BİTTİKTEN SONRA ulaşıyor -- yani
+// pickerPending o anda çoktan false'a dönmüş oluyor, ikinci pencerenin açılmasını hiç
+// engellemiyor. Kullanıcı ilk pencereyi kapatınca (isteği sonuçlandırınca) ikincisi
+// "sıradan" çıkıp beliriyordu. Gerçek çözüm bu yüzden burada DEĞİL -- voiceState.js'in
+// toggleScreenShare()'i, "Ekranını Paylaş" butonuna TEKRAR tıklamadan ÖNCE bu bayrağı
+// kontrol etmeli (bkz. oradaki kullanım). Burada yalnızca dışa aktarılıyor.
+function isPickerPending() {
+  return pickerPending;
+}
+
+module.exports = { registerScreenSharePicker, isPickerPending };

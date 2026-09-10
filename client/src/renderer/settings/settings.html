@@ -87,6 +87,16 @@
         <div class="sc-divider"></div>
 
         <label class="sc-toggle-row">
+          <input type="checkbox" id="toggle-disable-spellcheck-highlight" />
+          <span>
+            <strong>Hatalı metinleri vurgulamayı devre dışı bırak</strong>
+            <div class="sc-engine-desc">Açıkken, sohbet kutusuna yazarken hatalı/tanınmayan kelimelerin altındaki kırmızı zikzak çizgi (yazım denetimi) gösterilmez.</div>
+          </span>
+        </label>
+
+        <div class="sc-divider"></div>
+
+        <label class="sc-toggle-row">
           <input type="checkbox" id="toggle-quic" />
           <span>
             <strong>QUIC'i devre dışı bırak</strong>
@@ -364,6 +374,20 @@
         <div class="sc-divider"></div>
 
         <div id="shortcuts-list" class="sc-shortcuts-list">
+          <div class="sc-shortcut-row" data-action="pushToTalk">
+            <span class="sc-shortcut-label">Bas Konuş</span>
+            <div class="sc-shortcut-controls">
+              <button type="button" class="sc-shortcut-input" data-action="pushToTalk">—</button>
+              <button type="button" class="sc-shortcut-clear" data-action="pushToTalk" title="Kaldır">✕</button>
+            </div>
+          </div>
+          <div class="sc-shortcut-row" data-action="pushToMute">
+            <span class="sc-shortcut-label">Susturmak İçin Bas</span>
+            <div class="sc-shortcut-controls">
+              <button type="button" class="sc-shortcut-input" data-action="pushToMute">—</button>
+              <button type="button" class="sc-shortcut-clear" data-action="pushToMute" title="Kaldır">✕</button>
+            </div>
+          </div>
           <div class="sc-shortcut-row" data-action="toggleMute">
             <span class="sc-shortcut-label">Mikrofonu Sustur / Aç</span>
             <div class="sc-shortcut-controls">
@@ -393,10 +417,38 @@
             </div>
           </div>
           <div class="sc-shortcut-row" data-action="minimizeToTray">
-            <span class="sc-shortcut-label">Pencereyi Tepsiye Küçült</span>
+            <span class="sc-shortcut-label">Tepsiye Küçült / Geri Al</span>
             <div class="sc-shortcut-controls">
               <button type="button" class="sc-shortcut-input" data-action="minimizeToTray">—</button>
               <button type="button" class="sc-shortcut-clear" data-action="minimizeToTray" title="Kaldır">✕</button>
+            </div>
+          </div>
+          <div class="sc-shortcut-row" data-action="toggleCamera">
+            <span class="sc-shortcut-label">Kamerayı Aç / Kapat</span>
+            <div class="sc-shortcut-controls">
+              <button type="button" class="sc-shortcut-input" data-action="toggleCamera">—</button>
+              <button type="button" class="sc-shortcut-clear" data-action="toggleCamera" title="Kaldır">✕</button>
+            </div>
+          </div>
+          <div class="sc-shortcut-row" data-action="toggleScreenShare">
+            <span class="sc-shortcut-label">Ekran Paylaşımını Aç / Kapat</span>
+            <div class="sc-shortcut-controls">
+              <button type="button" class="sc-shortcut-input" data-action="toggleScreenShare">—</button>
+              <button type="button" class="sc-shortcut-clear" data-action="toggleScreenShare" title="Kaldır">✕</button>
+            </div>
+          </div>
+          <div class="sc-shortcut-row" data-action="navigateForward">
+            <span class="sc-shortcut-label">İleri Git</span>
+            <div class="sc-shortcut-controls">
+              <button type="button" class="sc-shortcut-input" data-action="navigateForward">—</button>
+              <button type="button" class="sc-shortcut-clear" data-action="navigateForward" title="Kaldır">✕</button>
+            </div>
+          </div>
+          <div class="sc-shortcut-row" data-action="navigateBack">
+            <span class="sc-shortcut-label">Geri Git</span>
+            <div class="sc-shortcut-controls">
+              <button type="button" class="sc-shortcut-input" data-action="navigateBack">—</button>
+              <button type="button" class="sc-shortcut-clear" data-action="navigateBack" title="Kaldır">✕</button>
             </div>
           </div>
         </div>

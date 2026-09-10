@@ -2,6 +2,7 @@
 
 const { logEvent } = require('./log');
 const { readLocalSettings } = require('./localSettings');
+const { isPickerPending } = require('./screenSharePicker');
 
 // Discord'un ses kanalı/arama durumunu webview DOM'undan okuyoruz — resmi bir API yok.
 //
@@ -140,6 +141,38 @@ function findControlButton(substrings) {
 }
 `;
 
+// GERÇEK BUG (Windows istemcisinde bulundu, buraya da aynen uygulanıyor -- bkz.
+// client/src/main/voiceState.js): Kamera/Ekran Paylaşımı aç/kapat kısayolları, YALNIZCA
+// sesli bağlantıda bulunulan sunucu/kanal o an EKRANDA SEÇİLİYKEN çalışıyordu. Kök neden:
+// sol alttaki HER ZAMAN görünen "Ses Bağlantısı Kuruldu" kompakt panelindeki Kamera/Ekran
+// Paylaşımı butonlarının `aria-label` özniteliği YOK -- bunun yerine `aria-describedby`
+// ile ayrı bir tooltip elemanına işaret ediyorlar (o eleman hover ETMEDEN de DOM'da mevcut
+// ve okunabilir, yalnızca görünürlüğü hover'a bağlı). Kanalın TAM (genişletilmiş) araç
+// çubuğu -- YALNIZCA o kanal ekrandayken var olan -- AYNI düğmelerin `aria-label`
+// KULLANAN bir kopyasını render ediyor; eski `document.querySelectorAll('[aria-label]')`
+// sorgumuz kompakt paneldeki (her zaman mevcut) düğmeleri bu yüzden hiç bulamıyordu.
+// getAccessibleLabel() ikisini de kapsıyor: önce doğrudan aria-label'a bakıyor, yoksa
+// aria-describedby'nin işaret ettiği elemanın metnine düşüyor -- hangi görünüm render
+// edilmiş olursa olsun aynı düğmeyi buluyor.
+const GET_ACCESSIBLE_LABEL_FN = `
+function getAccessibleLabel(el) {
+  const direct = el.getAttribute('aria-label');
+  if (direct) return direct;
+  const describedBy = el.getAttribute('aria-describedby');
+  if (describedBy) {
+    const tip = document.getElementById(describedBy);
+    if (tip && tip.textContent) return tip.textContent;
+  }
+  return '';
+}
+function findButtonByAccessibleLabel(exactLabels) {
+  return Array.from(document.querySelectorAll('button, [role="button"]')).find((el) => {
+    const label = getAccessibleLabel(el).toLowerCase();
+    return exactLabels.includes(label);
+  });
+}
+`;
+
 // Sustur/sağırlaştır artık gerçek ARIA switch'ler üzerinden hedefleniyor (bkz. yukarıdaki
 // not 3) — "Bağlantıyı Kes" ise sıradan bir eylem butonu (role="switch" değil).
 const TOGGLE_MUTE_SCRIPT = `
@@ -147,6 +180,22 @@ const TOGGLE_MUTE_SCRIPT = `
   ${FIND_SWITCH_FN}
   const btn = findSwitch(['sustur', 'mute', 'mikrofon']);
   if (btn) btn.click();
+})();
+`;
+
+// KULLANICI TALEBİ: Bas Konuş / Susturmak İçin Bas -- ikisi de bas-tut mantığıyla
+// çalışıyor (tuş basılıyken bir yöne, bırakılınca diğer yöne zorluyor). Kör bir
+// toggleMute() burada YANLIŞ olurdu: tuş tekrarı (OS auto-repeat) veya art üste hızlı
+// basma/bırakma durumunda çift tetiklenip durumu ters çevirebilir. Bunun yerine mevcut
+// gerçek switch durumunu okuyup İSTENEN duruma zaten eşitse hiç tıklamayan, idempotent
+// bir "setMuted" kullanıyoruz (bkz. shortcuts.js holdActionsMap).
+const SET_MUTE_SCRIPT = (desiredMuted) => `
+(function() {
+  ${FIND_SWITCH_FN}
+  const btn = findSwitch(['sustur', 'mute', 'mikrofon']);
+  if (!btn) return;
+  const current = btn.getAttribute('aria-checked') === 'true';
+  if (current !== ${desiredMuted ? 'true' : 'false'}) btn.click();
 })();
 `;
 
@@ -166,7 +215,39 @@ const DISCONNECT_SCRIPT = `
 })();
 `;
 
+// KULLANICI TALEBİ: Kamera aç/kapat -- canlı testte doğrulandı: bu buton role="switch"
+// DEĞİL, sıradan bir <button>; açık/kapalı durumu ARIA switch'lerdeki gibi aria-checked
+// ile değil, etiketin KENDİSİ "Kamerayı Aç" <-> "Kamerayı Kapat" olarak değişerek
+// belirtiliyor. "Daha Fazla Kamera Seçeneği" gibi AYNI "kamera" kelimesini içeren ama
+// alakasız bir buton da var -- bu yüzden findControlButton'daki genel alt-dize eşleşmesi
+// YETERSİZ (o buton da yanlışlıkla eşleşirdi); tam etiket eşleşmesi kullanılıyor.
+const TOGGLE_CAMERA_SCRIPT = `
+(function() {
+  ${GET_ACCESSIBLE_LABEL_FN}
+  const btn = findButtonByAccessibleLabel(['kamerayı aç', 'kamerayı kapat', 'turn on camera', 'turn off camera']);
+  if (btn) btn.click();
+})();
+`;
+
+// KULLANICI TALEBİ: Ekran paylaşımı aç/kapat -- canlı testte doğrulandı: "Ekranını
+// Paylaş" butonu paylaşım AKTİFKEN DE aynı etiketle kalıyor (tıklanınca yeniden kaynak
+// seçici açıyor, kapatmıyor) -- asıl "durdur" kontrolü TAMAMEN AYRI bir yerde, sol alttaki
+// "Yayın Aktif" panelinde "Yayını Durdur" etiketli bir buton olarak duruyor. Bu yüzden
+// doğru sırayla önce "Yayını Durdur" aranıyor (varsa paylaşım zaten aktif, onu durdurur);
+// yoksa "Ekranını Paylaş" tıklanıp SplitCord-Turkey'in kendi ekran seçici penceresi
+// açılıyor (manuel tıklamayla BİREBİR aynı davranış -- kaynak seçimi hâlâ gerekiyor).
+const TOGGLE_SCREEN_SHARE_SCRIPT = `
+(function() {
+  ${GET_ACCESSIBLE_LABEL_FN}
+  const stopBtn = findButtonByAccessibleLabel(['yayını durdur', 'stop streaming']);
+  if (stopBtn) { stopBtn.click(); return; }
+  const shareBtn = findButtonByAccessibleLabel(['ekranını paylaş', 'share your screen']);
+  if (shareBtn) shareBtn.click();
+})();
+`;
+
 let webviewWebContents = null;
+let mainWindowRef = null;
 let pollTimer = null;
 let lastState = { connected: false, muted: false, deafened: false };
 // Birden fazla dinleyici olabiliyor: tray.js ikonu güncellemek için, ayarlar
@@ -183,6 +264,15 @@ function getLastState() {
 
 async function poll(forceLog = false) {
   if (!webviewWebContents || webviewWebContents.isDestroyed()) return;
+  // KULLANICI TALEBİ: tam ekran oyunlarda FPS düşüşü -- Performans Modu açıkken VE
+  // pencere odaksızken (ör. bir oyunun arkasında açık kalması) bu yoklamayı atlıyoruz;
+  // forceLog=true (Ayarlar'daki "Şimdi Kontrol Et") İSTİSNA, kullanıcı elle istediğinde
+  // her zaman çalışır. Tray ikonu bir sonraki odaklanmada en fazla mevcut aralık kadar
+  // (5 sn) geriden gelir -- salt kozmetik bir gecikme, bkz. backgroundPriority.js'teki
+  // aynı temayı işleyen ayrıntılı not.
+  if (!forceLog && readLocalSettings().performanceMode && mainWindowRef && !mainWindowRef.isDestroyed() && !mainWindowRef.isFocused()) {
+    return;
+  }
   try {
     const raw = await webviewWebContents.executeJavaScript(POLL_SCRIPT);
     const state = raw ? JSON.parse(raw) : { connected: false };
@@ -225,8 +315,9 @@ function scheduleNextPoll() {
   }, interval);
 }
 
-function startVoiceStatePolling(webContents) {
+function startVoiceStatePolling(webContents, mainWindow) {
   webviewWebContents = webContents;
+  mainWindowRef = mainWindow || null;
   webContents.ipc.on('discord-preload:diag', (_event, info) => {
     logEvent('discord-preload-diag', info);
   });
@@ -247,4 +338,26 @@ function disconnect() {
   webviewWebContents?.executeJavaScript(DISCONNECT_SCRIPT).catch(() => {});
 }
 
-module.exports = { startVoiceStatePolling, getLastState, onVoiceStateChanged, pollNow, toggleMute, toggleDeafen, disconnect };
+function setMuted(desiredMuted) {
+  webviewWebContents?.executeJavaScript(SET_MUTE_SCRIPT(desiredMuted)).catch(() => {});
+}
+
+function toggleCamera() {
+  webviewWebContents?.executeJavaScript(TOGGLE_CAMERA_SCRIPT).catch(() => {});
+}
+
+// GERÇEK BUG (Windows istemcisinde bulundu, buraya da aynen uygulanıyor -- bkz.
+// client/src/main/voiceState.js): ekran paylaşımı seçici penceresi AÇIKKEN (henüz bir
+// kaynak seçilmeden) aynı kısayol tekrar tekrar kullanılınca, her basış Discord'un
+// "Ekranını Paylaş" butonuna YENİDEN tıklayıp YENİ bir getDisplayMedia() isteği
+// başlatıyordu. Chromium bu istekleri SIRAYLA işlediği için (bkz. screenSharePicker.js
+// isPickerPending yorumu) bu istekler görünmez şekilde kuyruğa giriyor, kullanıcı ilk
+// seçiciyi kapatınca/seçim yapınca sıradaki istek kendi seçici penceresini açıveriyordu
+// -- kullanıcıya "kapattığım pencere geri geliyor" gibi görünüyordu. Bir seçici zaten
+// açık/beklemedeyken tekrar tıklamayı burada engellemek kökten çözüyor.
+function toggleScreenShare() {
+  if (isPickerPending()) return;
+  webviewWebContents?.executeJavaScript(TOGGLE_SCREEN_SHARE_SCRIPT).catch(() => {});
+}
+
+module.exports = { startVoiceStatePolling, getLastState, onVoiceStateChanged, pollNow, toggleMute, toggleDeafen, disconnect, toggleCamera, toggleScreenShare, setMuted };

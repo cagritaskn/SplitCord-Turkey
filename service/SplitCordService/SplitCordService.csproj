@@ -33,4 +33,21 @@
     </Content>
   </ItemGroup>
 
+  <!-- GERÇEK BUG: resources/bin/ TAMAMEN gitignore'lu (üçüncü taraf binary'ler, lisans
+       nedeniyle commitlenmiyor; npm run fetch-binaries ile her seferinde sıfırdan
+       indiriliyor). ZapretEngine.cs'in hostlist dışlama bayrağı için kullandığı statik
+       dışlama listesi ise BİZİM kendi içeriğimiz (kullanıcı şikayet geldikçe güncelliyor);
+       o dizinin İÇİNE konursa asla commitlenmez ve her fetch-binaries çalıştığında
+       (upstream zapret-discord-youtube ZIP'inin kendi list-exclude.txt'i ile) sessizce
+       EZİLİRDİ. Bu yüzden repoya commitlenen, resources/bin/ dışındaki
+       resources/zapret-lists/ altında tutuluyor ve farklı bir dosya adıyla
+       (splitcord-exclude.txt) ayrı kopyalanıyor; upstream'in kendi list-exclude.txt'iyle
+       AYNI çıktı yoluna çakışmasın diye. -->
+  <ItemGroup>
+    <Content Include="..\..\resources\zapret-lists\**\*">
+      <Link>bin\zapret\lists\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

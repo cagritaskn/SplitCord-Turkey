@@ -27,6 +27,34 @@ function isAllowedOrigin(origin) {
   }
 }
 
+// GERÇEK BUG (kullanıcı raporu, Windows istemcisinde canlı testte doğrulandı): bir
+// Discord Aktivitesini (Wordle) "Pencere Modu"na alınca window.js'teki popout kontrolü
+// isAllowedOrigin() kullanıyordu ve pencereyi "harici" sayıp sistem tarayıcısına
+// gönderiyordu -- çünkü "Pencere Modu"nun window.open() çağrısı Aktivitenin KENDİ
+// iframe'inden (ör. https://<app_id>.discordsays.com) geliyor, discord.com'dan DEĞİL;
+// discordsays.com yukarıdaki ALLOWED_ORIGIN_SUFFIXES'te yok.
+//
+// discordsays.com'u DOĞRUDAN ALLOWED_ORIGIN_SUFFIXES'e EKLEMEDİK: o liste AYNI ZAMANDA
+// media/display-capture gibi YÜKSEK RİSKLİ izinleri de kontrol ediyor (bkz. yukarıdaki
+// CVE-2026-70599 notu) -- discordsays.com Discord'un KENDİ alan adı olsa da, ÜZERİNDE
+// ÇALIŞAN İÇERİK üçüncü taraf (Aktivite geliştiricisi) kodu; bu yüzden Activities'in
+// discord.com'un medya izinlerini yanlışlıkla MİRAS ALMASINI ÖNLEMEK zaten bilinçli bir
+// tasarım kararıydı, bunu geri almak istemiyoruz. Ama "bu pencere uygulama içinde mi
+// yoksa harici tarayıcıda mı açılsın" kararı ÇOK DAHA DÜŞÜK RİSKLİ (ek bir izin/erişim
+// VERMİYOR, yalnızca GÖRÜNTÜLEME yerini belirliyor) -- bu yüzden popout kontrolü için
+// discordsays.com'u da içeren AYRI, daha geniş bir liste kullanılıyor.
+const POPOUT_ALLOWED_ORIGIN_SUFFIXES = [...ALLOWED_ORIGIN_SUFFIXES, 'discordsays.com'];
+
+function isAllowedPopoutOrigin(url) {
+  if (!url) return false;
+  try {
+    const { hostname } = new URL(url);
+    return POPOUT_ALLOWED_ORIGIN_SUFFIXES.some((suffix) => hostname === suffix || hostname.endsWith(`.${suffix}`));
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Mikrofon/kamera (sesli-görüntülü konuşma) ve native bildirim izinlerini yalnızca
  * discord.com kökenli içerik için otomatik onaylar. Başka hiçbir origin bu izinleri alamaz.
@@ -72,4 +100,17 @@ function configureBrowserIdentity() {
   discordSession.setUserAgent(userAgent);
 }
 
-module.exports = { registerPermissions, configureBrowserIdentity, isAllowedOrigin, DISCORD_PARTITION };
+/**
+ * KULLANICI TALEBİ: Ayarlar > Genel > "Hatalı metinleri vurgulamayı devre dışı bırak" --
+ * Chromium'un yerleşik yazım denetleyicisini (sohbet kutusundaki kırmızı zikzak altı
+ * çizgi) açıp kapatır. session.setSpellCheckerEnabled() QUIC'in aksine yalnızca
+ * app.whenReady() öncesinde DEĞİL, runtime'da HER AN çağrılabiliyor -- bu yüzden hem
+ * başlangıçta (index.js) hem de ayar her değiştiğinde (ipc.js) yeniden çağrılıyor,
+ * yeniden başlatma gerekmiyor.
+ */
+function applySpellcheckSetting(disableHighlight) {
+  const discordSession = session.fromPartition(DISCORD_PARTITION);
+  discordSession.setSpellCheckerEnabled(!disableHighlight);
+}
+
+module.exports = { registerPermissions, configureBrowserIdentity, isAllowedOrigin, isAllowedPopoutOrigin, applySpellcheckSetting, DISCORD_PARTITION };

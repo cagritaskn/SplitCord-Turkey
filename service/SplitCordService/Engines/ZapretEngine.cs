@@ -78,6 +78,26 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
     // makul bir varsayılan strateji.
     private const string UdpCompanionArgs = "--wf-udp=443,50000-65535 --dpi-desync=fake --dpi-desync-ttl=4";
 
+    // GERİ ALINDI (kullanıcı raporu, canlı testte doğrulandı): --hostlist-exclude +
+    // --hostlist-auto BİRLİKTE eklenince Zapret'in TÜM adayları bozuldu -- her strateji
+    // "SSL connection could not be established" / bağlantı zaman aşımı ile başarısız oldu
+    // (winws.exe kendisi hatasız başlıyor, hostlist'leri doğru yüklüyor, ama gerçek
+    // desync ARTIK Discord'a ulaşmıyor). Zapret2 (bu bayraklar hiç eklenmemişti) aynı ağda
+    // sorunsuz çalıştığı için kök neden Zapret'e/bu bayraklara işaret ediyor. KULLANICI
+    // TALEBİ: yalnızca --hostlist-auto (kendi kendine öğrenen, sürekli dosya yazan, her
+    // aday denemesinde SIFIRDAN başlayan) kaldırıldı -- şüpheli olan bu, statik
+    // --hostlist-exclude (salt okunur, tek seferlik yüklenen liste) tutuluyor.
+    //
+    // GERÇEK BUG (ikinci tur): dosya adı bilerek "list-exclude.txt" DEĞİL,
+    // "splitcord-exclude.txt" -- resources/bin/zapret/lists/list-exclude.txt upstream
+    // zapret-discord-youtube ZIP'inin KENDİ dosyası (gitignore'lu, her fetch-binaries'te
+    // sıfırdan iniyor); bizim listemiz commitlenen resources/zapret-lists/ altında AYRI
+    // bir isimle tutuluyor ki ikisi aynı çıktı yoluna (bin/zapret/lists/) çakışmasın (bkz.
+    // SplitCordService.csproj'daki ikinci Content Include bloğu).
+    private static readonly string HostlistExcludeRelativePath = Path.Combine("..", "lists", "splitcord-exclude.txt");
+
+    private static readonly string HostlistArgs = $"--hostlist-exclude={HostlistExcludeRelativePath}";
+
     private readonly SettingsStore _settings;
     private readonly ILogger<ZapretEngine> _logger;
     private readonly LogRingBuffer _logs = new(200);
@@ -306,7 +326,7 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
-        foreach (var arg in SplitArgs(UdpCompanionArgs)) psi.ArgumentList.Add(arg);
+        foreach (var arg in SplitArgs($"{UdpCompanionArgs} {HostlistArgs}")) psi.ArgumentList.Add(arg);
 
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) _logs.Add($"[UDP eşlik] {e.Data}"); };
@@ -379,7 +399,7 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
-        foreach (var arg in SplitArgs(args)) psi.ArgumentList.Add(arg);
+        foreach (var arg in SplitArgs($"{args} {HostlistArgs}")) psi.ArgumentList.Add(arg);
 
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) _logs.Add(e.Data); };

@@ -2,8 +2,8 @@
   "name": "splitcord-client",
   "private": true,
   "author": "SplitCord-Turkey",
-  "version": "1.0.1",
-  "description": "SplitCord-Turkey 1.0.1 Installer",
+  "version": "1.0.2",
+  "description": "SplitCord-Turkey 1.0.2 Installer",
   "main": "src/main/index.js",
   "scripts": {
     "start": "electron .",
@@ -11,15 +11,17 @@
     "dist": "electron-builder"
   },
   "dependencies": {
-    "arrpc": "^3.6.0"
+    "arrpc": "^3.6.0",
+    "uiohook-napi": "^1.5.5"
   },
   "devDependencies": {
-    "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron": "^44.0.0",
+    "electron-builder": "^26.16.1"
   },
   "build": {
     "appId": "com.splitcord.turkey",
     "productName": "SplitCord-Turkey",
+    "npmRebuild": false,
     "files": [
       "src/**/*",
       "resources/**/*"
@@ -32,7 +34,9 @@
       {
         "from": "../service/installer",
         "to": "service-installer",
-        "filter": ["*.ps1"]
+        "filter": [
+          "*.ps1"
+        ]
       }
     ],
     "win": {
@@ -48,6 +52,8 @@
     }
   },
   "allowScripts": {
-    "electron@31.7.7": true
+    "electron@44.3.0": true,
+    "uiohook-napi@1.5.5": true,
+    "electron-winstaller@5.4.0": true
   }
 }

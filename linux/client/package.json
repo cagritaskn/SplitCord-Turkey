@@ -6,7 +6,7 @@
     "email": "cagritaskn@gmail.com"
   },
   "homepage": "https://github.com/cagritaskn/SplitCord-Turkey",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "SplitCord-Turkey",
   "main": "src/main/index.js",
   "scripts": {
@@ -15,11 +15,12 @@
     "dist": "electron-builder"
   },
   "dependencies": {
-    "arrpc": "^3.6.0"
+    "arrpc": "^3.6.0",
+    "uiohook-napi": "^1.5.5"
   },
   "devDependencies": {
-    "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron": "^44.0.0",
+    "electron-builder": "^26.16.1"
   },
   "build": {
     "appId": "com.splitcord.turkey",
@@ -55,6 +56,7 @@
     }
   },
   "allowScripts": {
-    "electron@31.7.7": true
+    "electron@44.3.0": true,
+    "uiohook-napi@1.5.5": true
   }
 }
