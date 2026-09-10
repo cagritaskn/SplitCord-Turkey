@@ -402,9 +402,20 @@ btnStatusAddDefenderException?.addEventListener('click', async () => {
         detail: 'SplitCord-Turkey kurulum dosyasını (indirdiğin .exe) tekrar çalıştır — istisna artık devrede olduğu için dosya bu sefer silinmeden geri yüklenecek.',
       });
     } else if (result.ok) {
+      // KULLANICI TALEBİ: "Yeniden deneniyor…" yerine, bu istisnanın sık karşılaşılan bir
+      // nedenini (Windows Defender'ın tanım güncellemelerinin otomatik güncellenmemesi)
+      // ve tekrar kurulum gerekebileceğini açıkça belirten, ANTIVIRUS.md'ye yönlendiren
+      // bir mesaj (bkz. antivirusInfo.js'teki AYNI link deseni).
       await window.showAlertModal({
         title: 'İstisna eklendi',
-        message: 'Windows Defender istisnası eklendi. Yeniden deneniyor…',
+        message:
+          'Windows Defender istisnası eklendi. Programı tekrar kurmanız gerekebilir. Programı ' +
+          'tekrar kurduktan sonra aynı hatayı alırsanız, Windows Defender tanım (definition) ' +
+          'güncellemeleri otomatik olarak güncellenmiyorsa bu hatayı almanız muhtemeldir.',
+        link: {
+          url: 'https://github.com/cagritaskn/SplitCord-Turkey/blob/main/resources/ANTIVIRUS.md',
+          label: 'Daha fazla bilgi',
+        },
       });
     } else if (result.blocked) {
       await window.showAlertModal({

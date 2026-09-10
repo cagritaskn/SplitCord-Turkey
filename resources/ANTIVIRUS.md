@@ -77,3 +77,23 @@ Kaspersky/ESET'i sisteminizden tamamen kaldırırsanız, Zapret2, Zapret ve Good
 ## Bu WinDivert'in güvenilir olmadığı anlamına mı geliyor
 
 Hayır. WinDivert açık kaynaklıdır ve kaynak kodu [buradan](https://github.com/basil00/WinDivert) incelenebilir. GoodbyeDPI, Zapret ve Zapret2 de açık kaynaklıdır — SplitCord-Turkey'in [kaynak kodundan](https://github.com/cagritaskn/SplitCord-Turkey) bu araçları nasıl çalıştırdığımızı görebilirsiniz. "Risk aracı" sınıflandırması, aracın YAPABİLECEKLERİ hakkında genel bir uyarıdır, bu projenin veya WinDivert'in kötü amaçlı olduğu anlamına gelmez.
+
+---
+
+## SplitCordDpiService'in Yanlış Pozitif (Machine Learning) Tespiti ve ECONNREFUSED Hatası
+
+Yukarıdaki WinDivert sınıflandırmasından **ayrı, farklı bir sorun**: arka planda çalışan DPI aşım hizmetinin kendisi olan **SplitCordService.dll**, her yeni sürümde derleme sonucu farklı bir dosya hash'ine sahip olur ve henüz hiçbir itibar geçmişi taşımaz. Windows Defender'ın makine öğrenmesi tabanlı tespit motoru bu YENİ dosyayı bazen **Trojan:Script/Wacatac.C!ml** gibi genel, davranışsal bir imzayla yanlış pozitif olarak işaretleyip karantinaya alabilir (hatta diskten tamamen silebilir).
+
+Bu durumda hizmet hiç başlayamaz ve SplitCord-Turkey, hizmetin dinlediği yerel adrese (`127.0.0.1:58271`) bağlanmaya çalışırken **ECONNREFUSED** hatası alır; uygulama başlığında **"Eylem Gerekli"** uyarısı belirir.
+
+### Neden korkmamanız/endişelenmemeniz gerekiyor
+
+- Bu tespit, dosyanın **gerçek içeriğine dayanan bir imza eşleşmesi DEĞİL**, "bir sistem hizmeti olarak kaydolma, ağ trafiğine müdahale etme" gibi meşru ama "riskli görünen" DAVRANIŞLARA dayanan istatistiksel bir sezgidir — aynı sınıftan bir yanlış pozitif, WinDivert için yukarıda anlatılan "not-a-virus:HEUR:RiskTool" sınıflandırmasıyla aynı mantığı taşır.
+- SplitCord-Turkey tamamen açık kaynaklıdır; SplitCordService'in kaynak kodunu (`service/SplitCordService/`) [GitHub'dan](https://github.com/cagritaskn/SplitCord-Turkey) inceleyebilir, isterseniz kendiniz derleyip karşılaştırabilirsiniz.
+- Geliştirici, **her yeni sürüm yayınlandığında** dosya örneğini ve bir yanlış pozitif inceleme talebini doğrudan Microsoft'a gönderir; bu talepler genellikle birkaç gün içinde incelenip onaylanır ve Defender'ın bulut tabanlı veritabanı güncellenir — yani sorun kalıcı değildir, kendiliğinden düzelir.
+
+### Ne yapabilirsiniz
+
+1. **Windows Defender tanım (definition) güncellemelerinin güncel olduğundan emin olun.** Bu yanlış pozitifin en sık görülen sebebi, sistemde Defender'ın virüs tanımı veritabanının otomatik güncellenmemesidir (sınırlı/kesintili internet bağlantısı, otomatik güncellemelerin kapalı olması gibi nedenlerle). Windows Güvenliği > Virüs ve tehdit koruması > Güncellemeleri kontrol et yoluyla elle tetikleyebilir, ya da doğrudan **[Microsoft'un tanım güncellemeleri sayfasından](https://www.microsoft.com/en-us/wdsi/defenderupdates)** en güncel tanım paketini indirip manuel olarak kurabilirsiniz. Microsoft'a gönderilen yanlış pozitif itirazı onaylandıktan sonra bu güncel tanımlar sorunu tamamen ortadan kaldırır.
+2. **Uygulama içindeki "Eylem Gerekli" uyarısına tıklayıp Windows Defender istisnası ekleyin.** Bu, tek seferlik bir UAC onayı ister ve yalnızca servis dosyalarının bulunduğu dar klasörü (`resources/service-installer`) Defender taramasından muaf tutar — gelecekteki taramalarda aynı yanlış pozitifin tekrarlanmasını önler.
+3. **İstisna eklendikten sonra dosya hâlâ eksikse SplitCord-Turkey kurulum dosyasını (indirdiğiniz `.exe`) tekrar çalıştırın.** İstisna eklemek, Defender'ın DAHA ÖNCE sildiği dosyayı geri getirmez — yalnızca bundan sonra aynısının tekrarlanmasını önler; dosyayı geri getirmenin tek yolu kurulumu (istisna artık devredeyken) tekrar çalıştırmaktır.

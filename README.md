@@ -63,6 +63,9 @@ SplitCord-Turkey, Chromium tabanlı bir Discord sunduğu için tam ekran uygulam
 ### **DPI Motoruna Bağlanılamama Hatası Aldığınızda**
 **SplitCordDpiService.dll** dosyası her güncellendiğinde yeni bir hash'e sahip olduğundan Microsoft Defender'ın makine öğrenmesine bağlı zararlı yazlım tespitinde hatalı olarak flaglenebiliyor. Bu durumun yaşanmaması adına her release'ten sonra Microsoft'a dosya örneği ve inceleme talebi gönderiliyor ve kabul ediliyor ancak bu manuel bir işlem olduğundan gözden kaçtığında DLL dosyasının Defender tarafından silinmesi ihtimali bulunuyor. Bu yaşandığında DPI motoruna erişlemediğine ilişkin hata alınabiliyor. Eğer bu durum gerçekleşirse Defender üzerinden ilgili DLL dosyası ya da SplitCord-Turkey'in kurulum klasörünü Defender istisnalarına ekleyip tekrar kurulum yaparak sorunu çözebilirsiniz.
 
+### **ECONNREFUSED**
+Uygulama günlüğünde ya da hata mesajında **ECONNREFUSED** (`127.0.0.1:58271`) görüyorsanız bu, yukarıdaki "DPI Motoruna Bağlanılamama Hatası" ile aynı sorundur — arka plan hizmeti Windows Defender tarafından yanlış pozitif olarak karantinaya alındığı için başlayamıyordur. Ayrıntılı açıklama ve çözüm adımları için [ANTIVIRUS.md](https://github.com/cagritaskn/SplitCord-Turkey/blob/main/resources/ANTIVIRUS.md) sayfasına bakın.
+
 ### **Sesli Görüşmeye Bağlantı Sorunu Yaşadığınızda**
 Ayarlardaki DPI Aşımı bölümünde **Gelişmiş** seçeneğini aktifleştirip **Argüman Setini Yasakla** butonunu kullanarak o an aktif olan argüman setini yasaklayabilirsiniz. Bu sayede sonraki taramada bu argüman seti atlanacak ve sonraki argüman setleri denenecektir.
 
