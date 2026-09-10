@@ -12,7 +12,7 @@
 
 Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'i kurup kullanmaya başlayabilirsiniz.
 
-1. **[SplitCord-Turkey-Setup-1.0.1.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.1/SplitCord-Turkey-Setup-1.0.1.exe)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
+1. **[SplitCord-Turkey-Setup-1.0.2.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.2/SplitCord-Turkey-Setup-1.0.2.exe)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
 2. İndirilen dosyayı çalıştırın. SmartScreen uyarısı görürseniz **(Windows kişisel bilgisayarınızı korudu başlıklı)** pencerede bulunan **Ek bilgi** kısmına tıklayıp daha sonra **Yine de çalıştır** butonuna tıklayın. Set-up, arka planda çalışacak DPI aşım hizmetini (SplitCordDpiService) kaydedebilmek için yönetici izni isteyebilir; kurulum tamamlandıktan sonra uygulama hiçbir zaman yükseltilmiş yetkiyle çalışmaz (Yönetici izni istemez).
 3. Kurulum bitince SplitCord-Turkey'i çalıştırın.
 4. İlk açılışta uygulama sizin için en uygun DPI aşım motorunu ve ayarını bulmak amacıyla Zapret, Zapret2, ByeDPI ve GoodbyeDPI'yi sırayla dener; bu tarama birkaç dakika sürebilir. Bu süre boyunca "Bağlantı hazırlanıyor…" ekranını görmeniz normaldir, taramanın bitmesini bekleyin.
@@ -27,10 +27,10 @@ Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'
 
 SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint'te test edildi) `.deb` paketi olarak sunulan bir Linux sürümü de bulunur. Motor seti Windows'tan biraz farklıdır: WinDivert yerine NFQUEUE/iptables kullanılır, GoodbyeDPI Linux'a özgü bir karşılığı olmadığı için bulunmaz — Otomatik modun motor sırası **Zapret → Zapret2 → ByeDPI**'dir.
 
-1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından [SplitCord-Turkey-Linux-1.0.1-AMD64.deb](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.1/SplitCord-Turkey-Linux-1.0.1-AMD64.deb) dosyasını indirin.
+1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından [SplitCord-Turkey-Linux-1.0.2-AMD64.deb](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.2/SplitCord-Turkey-Linux-1.0.2-AMD64.deb) dosyasını indirin.
 2. Paketi kurun:
    ```bash
-   sudo dpkg -i SplitCord-Turkey-Linux-1.0.1-AMD64.deb
+   sudo dpkg -i SplitCord-Turkey-Linux-1.0.2-AMD64.deb
    ```
    ya da 
    Linux dağıtımınız destekliyorsa .deb dosyasına çift tıklayıp çalıştırarak kurun.
@@ -78,6 +78,8 @@ Ayarlardaki Hakkında ve Güncelleme bölümünde bulunan **Tüm Ayarları Sıf�
 - **Otomatik ve Manuel mod.** Otomatik modda uygulama sizin için en uygun motoru ve stratejiyi bulur; Manuel modda hangi motorun, hangi parametrelerle çalışacağını kendiniz seçebilirsiniz.
 - **Şifreli DNS desteği (DoH/DNSCrypt, isteğe bağlı DoT/DoQ).** DNS seviyesinde yaşanan engellemelere karşı Zapret/Zapret2/ByeDPI, DoH → DNSCrypt → DNS'siz sırasıyla otomatik olarak dener (DoT/DoQ sabit 853 portunda çalıştığı ve birçok ISP tarafından protokole bakılmaksızın toptan engellendiği için otomatik sıradan çıkarıldı, Manuel moddan hâlâ elle sabitlenebilir); DoH sağlayıcıları arasında, diğerlerinin tamamı engellendiğinde devreye giren bir NextDNS yedeği de bulunur. Sağlayıcıları Ayarlar ekranından kendiniz de özelleştirebilirsiniz.
 - **Sesli kanal desteği.** ByeDPI'nin kapsayamadığı WebRTC/UDP trafiği için, ByeDPI aktifken arka planda otomatik olarak devreye giren bir Zapret UDP eşlik süreci bulunur.
+- **Global Klavye Kısayolları.** Mikrofonu sustur/aç, sağırlaştır, bağlantıyı kes, kamerayı aç/kapat, ekran paylaşımını aç/kapat, pencereyi öne al, tepsiye küçült/geri al, sohbette ileri/geri git ve Bas-Konuş/Susturmak İçin Bas — hepsi uygulama arka planda ya da odak dışındayken bile çalışır; Discord'un kendi (yalnızca sekme ön plandayken çalışan) Bas-Konuş özelliğinin yerini alır.
+- **Performans Modu.** Pencere odak dışındayken bazı arkaplan işlemlerinin sıklığını azaltarak tam ekran oyunlarda yaşanabilecek FPS düşüşünü engeller.
 - **Discord Rich Presence desteği.** Resmi olmayan istemcilerde normalde çalışmayan bu özellik, [arRPC](https://github.com/OpenAsar/arrpc) tabanlı yerel bir RPC sunucusu ile desteklenir.
 - **İzinler ve Kontroller ekranı.** Güvenlik duvarı izinlerini, çakışabilecek güvenlik yazılımlarını (Kaspersky, ESET) ve elle kurulmuş harici DPI süreçlerini/hizmetlerini tespit edip yönetmenizi sağlar.
 - **Kalıcı arka plan hizmeti.** DPI aşımı, SYSTEM yetkisiyle çalışan ayrı bir Windows hizmeti üzerinden yürütülür; Discord penceresini kapatsanız da bağlantı kesilmez, sistem açılışında otomatik başlar.
@@ -119,9 +121,9 @@ Otomatik modun motor sırası **Zapret → Zapret2 → ByeDPI**'dir — mantık 
 
 - **DPI Aşımı:** Otomatik/Manuel mod seçimi, motor kartları, gelişmiş argüman düzenleme, DNS protokolü sırası ve sağlayıcıları, Zapret2 blockcheck2 tarama zamanaşımı, yeniden arama başlatma ve reddedilen ayar listeleri.
 - **İzinler ve Kontroller:** Güvenlik duvarı izinleri, resmi Discord uygulamasıyla çakışma kontrolü, Kaspersky/ESET tespiti, çakışabilecek hizmetlerin ve harici DPI süreçlerinin listesi ile ses bağlantısı kontrolleri.
-- **Genel:** Otomatik başlatma, bildirim rozeti, performans modu, bağlantıları sistem tarayıcısında açma, QUIC'i devre dışı bırakma ve benzeri genel tercihler.
+- **Genel:** Otomatik başlatma, bildirim rozeti, performans modu, bağlantıları sistem tarayıcısında açma, yazım denetimi vurgusunu kapatma, QUIC'i devre dışı bırakma ve benzeri genel tercihler.
 - **Görünüm:** Discord temasından otomatik renk örnekleme veya sabit tema ön ayarları.
-- **Tuş Atamaları:** Sesi kapatma/açma, sağırlaştırma ve pencereyi öne getirme için genel (uygulama arka plandayken de çalışan) kısayollar.
+- **Tuş Atamaları:** Bas-Konuş, Susturmak İçin Bas, mikrofon sustur/aç, sağırlaştır, bağlantıyı kes, kamerayı aç/kapat, ekran paylaşımını aç/kapat, pencereyi öne al, tepsiye küçült/geri al ve sohbette ileri/geri git için genel (uygulama arka plandayken de çalışan) kısayollar.
 - **Vencord:** Vencord'u onaylı şekilde etkinleştirme/devre dışı bırakma, Vencord'un kendi ayarlarını açma, durum ve sürüm bilgisi.
 - **Hakkında ve Güncelleme:** Sürüm bilgisi, güncelleme kontrolü, tanılama günlüğü dosya konumunu açma ve tüm ayarları sıfırlama.
 
@@ -150,7 +152,7 @@ SplitCord-Turkey, kaynak koddan da derlenerek çalıştırılabilir.
 ### Gereksinimler
 
 - **.NET 8.0 SDK** veya üzeri
-- **Node.js 18** veya üzeri
+- **Node.js 22.12** veya üzeri (Electron 44'ün gerektirdiği minimum sürüm)
 - **Windows 10/11** işletim sistemi
 
 ### Derleme Adımları
@@ -185,7 +187,7 @@ Linux sürümü de aynı şekilde kaynak koddan derlenebilir; kaynak dosyalar `l
 ### Gereksinimler
 
 - **.NET 8.0 SDK** veya üzeri
-- **Node.js 18** veya üzeri
+- **Node.js 22.12** veya üzeri (Electron 44'ün gerektirdiği minimum sürüm)
 - Debian/Ubuntu tabanlı bir dağıtım (Linux Mint dahil)
 - Derleme bağımlılıkları: `build-essential`, `libnetfilter-queue-dev`, `libnfnetlink-dev`, `libmnl-dev`, `libcap-dev`, `libsystemd-dev`, `zlib1g-dev`, `libluajit-5.1-dev`
 
