@@ -52,7 +52,7 @@ SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint'te te
 ## Karşılaşılabilecek Sorunlar
 
 ### **Sistem Geneli Aşımlarda (Zapret, Zapret2 ve GoodbyeDPI) Belirli Siteler/Uygulamalara Erişimin Kaybedilmesi Durumunda**
-DPI Aşımı ayarlarından **Gelişmiş** seçeneğini aktifleştirin, ardından aşağı kaydırıp **Argüman Setini Yasakla** butonunu bulup tıklayın. Sorun devam ederse bu işlemi tekrar edin. Yine sonuç alamazsanız DPI aşım motorunu değşitirmeyi deneyin. (Örn. Zapret2 -> Zapret) Ayrıca SplitCord-Turkey'i sonlandırdığınızda hiçbir aşım motorunun çalışmayacağı, bu sebeple erişim kaybettiğiniz site/uygulamalara SplitCord-Turkey'den çıkış yaptıktan sonra erişebileceğinizi unutmayın.
+DPI Aşımı ayarlarından **Gelişmiş** seçeneğini aktifleştirin, ardından aşağı kaydırıp **Argüman Setini Yasakla** butonunu bulup tıklayın. Sorun devam ederse bu işlemi tekrar edin. Yine sonuç alamazsanız DPI aşım motorunu değşitirmeyi deneyin. (Örn. Zapret2 -> Zapret) Ayrıca SplitCord-Turkey'i sonlandırdığınızda hiçbir aşım motorunun çalışmayacağı, bu sebeple erişim kaybettiğiniz site/uygulamalara SplitCord-Turkey'den çıkış yaptıktan sonra erişebileceğinizi unutmayın. Eğer herhangi bir aşım motoru aktifken bir siteye/uygulamaya erişmekte sorun yaşıyorsanız, lütfen [Github Issues sayfasında bir rapor oluşturarak](https://github.com/cagritaskn/SplitCord-Turkey/issues) bildirin.
 
 ### **QUIC Hatası Almanız Durumunda**
 Genel ayarlarda bulunan **QUIC devre dışı** seçeneğini aktifleştirip yeniden arama başlatmayı deneyin.
