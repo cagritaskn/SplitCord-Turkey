@@ -129,6 +129,12 @@
 
           <p id="dpi-active-engine-info" class="sc-hint" hidden></p>
 
+          <!-- KULLANICI TALEBİ: çalışan ayar Zapret ya da Zapret2 iken (Otomatik ya da Manuel
+               modda fark etmeksizin) görünen, Ayarlar > DPI Aşımı > Dışlamalar penceresini açan
+               buton -- Gelişmiş switchinin ÜSTÜNDE -- bkz. settings.js'teki
+               updateHostlistButtonVisibility. -->
+          <button id="btn-open-hostlist-automatic" class="sc-btn" hidden>Dışlamalar</button>
+
           <label class="sc-toggle-row">
             <input type="checkbox" id="toggle-dpi-advanced" />
             <span>
@@ -189,6 +195,12 @@
           <div id="engine-list" class="sc-engine-list">
             <div class="sc-hint">Yükleniyor…</div>
           </div>
+
+          <!-- KULLANICI TALEBİ: çalışan ayar Zapret ya da Zapret2 iken (Otomatik ya da Manuel
+               modda fark etmeksizin) görünen, Ayarlar > DPI Aşımı > Dışlamalar penceresini açan
+               buton -- Gelişmiş switchinin ÜSTÜNDE -- bkz. settings.js'teki
+               updateHostlistButtonVisibility. -->
+          <button id="btn-open-hostlist-manual" class="sc-btn" hidden>Dışlamalar</button>
 
           <label class="sc-toggle-row">
             <input type="checkbox" id="toggle-dpi-advanced-manual" />

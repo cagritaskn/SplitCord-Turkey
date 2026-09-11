@@ -88,15 +88,15 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
     // aday denemesinde SIFIRDAN başlayan) kaldırıldı -- şüpheli olan bu, statik
     // --hostlist-exclude (salt okunur, tek seferlik yüklenen liste) tutuluyor.
     //
-    // GERÇEK BUG (ikinci tur): dosya adı bilerek "list-exclude.txt" DEĞİL,
-    // "splitcord-exclude.txt" -- resources/bin/zapret/lists/list-exclude.txt upstream
-    // zapret-discord-youtube ZIP'inin KENDİ dosyası (gitignore'lu, her fetch-binaries'te
-    // sıfırdan iniyor); bizim listemiz commitlenen resources/zapret-lists/ altında AYRI
-    // bir isimle tutuluyor ki ikisi aynı çıktı yoluna (bin/zapret/lists/) çakışmasın (bkz.
-    // SplitCordService.csproj'daki ikinci Content Include bloğu).
-    private static readonly string HostlistExcludeRelativePath = Path.Combine("..", "lists", "splitcord-exclude.txt");
-
-    private static readonly string HostlistArgs = $"--hostlist-exclude={HostlistExcludeRelativePath}";
+    // KULLANICI TALEBİ (Ayarlar > DPI Aşımı > Dışlamalar): hostlist-exclude dosyası artık
+    // bundled/relative bir kaynak DEĞİL, HostlistManager'ın yönettiği, Zapret VE Zapret2
+    // arasında PAYLAŞILAN, kullanıcı tarafından düzenlenebilen MUTLAK yol (bkz.
+    // HostlistManager.cs). Mutlak olduğu için winws.exe'nin çalışma dizininden (bin/zapret/bin)
+    // bağımsız -- eski göreli yol (../lists/...) hesaplamasına gerek kalmadı. HostlistManager
+    // Program.cs'te DpiEngineManager'dan ÖNCE hosted service olarak başladığı için (bkz.
+    // oradaki kayıt sırası notu), bu dosyanın spawn zamanında zaten var olduğu garanti --
+    // burada ayrıca bir instance'a ihtiyaç yok, FilePath statik.
+    private static string HostlistArgs => $"--hostlist-exclude={HostlistManager.FilePath}";
 
     private readonly SettingsStore _settings;
     private readonly ILogger<ZapretEngine> _logger;

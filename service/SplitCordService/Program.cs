@@ -28,6 +28,12 @@ builder.Services.AddSingleton<NextDnsProxyProcess>();
 builder.Services.AddSingleton<EncryptedDnsForwarder>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<EncryptedDnsForwarder>());
 
+// KULLANICI TALEBİ: Zapret VE Zapret2'nin ORTAK kullandığı, Ayarlar > DPI Aşımı >
+// Dışlamalar'dan düzenlenebilen hostlist-exclude dosyası (bkz. HostlistManager.cs). Motor
+// singleton'larından ÖNCE kayıtlı olmalı ki her ikisi de constructor injection ile alabilsin.
+builder.Services.AddSingleton<HostlistManager>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<HostlistManager>());
+
 builder.Services.AddSingleton<ByeDpiEngine>();
 builder.Services.AddSingleton<GoodbyeDpiEngine>();
 builder.Services.AddSingleton<ZapretEngine>();

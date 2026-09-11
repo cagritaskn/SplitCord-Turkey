@@ -212,6 +212,17 @@
     .sc-link-opener-popover[hidden] {
       display: none;
     }
+    /* KULLANICI TALEBİ: küçük başlık çubuğu modu .sc-titlebar'ı zoom:0.5 ile küçültüyor --
+       bu, "+" butonuyla açılan davet bağlantısı popover'ını da (aynı ağacın bir parçası
+       olduğu için) küçültüp okunurluğu/anlaşılırlığı azaltıyordu. Popover'ı KENDİ zoom:2'siyle
+       (iç içe zoom çarpımsal: 0.5*2=1) normal boyutuna geri döndürüyoruz -- top offseti
+       ebeveynin ZATEN zoom'lu koordinat uzayında yorumlandığı için (popover'ın kendi zoom'u
+       yalnızca KENDİ kutusunu/içeriğini büyütüyor, ebeveyne göre konumunu değil) aynı oranda
+       telafi ediyoruz. */
+    html[data-small-titlebar] .sc-link-opener-popover {
+      zoom: 2;
+      top: 80px;
+    }
     .sc-link-opener-popover label {
       display: block;
       font-size: 11px;

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dışlamalar</title>
+  <link rel="stylesheet" href="../theme/theme.css" />
+  <link rel="stylesheet" href="../titlebar.css" />
+  <link rel="stylesheet" href="../settings/settings.css" />
+  <link rel="stylesheet" href="hostlist.css" />
+</head>
+<body>
+  <div class="sc-titlebar">
+    <div class="sc-titlebar-drag"><img src="../../../resources/icon.png" alt="" class="sc-titlebar-logo" /><span class="sc-titlebar-title">Dışlamalar</span></div>
+    <div class="sc-titlebar-controls">
+      <button class="sc-titlebar-btn sc-titlebar-btn--close" id="btn-close-hostlist" title="Kapat">&#10005;</button>
+    </div>
+  </div>
+
+  <main class="sc-hostlist-content">
+    <h1>Dışlamalar</h1>
+    <p class="sc-hint">
+      Zapret ve Zapret2 sistem geneli çalışırken, aşağıda listelenen domainlere (ve alt alan
+      adlarına) DPI aşım tekniği (fake paket/parçalama vb.) uygulanmaz — bu, aşım yüzünden
+      bazı sitelerin bozulmasını önler. Liste, çalışan motor yeniden başlatılmadan kısa süre
+      içinde otomatik olarak devreye girer.
+    </p>
+
+    <label class="sc-toggle-row">
+      <input type="checkbox" id="toggle-hostlist-auto-update" />
+      <span>
+        <strong>Hostlist'i otomatik güncelle</strong>
+        <div class="sc-engine-desc">Açıkken, SplitCord-Turkey'in resmi listesindeki yeni girdiler düzenli aralıklarla kontrol edilip eklenir. Kendi eklediğiniz domainler bu güncellemeyle asla silinmez.</div>
+      </span>
+    </label>
+
+    <label class="sc-field-label" for="slider-hostlist-interval">Hostlist güncelleme kontrolü aralığı (saat)</label>
+    <div class="sc-slider-row">
+      <input type="range" id="slider-hostlist-interval" min="1" max="24" step="1" />
+      <span class="sc-slider-value" id="slider-hostlist-interval-value">2 saat</span>
+    </div>
+    <button id="btn-sync-hostlist-now" class="sc-btn">Şimdi Güncelle</button>
+    <p id="hostlist-sync-status" class="sc-hint" hidden></p>
+
+    <div class="sc-divider"></div>
+
+    <button id="btn-add-domain" class="sc-btn">+ Dışlanan Domain Ekle</button>
+
+    <div id="user-domains-list" class="sc-hostlist-domains"></div>
+    <p id="user-domains-empty-hint" class="sc-hint sc-hostlist-empty-hint" hidden>Henüz "+" ile eklediğiniz bir domain yok.</p>
+
+    <div class="sc-divider"></div>
+
+    <label class="sc-toggle-row">
+      <input type="checkbox" id="toggle-hostlist-manual-edit" />
+      <span>
+        <strong>Hostlist'i manuel düzenle</strong>
+        <div class="sc-engine-desc">Açıkken, aşağıdaki listeyi doğrudan (her satırda bir domain) düzenleyebilirsiniz. Kapalıyken liste yalnızca kaydırılıp görüntülenebilir.</div>
+      </span>
+    </label>
+    <textarea id="hostlist-manual-textarea" class="sc-hostlist-textarea" disabled spellcheck="false" rows="10"></textarea>
+  </main>
+
+  <div id="unsaved-bar" class="sc-unsaved-bar" hidden>
+    <span>Kaydedilmemiş değişiklikleriniz var.</span>
+    <div class="sc-unsaved-bar-actions">
+      <button id="btn-discard-changes" class="sc-btn">Değişiklikleri Geri Al</button>
+      <button id="btn-save-changes" class="sc-btn sc-btn--primary">Değişiklikleri Kaydet</button>
+    </div>
+  </div>
+
+  <script src="../modal.js"></script>
+  <script src="hostlist.js"></script>
+</body>
+</html>

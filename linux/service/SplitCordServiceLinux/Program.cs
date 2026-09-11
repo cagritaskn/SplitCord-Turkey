@@ -36,6 +36,13 @@ builder.Services.AddSingleton<NextDnsProxyProcess>();
 builder.Services.AddSingleton<EncryptedDnsForwarder>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<EncryptedDnsForwarder>());
 
+// Windows istemcisinde bulundu, buraya da aynen uygulanıyor -- bkz.
+// service/SplitCordService/Program.cs'teki aynı kayıt. Zapret VE Zapret2'nin ORTAK kullandığı
+// hostlist-exclude dosyası (bkz. HostlistManager.cs). Motor singleton'larından ÖNCE kayıtlı
+// olmalı ki her ikisi de constructor injection ile alabilsin.
+builder.Services.AddSingleton<HostlistManager>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<HostlistManager>());
+
 builder.Services.AddSingleton<ByeDpiEngine>();
 builder.Services.AddSingleton<ZapretEngine>();
 builder.Services.AddSingleton<Zapret2Engine>();

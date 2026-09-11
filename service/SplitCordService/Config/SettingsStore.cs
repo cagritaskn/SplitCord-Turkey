@@ -154,6 +154,29 @@ public sealed class ServiceSettings
     /// <summary>Zapret2AutomaticTierTimeoutMinutes ile aynı mantık, Manuel mod
     /// (IsManualActivation=true) için. Varsayılan 10 (eski sabit değerle aynı).</summary>
     public int Zapret2ManualTierTimeoutMinutes { get; set; } = 10;
+
+    /// <summary>KULLANICI TALEBİ: Ayarlar > DPI Aşımı > Dışlamalar — Zapret VE Zapret2'nin
+    /// ORTAK kullandığı hostlist-exclude dosyasının repodan (bkz. HostlistManager.RepoRawUrl)
+    /// otomatik güncellenip güncellenmeyeceği. Kapalıyken kullanıcının kendi listesi
+    /// olduğu gibi kalır, yalnızca repo senkronu devre dışı kalır — dosyanın kendisi motor
+    /// başlatmada hâlâ kullanılmaya devam eder.</summary>
+    public bool HostlistAutoUpdateEnabled { get; set; } = true;
+
+    /// <summary>HostlistAutoUpdateEnabled açıkken repo kontrolü arasındaki süre (saat).
+    /// Varsayılan 2 (kullanıcı talebi). Slider aralığı için bkz. LocalApiEndpoints'teki
+    /// Min/MaxHostlistUpdateIntervalHours.</summary>
+    public int HostlistUpdateIntervalHours { get; set; } = 2;
+
+    /// <summary>Kullanıcının Dışlamalar penceresindeki "+" diyaloğuyla EKLEDİĞİ domainlerin
+    /// izlenen listesi — yalnızca bu yoldan eklenenler (manuel düzenleme kutusuna doğrudan
+    /// yazılanlar DAHİL DEĞİL, bkz. HostlistManager.AddDomain). Periyodik repo senkronu bu
+    /// listeye HİÇ dokunmaz/silmez; UI'daki "kullanıcı tarafından eklenen domainler" bölümü
+    /// doğrudan bunu gösterir.</summary>
+    public List<string> HostlistUserAddedDomains { get; set; } = new();
+
+    /// <summary>HostlistManager'ın repodan en son BAŞARIYLA senkronize ettiği zaman (UTC) —
+    /// yalnızca tanılama/bilgi amaçlı.</summary>
+    public DateTime? HostlistLastSyncUtc { get; set; } = null;
 }
 
 /// <summary>JSON tabanlı, %ProgramData%\SplitCord altında kalıcı basit ayar deposu.

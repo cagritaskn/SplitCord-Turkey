@@ -117,6 +117,51 @@ const MAIN_WORLD_SCRIPT = `
     };
   }
 
+  // --- KULLANICI TALEBİ: Discord giriş ekranında native "Geçiş anahtarı seçin" (WebAuthn/
+  // passkey) Windows Güvenliği penceresinin açılmasını engelle ---
+  // Discord'un giriş sayfası, kullanıcı hiçbir şeye tıklamadan sayfa yüklenir yüklenmez
+  // WebAuthn'in "conditional mediation" (otomatik doldurma) özelliğiyle bir passkey isteği
+  // başlatıyor; bu da Chromium'un işletim sistemine native bir "Geçiş anahtarı seçin"
+  // (Windows Güvenliği) penceresi açtırmasına yol açıyor -- kullanıcının genelde kayıtlı
+  // bir passkey'i olmadığı için kullanışsız ve her giriş ekranında tekrar tekrar çıkıyor.
+  // Önce Discord'un KENDİ özellik tespitini (isConditionalMediationAvailable/
+  // isUserVerifyingPlatformAuthenticatorAvailable) "desteklenmiyor" döndürecek şekilde
+  // sabitliyoruz -- bu, Discord'un passkey isteğini hiç BAŞLATMAMASINI sağlıyor (WebAuthn
+  // desteklemeyen bir tarayıcıdaymış gibi davranıp doğrudan şifreyle girişe düşüyor).
+  // Ayrıca (doğrudan bir "passkey ile giriş yap" butonu credentials.get/create'i çağırırsa
+  // diye) navigator.credentials.get/create'i de publicKey isteği taşıdığında reddedecek
+  // şekilde yamalıyoruz -- şifre tabanlı credentials.get({password:true}) (tarayıcının
+  // kayıtlı şifre otomatik doldurması) buna DOKUNULMUYOR, yalnızca publicKey (WebAuthn/
+  // passkey) istekleri engelleniyor.
+  if (window.PublicKeyCredential) {
+    try {
+      window.PublicKeyCredential.isConditionalMediationAvailable = () => Promise.resolve(false);
+      window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable = () => Promise.resolve(false);
+    } catch (err) {
+      console.error('[SplitCord] WebAuthn özellik tespiti engellenemedi:', err);
+    }
+  }
+  if (navigator.credentials) {
+    const originalCredentialsGet = navigator.credentials.get ? navigator.credentials.get.bind(navigator.credentials) : null;
+    if (originalCredentialsGet) {
+      navigator.credentials.get = function patchedCredentialsGet(options) {
+        if (options && options.publicKey) {
+          return Promise.reject(new DOMException('WebAuthn/passkey bu istemcide devre dışı.', 'NotAllowedError'));
+        }
+        return originalCredentialsGet(options);
+      };
+    }
+    const originalCredentialsCreate = navigator.credentials.create ? navigator.credentials.create.bind(navigator.credentials) : null;
+    if (originalCredentialsCreate) {
+      navigator.credentials.create = function patchedCredentialsCreate(options) {
+        if (options && options.publicKey) {
+          return Promise.reject(new DOMException('WebAuthn/passkey bu istemcide devre dışı.', 'NotAllowedError'));
+        }
+        return originalCredentialsCreate(options);
+      };
+    }
+  }
+
   // --- Mikrofon durumu izleme (bağlı/susturma yedek sinyali) ---
   // Konuşma seviyesi tespiti (AnalyserNode) kaldırıldı — güvenilmez çıktı (kullanıcının
   // ortamında sessizken bile eşiği sürekli aşan bir gürültü tabanı vardı). Susturma artık
@@ -1002,9 +1047,17 @@ injectVencordIfEnabled();
  * Discord logosu + "Bağlantı sorunları mı? Bize bildir!" + Twitter/X ve Sunucu Durumu
  * bağlantıları) kullanıcı talebiyle "Kullanılan Argüman Setini Yasaklamayı Deneyin" butonu
  * ekleniyor — tıklanınca (onaydan sonra) o an aktif motorun kayıtlı argüman setini reddedip
- * Otomatik moda geçip sıfırdan bir tarama başlatıyor (btnStatusRetryAuto'nun — bkz.
- * titlebar.js — AYNI "mod zorla Otomatik + zapret'ten başlat" deseni, öncesine bir de
- * reddetme adımı eklenmiş hâli).
+ * yeniden arattırıyor.
+ *
+ * KULLANICI TALEBİ (düzeltme): ESKİDEN mod ne olursa olsun Otomatik moda ZORLA geçip
+ * sabit "zapret"i aktive ediyordu (titlebar.js'teki btnStatusRetryAuto'yla AYNI -- ama O
+ * buton KASITLI olarak öyle, bkz. o dosyadaki not) -- bu, Manuel modda BİLEREK belirli bir
+ * motoru seçmiş bir kullanıcıyı sormadan Otomatik'e geçiriyordu. Artık mod OKUNUYOR ama
+ * DEĞİŞTİRİLMİYOR: Manuel'deyken yalnızca o an aktif olan motorun argüman seti reddedilip
+ * AYNI motor içinde yeniden aranıyor (dpi:reject-current-args zaten mod Manuel'ken
+ * allowEscalation=false ile başka bir motora ATLAMADAN böyle çalışıyor -- bkz. ipc.js'teki
+ * AYNI mantık, settings.js'teki "Tekrar Arama Başlat" butonuyla BİREBİR aynı çağrı).
+ * Otomatik moddaysak eskisi gibi zincirin başından (Zapret) sıfırdan bir tarama başlatılıyor.
  *
  * DİL BAĞIMSIZ EŞLEŞTİRME: metne değil (Discord'un dili her neyse bu ekran ona göre
  * değişir), Discord'un HER dilde AYNI kalan sabit bağlantılarına (resmi durum sayfası
@@ -1047,10 +1100,12 @@ injectVencordIfEnabled();
         await ipcRenderer.invoke('dpi:reject-current-args', activeEngineId);
       }
       const mode = await ipcRenderer.invoke('dpi:get-mode');
-      if (mode === 'manual') {
-        await ipcRenderer.invoke('dpi:set-mode', 'automatic');
+      if (mode !== 'manual') {
+        // Otomatik moddaysak (Manuel'e HİÇ dokunmadan) zincirin başından, Zapret'ten
+        // başlayarak sıfırdan bir tarama başlatılıyor -- reject-current-args yukarıda
+        // zaten allowEscalation=true ile çalıştı, bu ekstra bir "baştan başlat".
+        await ipcRenderer.invoke('dpi:activate-engine', 'zapret');
       }
-      await ipcRenderer.invoke('dpi:activate-engine', 'zapret');
     } catch (err) {
       console.error('[SplitCord] Argüman seti yasaklanamadı:', err);
     } finally {

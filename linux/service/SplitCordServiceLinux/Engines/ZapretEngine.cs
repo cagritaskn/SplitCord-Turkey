@@ -63,25 +63,12 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
 
     private const string UdpCompanionArgs = "--dpi-desync=fake --dpi-desync-ttl=4";
 
-    // GERİ ALINDI (Windows istemcisinde bulundu, canlı testte doğrulandı -- bkz.
-    // client/src/main tarafındaki karşılığı DEĞİL, service/SplitCordService/Engines/
-    // ZapretEngine.cs'teki AYNI not): --hostlist-exclude + --hostlist-auto BİRLİKTE eklenince
-    // Zapret'in TÜM adayları bozuldu (her strateji bağlantı kuramadı), Zapret2 (bu bayraklar
-    // hiç eklenmemişti) aynı ağda sorunsuz çalıştı. KULLANICI TALEBİ: yalnızca --hostlist-auto
-    // (kendi kendine öğrenen, sürekli dosya yazan) kaldırıldı -- şüpheli olan bu, statik
-    // --hostlist-exclude (salt okunur, tek seferlik yüklenen liste) tutuluyor.
-    //
-    // GERÇEK BUG (ikinci tur): dosya adı bilerek "list-exclude.txt" DEĞİL,
-    // "splitcord-exclude.txt" -- resources/bin/zapret/lists/list-exclude.txt upstream
-    // zapret-discord-youtube ZIP'inin KENDİ dosyası (gitignore'lu, her fetch-binaries'te
-    // sıfırdan iniyor); bizim listemiz commitlenen resources/zapret-lists/ altında AYRI
-    // bir isimle tutuluyor ki ikisi aynı çıktı yoluna (bin/zapret/lists/) çakışmasın (bkz.
-    // build-zapret.sh). nfqws'in WorkingDirectory'si bin/zapret/nfq olduğu için (bkz.
-    // SpawnAsync), liste ../lists/splitcord-exclude.txt ile GÖRELİ olarak referans veriliyor
-    // (Windows'ta bin/zapret/bin -> ../lists ile AYNI derinlik).
-    private static readonly string HostlistExcludeRelativePath = Path.Combine("..", "lists", "splitcord-exclude.txt");
-
-    private static readonly string HostlistArgs = $"--hostlist-exclude={HostlistExcludeRelativePath}";
+    // KULLANICI TALEBİ (Ayarlar > DPI Aşımı > Dışlamalar, Windows istemcisinde bulundu, buraya
+    // da aynen uygulanıyor -- bkz. service/SplitCordService/Engines/ZapretEngine.cs'teki AYNI
+    // not): hostlist-exclude dosyası artık bundled/relative bir kaynak DEĞİL, HostlistManager'ın
+    // yönettiği, Zapret VE Zapret2 arasında PAYLAŞILAN, kullanıcı tarafından düzenlenebilen
+    // MUTLAK yol. Mutlak olduğu için nfqws'in çalışma dizininden (bin/zapret/nfq) bağımsız.
+    private static string HostlistArgs => $"--hostlist-exclude={HostlistManager.FilePath}";
 
     private readonly SettingsStore _settings;
     private readonly ILogger<ZapretEngine> _logger;

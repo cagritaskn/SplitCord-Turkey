@@ -640,6 +640,24 @@ function getDisplayActiveEngineId(status) {
     : status.activeEngineId;
 }
 
+// KULLANICI TALEBİ: "Dışlamalar" butonu yalnızca ÇALIŞAN ayar Zapret ya da Zapret2 iken
+// görünür (Otomatik/Manuel moddan bağımsız) -- ikisi de hostlist-exclude desteği olan tek
+// motorlar (bkz. HostlistManager.cs, ZapretEngine/Zapret2Engine SpawnAsync). Buton, Otomatik
+// ve Manuel görünümlerin HER İKİSİNDE de kendi "Gelişmiş" switchinin üstünde ayrı ayrı yer
+// alıyor (o an aktif olmayan görünümdeki kopyası zaten hidden div içinde olduğu için görünmez).
+const hostlistButtons = [
+  document.getElementById('btn-open-hostlist-automatic'),
+  document.getElementById('btn-open-hostlist-manual'),
+].filter(Boolean);
+function updateHostlistButtonVisibility() {
+  const activeEngineId = currentStatus ? getDisplayActiveEngineId(currentStatus) : null;
+  const visible = ['zapret', 'zapret2'].includes(activeEngineId);
+  hostlistButtons.forEach((btn) => {
+    btn.hidden = !visible;
+  });
+}
+hostlistButtons.forEach((btn) => btn.addEventListener('click', () => window.splitcord.window.openHostlist()));
+
 async function refreshStatus() {
   try {
     currentStatus = await window.splitcord.dpi.getStatus();
@@ -648,6 +666,7 @@ async function refreshStatus() {
     window.splitcord.log('get-status-error', { error: err.message });
     engineListEl.innerHTML = `<div class="sc-hint">DPI servisine ulaşılamıyor: ${escapeHtml(err.message)}<br/>Servisin kurulu ve çalışır durumda olduğundan emin ol (service/installer/install-service.ps1).</div>`;
     automaticStatusEl.textContent = 'DPI servisine ulaşılamıyor.';
+    updateHostlistButtonVisibility();
     return;
   }
   selectedEngineId = selectedEngineId || getDisplayActiveEngineId(currentStatus);
@@ -655,6 +674,7 @@ async function refreshStatus() {
   await renderAutomaticStatus();
   await renderManualRejectedArgsList();
   await refreshLogs();
+  updateHostlistButtonVisibility();
 }
 
 // true olduğu sürece (bir onay sonrası activateEngine çağrısı beklenirken VEYA

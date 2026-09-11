@@ -533,6 +533,95 @@ btnStatusInstallService?.addEventListener('click', async () => {
 async function maybeShowAntivirusDialog() {
 }
 
+// --- KULLANICI TALEBİ: Zapret2 + kayıtlı/doğrulanmış bir ayar aktifken Discord'un yükleme
+// ekranında takılı kalma koruması ---
+// Zapret2Engine.cs'teki SavedArgsRetryAttempts notundan bilindiği gibi nfqws2'nin NFQUEUE'ya
+// oturması diğer motorlara göre daha kırılgan olabiliyor: strateji GERÇEKTEN çalışıyor olsa
+// bile Discord'un kendi sayfası (statik "BİLİYOR MUYDUN?" kabuğu — bkz. discordWebviewPreload.js
+// setupBanCurrentArgsButton'daki AYNI discordstatus.com/twitter.com/x.com footer bağlantısı
+// tespiti) uzun süre takılı kalabiliyor, GERÇEK bir did-fail-load tetiklemeden (üst seviye
+// sayfa zaten başarıyla yüklendi — takılan Discord'un KENDİ iç JS/WebSocket mantığı) — bu
+// yüzden aşağıdaki did-fail-load tabanlı, TÜM motorlar için ortak yeniden deneme mekanizması
+// bu durumu hiç YAKALAYAMIYOR. Bu ayrı, yalnızca Zapret2'ye özel bekçi 30 saniyede bir
+// yoklayıp (hem "hâlâ aynı takılı kabuk" hem "gerçekten bir hata sayfasına düştü" durumlarını
+// TEK kontrolde birleştirerek) gerekiyorsa sayfayı otomatik yeniden yüklüyor — en fazla 5 kez;
+// 5. denemeden sonra otomatik yenilenmiyor (kullanıcı hâlâ elle "Argüman Setini Yasaklamayı
+// Deneyin" butonuna basabilir).
+const ZAPRET2_STUCK_POLL_INTERVAL_MS = 30000;
+const ZAPRET2_STUCK_MAX_RELOADS = 5;
+let zapret2StuckPollTimer = null;
+let zapret2StuckArmed = false;
+let zapret2StuckReloadCount = 0;
+
+// AYNI tespit discordWebviewPreload.js'teki findFooterAnchor ile -- webview KENDİ ayrı bir
+// renderer olduğu için buradan doğrudan DOM'a erişemiyoruz, webview.executeJavaScript ile
+// (getWebviewRealUrl'in de kullandığı AYNI mekanizma) misafir sayfada çalıştırıyoruz.
+const STUCK_SCREEN_CHECK_SCRIPT = `
+  (function() {
+    return !!document.querySelector(
+      'a[href*="discordstatus.com"], a[href*="twitter.com/discord"], a[href*="x.com/discord"]'
+    );
+  })();
+`;
+
+async function checkZapret2StuckScreen() {
+  if (!zapret2StuckArmed) return;
+  if (zapret2StuckReloadCount >= ZAPRET2_STUCK_MAX_RELOADS) {
+    stopZapret2StuckWatchdog();
+    return;
+  }
+  try {
+    const [isStuckShell, currentUrl] = await Promise.all([
+      webview?.executeJavaScript?.(STUCK_SCREEN_CHECK_SCRIPT).catch(() => false),
+      getWebviewRealUrl(),
+    ]);
+    // "Hata tespit edildiğinde de yeniden yükle" kullanıcı talebi: sayfanın GERÇEKTEN
+    // discord.com'da olmaması (ör. bir chrome-error:// sayfasına düşmüş olması) da aynı
+    // kontrolde "takılı kaldı" sayılıyor -- ayrı bir mekanizmaya gerek yok, getWebviewRealUrl
+    // zaten did-fail-load/did-finish-load handler'larının kullandığı GÜVENİLİR yol.
+    const isErrorPage = !!currentUrl && !/^https:\/\/(www\.)?discord\.com\//.test(currentUrl);
+    if (isStuckShell || isErrorPage) {
+      zapret2StuckReloadCount += 1;
+      window.splitcord.log?.('zapret2-stuck-screen-reload', {
+        attempt: zapret2StuckReloadCount,
+        max: ZAPRET2_STUCK_MAX_RELOADS,
+        isStuckShell,
+        isErrorPage,
+        currentUrl,
+      });
+      webview?.reload();
+    } else if (zapret2StuckReloadCount > 0) {
+      // KULLANICI TALEBİ: did-finish-load'a GÜVENMİYORUZ (takılı kabuğun kendisi de
+      // discord.com'dan geldiği için sayfa yüklenmesi zaten başarılı sayılıyor, kabuk
+      // kalksa da kalkmasa da tetikleniyor) -- gerçek kurtuluş sinyali BURADA, bu kontrolün
+      // kendisinde: kabuk artık yok VE hata sayfasında değiliz demek gerçekten kurtulduk.
+      // Sayacı sıfırlayıp (bekçiyi durdurmadan) sonraki, bağımsız bir takılma bölümü için
+      // taze bir 5 haklık bütçe bırakıyoruz.
+      window.splitcord.log?.('zapret2-stuck-screen-recovered', { previousAttempts: zapret2StuckReloadCount });
+      zapret2StuckReloadCount = 0;
+    }
+  } catch (err) {
+    window.splitcord.log?.('zapret2-stuck-screen-check-error', { error: err.message });
+  }
+}
+
+function startZapret2StuckWatchdog() {
+  if (zapret2StuckArmed) return; // zaten kurulu -- yeniden kurup sayacı sıfırlamıyoruz
+  zapret2StuckArmed = true;
+  zapret2StuckReloadCount = 0;
+  window.splitcord.log?.('zapret2-stuck-watchdog-armed', {});
+  zapret2StuckPollTimer = setInterval(checkZapret2StuckScreen, ZAPRET2_STUCK_POLL_INTERVAL_MS);
+}
+
+function stopZapret2StuckWatchdog() {
+  if (zapret2StuckPollTimer) {
+    clearInterval(zapret2StuckPollTimer);
+    zapret2StuckPollTimer = null;
+  }
+  if (zapret2StuckArmed) window.splitcord.log?.('zapret2-stuck-watchdog-disarmed', {});
+  zapret2StuckArmed = false;
+}
+
 // DPI durumunu sorgular; motor gerçekten çalışıyorsa Discord'u (yeniden) yükler,
 // çalışmıyorsa Discord'un olması gereken yerde nedenini gösterir.
 async function refreshConnection() {
@@ -578,6 +667,11 @@ async function refreshConnection() {
     // görünmesi GEÇİCİ ve NORMAL — bunu hata sayıp spinner'ı durdurmuyoruz, "Bağlantı
     // hazırlanıyor…" göstermeye devam edip birkaç saniye sonra sessizce tekrar deniyoruz.
     if (status.switching) {
+      // Tarama/motor değişimi sürerken (henüz doğrulanmış bir ayar olmayabilir, ya da
+      // doğrulanmış olan artık geçerli olmayabilir) bekçiyi durduruyoruz -- aşağıdaki normal
+      // yol, tarama bitip GERÇEKTEN Zapret2+doğrulanmış+çalışıyor durumuna dönüldüğünde onu
+      // zaten yeniden kuracak.
+      stopZapret2StuckWatchdog();
       window.splitcord.log?.('connection-status-switching', { activeEngineId: status.activeEngineId });
       updateStatusScanLog(status.switchingToEngineId || status.activeEngineId, status.engines);
       setTimeout(refreshConnection, 3000);
@@ -586,6 +680,16 @@ async function refreshConnection() {
 
     const active = status.engines?.find((e) => e.id === status.activeEngineId);
     window.splitcord.log?.('connection-status', { activeEngineId: status.activeEngineId, active });
+
+    // KULLANICI TALEBİ: bekçi yalnızca Zapret2 aktif VE çalışıyor VE kayıtlı/doğrulanmış bir
+    // ayarı VARKEN kurulu kalsın -- ör. blockcheck2 henüz hiçbir aday doğrulamamışken (ilk
+    // kurulum/tam sıfırdan tarama) "verified" false olur, bu durumda Discord'un henüz hiç
+    // yüklenememesi zaten BEKLENEN bir durum, otomatik yenileme anlamsız/zararlı olurdu.
+    if (active?.id === 'zapret2' && active?.running && active?.verified) {
+      startZapret2StuckWatchdog();
+    } else {
+      stopZapret2StuckWatchdog();
+    }
 
     // Tarama sonuçlandı mı: ya çalışan bir ayar bulundu, ya da 'exhausted' ise tüm motorlar
     // tükenmiştir — terminal bir durumdur. (autoScanResult 'antivirus' Linux'ta hiç oluşmaz,
@@ -603,10 +707,71 @@ async function refreshConnection() {
       // durumlar) bu, ekranın sürekli flaşlanmasına yol açıyordu. Artık overlay yalnızca
       // did-finish-load GERÇEKTEN discord.com'a ulaşıldığını doğruladığında kapanıyor —
       // o ana kadar tek, kesintisiz bir "yükleniyor" durumu gösteriliyor.
-      showStatus('Discord yükleniyor…');
+      //
+      // KULLANICI TALEBİ (çifte reload düzeltmesi, 2026-09-11): ipc.js'teki dpi:activate-engine
+      // handler'ı 'dpi:engine-changed'i hem çağrı BAŞLARKEN hem BAŞARIYLA bitince gönderiyor;
+      // bu pencerenin KENDİ 3sn'lik switching-yoklama döngüsü de aynı "artık running" anını
+      // BAĞIMSIZ olarak yakalayabiliyor. Bu iki tetikleyici senkronize değil -- ikisi ayrı ayrı
+      // ateşlenirse (özellikle Zapret2 gibi aktivasyonu uzun süren motorlarda görünür hâle
+      // geliyor) sayfa ZATEN başarıyla yüklenmişken/yüklenmekteyken GEREKSİZ bir ikinci
+      // webview.reload() tetikleniyordu — Discord'un kendi yükleme ekranı sıfırdan başlıyor,
+      // "Discord yükleniyor…" yazımız 1 saniyeliğine geri geliyordu (kullanıcı raporu). Yeniden
+      // yüklemeden önce sayfanın zaten GERÇEKTEN discord.com'da olup olmadığını (did-fail-load
+      // handler'ındaki AYNI getWebviewRealUrl deseniyle) kontrol ediyoruz -- öyleyse bu ikinci
+      // tetikleyiciyi TAMAMEN yok sayıyoruz (showStatus/reload/hideStatus'a hiç dokunmuyoruz):
+      // devam eden yükleme kendi did-finish-load'ıyla overlay'i zaten normal şekilde kapatacak.
+      //
+      // GERÇEK BUG (canlı testte bulundu, düzeltildi): bu kontrol önceden webview.src'in
+      // BOŞ olduğu (yani HİÇ navigasyon denenmemiş, ör. uygulama ilk açılışta İLK bağlantı)
+      // durumda da çalışıyordu -- webview'in misafir içeriği hiç "attach" olmamışken
+      // webview.executeJavaScript() çağırmak Electron'da SÜRESİZ askıda kalabiliyor (ne
+      // resolve ne reject), bu da await'i sonsuza kadar bekletip refreshConnection()'ı
+      // TAMAMEN kilitliyordu -- kullanıcı "Bağlantı hazırlanıyor…" ekranında sonsuza kadar
+      // takılı kalıyordu (refreshInFlight de hiç sıfırlanmadığı için SONRAKİ hiçbir yoklama
+      // da çalışmıyordu). did-fail-load/did-finish-load handler'ları getWebviewRealUrl'i
+      // GÜVENLE kullanabiliyor çünkü onlar zaten en az bir navigasyon denendikten SONRA
+      // tetikleniyor -- burada da AYNI güvenceyi sağlamak için executeJavaScript'i yalnızca
+      // webview.src DOLUYKEN (yani daha önce en az bir kez navigasyon başlatılmışken)
+      // çağırıyoruz; ilk navigasyon hâlâ eskisi gibi koşulsuz yapılıyor.
       if (webview?.src) {
-        webview.reload();
+        // KULLANICI TALEBİ (2026-09-11, ikinci düzeltme): "zaten discord.com'dayız" kontrolü
+        // yalnızca URL'e bakıyordu -- ama Discord'un KENDİ statik "takılı" yükleme kabuğu
+        // (bkz. STUCK_SCREEN_CHECK_SCRIPT/setupBanCurrentArgsButton) DA discord.com'dan
+        // geliyor, yani URL eşleşiyor ama sayfa GERÇEKTEN yüklenmiş SAYILMAZ. Bu yüzden
+        // "Tekrar Arama Başlat"/mod-motor değiştirme gibi bir eylem YENİ bir switching
+        // başlattığında, ipc.js'in bu eylemin BAŞINDA (HTTP çağrısı sunucuya varıp
+        // switching=true olmadan ÖNCE) gönderdiği erken 'dpi:engine-changed' tetiklemesi
+        // hâlâ ESKİ (running=true) durumu görüp, webview'in o an gösterdiği (aslında hâlâ
+        // takılı) kabuğu "zaten bağlandık" sanıp hideStatus() çağırıyordu -- kullanıcı bunu
+        // "log'ların göründüğü bizim ekran hiç gelmiyor, Discord'un kendi ekranı öylece
+        // kalıyor" olarak bildirdi. Düzeltme: takılı kabuk tespit edilirse "zaten bağlandık"
+        // SAYILMIYOR -- normal showStatus+reload akışına düşüyor, böylece yeni tarama/switch
+        // başladığında bizim "Bağlantı hazırlanıyor…" + canlı log ekranımız GERÇEKTEN devreye
+        // giriyor.
+        const [currentUrl, isStuckShell] = await Promise.all([
+          getWebviewRealUrl(),
+          webview?.executeJavaScript?.(STUCK_SCREEN_CHECK_SCRIPT).catch(() => false),
+        ]);
+        const alreadyOnDiscord = /^https:\/\/(www\.)?discord\.com\//.test(currentUrl) && !isStuckShell;
+        if (alreadyOnDiscord) {
+          // GERÇEK BUG (canlı testte bulundu, düzeltildi): refreshConnection() bu fonksiyonun
+          // EN BAŞINDA showStatus('Bağlantı hazırlanıyor…')'u KOŞULSUZ çağırıyor -- burada
+          // hiçbir şey yapmadan (eski hâliyle) bırakmak, o BAŞLANGIÇ metnini ekranda ASILI
+          // bırakıyordu: reload atlandığı için YENİ bir navigasyon/did-finish-load hiç
+          // tetiklenmiyor, dolayısıyla overlay'i normalde kapatacak olan mekanizma da hiç
+          // çalışmıyordu -- kullanıcı "Bağlantı hazırlanıyor…" ekranında SONSUZA KADAR takılı
+          // kalıyordu (canlı diagnostic.log'da doğrulandı: bu dal tetiklendikten sonra bir
+          // daha HİÇ refresh-start/connection-status log'u gelmiyordu). Sayfanın ZATEN
+          // discord.com'da olduğunu burada kendimiz doğruladığımız için overlay'i DOĞRUDAN
+          // kapatıyoruz -- did-finish-load'ı beklemeye gerek yok, zaten tetiklenmeyecek.
+          window.splitcord.log?.('refresh-skip-redundant-reload', { url: currentUrl });
+          hideStatus();
+        } else {
+          showStatus('Discord yükleniyor…');
+          webview.reload();
+        }
       } else if (webview) {
+        showStatus('Discord yükleniyor…');
         webview.src = 'https://discord.com/app';
       }
     } else if (status.autoScanResult === 'antivirus') {
@@ -805,6 +970,21 @@ webview?.addEventListener('render-process-gone', (event) => {
 window.splitcord.onDpiEngineChanged?.(() => {
   refreshConnection();
   checkControlsIssues();
+  // KULLANICI TALEBİ (canlı testte doğrulanan bir yarış durumu, 2026-09-11): ipc.js'teki
+  // dpi:activate-engine/dpi:reject-current-args handler'ları bu olayı, sunucuya asıl HTTP
+  // isteği GİTMEDEN ÖNCE, iyimser olarak gönderiyor ("dakikalarca sürebilecek bir tarama
+  // varsa yoklama döngüsü hemen başlasın" diye — bkz. ipc.js'teki not). Ama bu yüzden
+  // YUKARIDAKİ refreshConnection() çağrısı çoğu zaman ESKİ (henüz switching=true olmamış)
+  // bir /status anlık görüntüsü yakalıyor -- "running" dalına düşüp (webview zaten
+  // discord.com'daysa) hideStatus() ile SESSİZCE bitiyor, switching dalının kendi 3sn'lik
+  // yeniden yoklama zincirini HİÇ BAŞLATMADAN. Sonuç: RejectCurrentArgsAsync/SwitchToAsync
+  // sunucuda GERÇEKTEN çalışırken (yeni adaylar denenirken) istemci tarafı bunu hiç
+  // GÖRMÜYORDU -- kullanıcı "Argüman setini yasakladıktan sonra log ekranı hiç gelmiyor,
+  // Discord'un kendi ekranı kalıyor" olarak bildirdi. Sunucunun _switching=true'yu set etmesi
+  // tipik olarak birkaç on milisaniye sürüyor -- 800ms sonra GARANTİLİ bir ikinci yoklama,
+  // bu sefer GERÇEK switching=true durumunu neredeyse her zaman yakalıyor; o andan itibaren
+  // switching dalının kendi döngüsü doğal olarak devralıyor.
+  setTimeout(refreshConnection, 800);
 });
 
 // discord:// bir bağlantıyla (davet, kanal, kullanıcı) başlatıldığımızda veya uygulama

@@ -76,6 +76,22 @@ public sealed class ServiceSettings
 
     /// <summary>Aynı, Manuel mod için.</summary>
     public int Zapret2ManualTierTimeoutMinutes { get; set; } = 10;
+
+    /// <summary>Windows istemcisinde bulundu, buraya da aynen uygulanıyor -- bkz.
+    /// service/SplitCordService/Config/SettingsStore.cs'teki aynı alanlar. Ayarlar > DPI
+    /// Aşımı > Dışlamalar — Zapret VE Zapret2'nin ORTAK kullandığı hostlist-exclude
+    /// dosyasının repodan otomatik güncellenip güncellenmeyeceği.</summary>
+    public bool HostlistAutoUpdateEnabled { get; set; } = true;
+
+    /// <summary>HostlistAutoUpdateEnabled açıkken repo kontrolü arasındaki süre (saat).</summary>
+    public int HostlistUpdateIntervalHours { get; set; } = 2;
+
+    /// <summary>Kullanıcının Dışlamalar penceresindeki "+" diyaloğuyla EKLEDİĞİ domainlerin
+    /// izlenen listesi (bkz. HostlistManager.AddDomain).</summary>
+    public List<string> HostlistUserAddedDomains { get; set; } = new();
+
+    /// <summary>HostlistManager'ın repodan en son BAŞARIYLA senkronize ettiği zaman (UTC).</summary>
+    public DateTime? HostlistLastSyncUtc { get; set; } = null;
 }
 
 /// <summary>JSON tabanlı, kalıcı basit ayar deposu. Dosya konumu için bkz. LinuxPaths.DataDirectory

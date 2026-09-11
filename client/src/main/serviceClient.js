@@ -130,6 +130,19 @@ const resetServiceSettings = () => request('POST', '/settings/reset', null, LONG
 // tetikliyor), varsayılan kısa zaman aşımı yeterli.
 const cancelScan = () => request('POST', '/scan/cancel');
 
+// KULLANICI TALEBİ: Ayarlar > DPI Aşımı > Dışlamalar — Zapret VE Zapret2'nin ORTAK kullandığı
+// hostlist-exclude dosyası (bkz. service tarafındaki HostlistManager.cs).
+const getHostlist = () => request('GET', '/hostlist');
+const addHostlistDomain = (domain) => request('POST', '/hostlist/add', { domain });
+const removeHostlistDomain = (domain) => request('POST', '/hostlist/remove', { domain });
+const saveHostlistManualContent = (content) => request('POST', '/hostlist/manual-save', { content });
+const setHostlistSettings = (autoUpdateEnabled, updateIntervalHours) =>
+  request('POST', '/hostlist/settings', { autoUpdateEnabled: autoUpdateEnabled ?? null, updateIntervalHours: updateIntervalHours ?? null });
+// KULLANICI TALEBİ: Dışlamalar penceresindeki "Şimdi Güncelle" butonu — HostlistManager'ın
+// gerçek ağ isteği yaptığı yol (15sn'lik kendi HttpClient zaman aşımı var), varsayılan 5sn'lik
+// istemci zaman aşımı bunun için kısa kalırdı.
+const syncHostlistNow = () => request('POST', '/hostlist/sync-now', null, 20000);
+
 module.exports = {
   getDpiStatus,
   activateEngine,
@@ -160,4 +173,10 @@ module.exports = {
   removeConflictingService,
   resetServiceSettings,
   cancelScan,
+  getHostlist,
+  addHostlistDomain,
+  removeHostlistDomain,
+  saveHostlistManualContent,
+  setHostlistSettings,
+  syncHostlistNow,
 };

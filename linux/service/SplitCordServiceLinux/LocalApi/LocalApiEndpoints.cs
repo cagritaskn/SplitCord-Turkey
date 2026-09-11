@@ -15,6 +15,10 @@ public sealed record SetZapret2TierTimeoutPayload(int? AutomaticMinutes, int? Ma
 public sealed record DiagnosticLogPayload(string? Tag, string? Level, string? Message);
 public sealed record UnrejectArgsPayload(string Args);
 public sealed record SetByeDpiExtendedCandidatesPayload(bool Enabled);
+public sealed record AddHostlistDomainPayload(string Domain);
+public sealed record RemoveHostlistDomainPayload(string Domain);
+public sealed record SetHostlistManualContentPayload(string Content);
+public sealed record SetHostlistSettingsPayload(bool? AutoUpdateEnabled, int? UpdateIntervalHours);
 
 /// <summary>Windows karşılığının (service/SplitCordService/LocalApi/LocalApiEndpoints.cs) portu.
 /// Windows'tan FARK (bkz. PORTING_PLAN.md D-2, D-9): `/firewall/*` (PowerShell NetSecurity
@@ -255,6 +259,74 @@ public static class LocalApiEndpoints
         {
             mgr.CancelCurrentScan();
             return Results.Ok();
+        });
+
+        // Windows istemcisinde bulundu, buraya da aynen uygulanıyor -- bkz.
+        // service/SplitCordService/LocalApi/LocalApiEndpoints.cs'teki aynı uç noktalar.
+        // KULLANICI TALEBİ: Ayarlar > DPI Aşımı > Dışlamalar penceresi — Zapret VE Zapret2'nin
+        // ORTAK kullandığı hostlist-exclude dosyasını görüntüleme/düzenleme (bkz.
+        // HostlistManager.cs).
+        app.MapGet("/hostlist", (HostlistManager hostlist, SettingsStore settings) => Results.Ok(new
+        {
+            content = hostlist.GetContent(),
+            userAddedDomains = hostlist.GetUserAddedDomains(),
+            autoUpdateEnabled = settings.Current.HostlistAutoUpdateEnabled,
+            updateIntervalHours = settings.Current.HostlistUpdateIntervalHours,
+            lastSyncUtc = settings.Current.HostlistLastSyncUtc,
+        }));
+
+        app.MapPost("/hostlist/add", (AddHostlistDomainPayload payload, HostlistManager hostlist) =>
+        {
+            var (ok, normalized, error) = hostlist.AddDomain(payload.Domain ?? "");
+            if (!ok) return Results.BadRequest(new { error });
+            return Results.Ok(new { normalizedDomain = normalized });
+        });
+
+        app.MapPost("/hostlist/remove", (RemoveHostlistDomainPayload payload, HostlistManager hostlist) =>
+        {
+            var removed = hostlist.RemoveUserDomain(payload.Domain ?? "");
+            return Results.Ok(new { removed });
+        });
+
+        app.MapPost("/hostlist/manual-save", (SetHostlistManualContentPayload payload, HostlistManager hostlist) =>
+        {
+            hostlist.SetContentManual(payload.Content ?? "");
+            return Results.Ok(new { content = hostlist.GetContent() });
+        });
+
+        const int MinHostlistUpdateIntervalHours = HostlistManager.MinUpdateIntervalHours;
+        const int MaxHostlistUpdateIntervalHours = HostlistManager.MaxUpdateIntervalHours;
+        app.MapPost("/hostlist/settings", (SetHostlistSettingsPayload payload, SettingsStore settings) =>
+        {
+            if (payload.AutoUpdateEnabled is { } enabled)
+            {
+                settings.Current.HostlistAutoUpdateEnabled = enabled;
+            }
+            if (payload.UpdateIntervalHours is { } hours)
+            {
+                if (hours < MinHostlistUpdateIntervalHours || hours > MaxHostlistUpdateIntervalHours)
+                {
+                    return Results.BadRequest(new { error = $"Güncelleme aralığı {MinHostlistUpdateIntervalHours}-{MaxHostlistUpdateIntervalHours} saat arasında olmalı" });
+                }
+                settings.Current.HostlistUpdateIntervalHours = hours;
+            }
+            settings.Save();
+            return Results.Ok(new
+            {
+                autoUpdateEnabled = settings.Current.HostlistAutoUpdateEnabled,
+                updateIntervalHours = settings.Current.HostlistUpdateIntervalHours,
+            });
+        });
+
+        // KULLANICI TALEBİ: Dışlamalar penceresindeki "Şimdi Güncelle" butonu -- otomatik
+        // güncelleme açık/kapalı fark etmeksizin, repodaki listeyi HEMEN (kullanıcı isteğiyle)
+        // çeker. Periyodik döngünün kullandığı AYNI SyncFromRepoAsync'i çağırıyor -- additive-
+        // only (yalnızca ekleme, hiçbir zaman silme), kullanıcının "+" ile eklediği domainlere
+        // hiç dokunmuyor.
+        app.MapPost("/hostlist/sync-now", async (HostlistManager hostlist, CancellationToken ct) =>
+        {
+            var added = await hostlist.SyncFromRepoAsync(ct);
+            return Results.Ok(new { addedCount = added, content = hostlist.GetContent() });
         });
 
         // PORT_PLAN_2.md AP-5/Faz 3 — İzinler ve Kontroller panelindeki (yalnızca AppImage

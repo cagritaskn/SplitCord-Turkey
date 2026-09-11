@@ -19,6 +19,22 @@ contextBridge.exposeInMainWorld('splitcord', {
     closeSettings: () => ipcRenderer.send('settings-window:close'),
     setDirty: (dirty) => ipcRenderer.send('settings-window:set-dirty', dirty),
     openDiscordLink: (url) => ipcRenderer.invoke('window:open-discord-link', url),
+    // KULLANICI TALEBİ: Ayarlar > DPI Aşımı > Dışlamalar penceresi — settings-window:*
+    // kanallarından AYRI kendi kanalları var (bkz. ipc.js'teki hostlistHasUnsavedChanges),
+    // aksi hâlde iki pencere aynı anda açıkken birbirinin "kaydedilmemiş değişiklik"
+    // bayrağını ezerdi.
+    openHostlist: () => ipcRenderer.send('window:open-hostlist'),
+    closeHostlist: () => ipcRenderer.send('hostlist-window:close'),
+    setHostlistDirty: (dirty) => ipcRenderer.send('hostlist-window:set-dirty', dirty),
+  },
+  hostlist: {
+    get: () => ipcRenderer.invoke('hostlist:get'),
+    add: (domain) => ipcRenderer.invoke('hostlist:add', domain),
+    remove: (domain) => ipcRenderer.invoke('hostlist:remove', domain),
+    manualSave: (content) => ipcRenderer.invoke('hostlist:manual-save', content),
+    setSettings: (autoUpdateEnabled, updateIntervalHours) =>
+      ipcRenderer.invoke('hostlist:set-settings', autoUpdateEnabled, updateIntervalHours),
+    syncNow: () => ipcRenderer.invoke('hostlist:sync-now'),
   },
   dpi: {
     getStatus: () => ipcRenderer.invoke('dpi:get-status'),

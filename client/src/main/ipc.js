@@ -126,10 +126,106 @@ function openSettingsWindow(panel, highlight) {
   settingsWindow.on('closed', () => {
     logEvent('settings-window-closed', {});
     settingsWindow = null;
+    // KULLANICI TALEBİ: Dışlamalar penceresi Ayarlar'ın İÇİNDEKİ bir butondan açılıyor --
+    // Ayarlar kapandığında ebeveynsiz/yetim kalmasın diye o da otomatik kapatılıyor.
+    if (hostlistWindow && !hostlistWindow.isDestroyed()) hostlistWindow.close();
+  });
+}
+
+// KULLANICI TALEBİ: Ayarlar > DPI Aşımı > Dışlamalar — Zapret/Zapret2 aktifken görünen bir
+// buton, bu ayrı themed pencereyi açıyor. openSettingsWindow ile BİREBİR AYNI desen (frameless,
+// tema renkleri, kaydedilmemiş değişiklik onayı) -- SADECE farklı bir HTML dosyası yüklüyor.
+// Aynı preload.js'i (settings.html'in kullandığı) paylaşıyor, bu yüzden ayrı bir preload
+// dosyasına gerek yok.
+let hostlistWindow = null;
+let hostlistHasUnsavedChanges = false;
+
+dynamicColor.setOnPaletteChanged((palette) => {
+  if (hostlistWindow && !hostlistWindow.isDestroyed()) {
+    hostlistWindow.webContents.send('app:dynamic-color-sampled', palette);
+  }
+});
+
+function openHostlistWindow() {
+  if (hostlistWindow) {
+    logEvent('hostlist-window-focused', {});
+    hostlistWindow.show();
+    hostlistWindow.focus();
+    return;
+  }
+
+  logEvent('hostlist-window-open', {});
+  hostlistHasUnsavedChanges = false;
+
+  hostlistWindow = new BrowserWindow({
+    width: 640,
+    height: 720,
+    resizable: true,
+    minWidth: 520,
+    minHeight: 480,
+    frame: false,
+    backgroundColor: '#313338',
+    parent: getMainWindow() || undefined,
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  hostlistWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  hostlistWindow.loadFile(path.join(__dirname, '..', 'renderer', 'hostlist', 'hostlist.html'));
+
+  hostlistWindow.webContents.on('did-finish-load', () => {
+    const palette = dynamicColor.getLastPalette();
+    if (palette) hostlistWindow.webContents.send('app:dynamic-color-sampled', palette);
+  });
+
+  let closeConfirmPending = false;
+  hostlistWindow.on('close', (event) => {
+    if (!hostlistHasUnsavedChanges) return;
+    event.preventDefault();
+    if (closeConfirmPending) return;
+    closeConfirmPending = true;
+    showThemedConfirm(hostlistWindow, {
+      type: 'warning',
+      buttons: ['Kaydetmeden Kapat', 'İptal'],
+      defaultId: 1,
+      cancelId: 1,
+      title: 'Kaydedilmemiş değişiklikler',
+      message: 'Kaydedilmemiş değişiklikleriniz var. Yine de kapatmak istiyor musunuz?',
+    }).then((choice) => {
+      closeConfirmPending = false;
+      if (choice !== 0) return;
+      hostlistHasUnsavedChanges = false;
+      hostlistWindow?.close();
+    });
+  });
+
+  hostlistWindow.on('closed', () => {
+    logEvent('hostlist-window-closed', {});
+    hostlistWindow = null;
   });
 }
 
 function registerIpcHandlers() {
+  // KULLANICI TALEBİ: ana SplitCord-Turkey penceresi kapatıldığında (hem tepsiye küçültme
+  // hem gerçek çıkış -- window.js'teki mainWindow.on('close') ikisinde de bu olayı
+  // tetikliyor) açık kalan Ayarlar (ve onun üzerinden Dışlamalar) penceresi de kapatılsın.
+  // settingsWindow.close() kendi kaydedilmemiş-değişiklik onayını (varsa) ZATEN tetikliyor
+  // -- burada tekrarlamıyoruz, doğrudan kullanıcının Ayarlar'ı kendi X butonuyla kapatmasıyla
+  // AYNI yolu izliyor. hostlistWindow'u da (settingsWindow'un 'closed' kaskatından bağımsız
+  // olarak, o an Ayarlar açık olmasa bile) doğrudan kapatıyoruz.
+  getMainWindow()?.on('close', () => {
+    if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.close();
+    if (hostlistWindow && !hostlistWindow.isDestroyed()) hostlistWindow.close();
+  });
+
   ipcMain.on('window:minimize', () => getMainWindow()?.minimize());
   ipcMain.on('window:toggle-maximize', () => {
     const win = getMainWindow();
@@ -143,6 +239,32 @@ function registerIpcHandlers() {
   ipcMain.on('settings-window:set-dirty', (_event, dirty) => {
     hasUnsavedChanges = dirty;
   });
+
+  ipcMain.on('window:open-hostlist', () => openHostlistWindow());
+  ipcMain.on('hostlist-window:close', (event) => BrowserWindow.fromWebContents(event.sender)?.close());
+  ipcMain.on('hostlist-window:set-dirty', (_event, dirty) => {
+    hostlistHasUnsavedChanges = dirty;
+  });
+
+  ipcMain.handle('hostlist:get', () => serviceClient.getHostlist());
+  // KULLANICI TALEBİ: geçersiz domain girildiğinde diyalogda YALNIZCA "Geçersiz URL" gibi
+  // temiz bir mesaj gösterilecek. ipcMain.handle içinde throw/reject edilirse Electron
+  // bunu "Error invoking remote method 'hostlist:add': Error: Geçersiz URL" şeklinde
+  // sarmalıyor (renderer'a düz err.message olarak ulaşıyor) -- bu yüzden burada hatayı
+  // YAKALAYIP normal bir { error } sonucu olarak döndürüyoruz, IPC sınırını reddeden bir
+  // promise olarak GEÇMİYORUZ.
+  ipcMain.handle('hostlist:add', async (_event, domain) => {
+    try {
+      return await serviceClient.addHostlistDomain(domain);
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+  ipcMain.handle('hostlist:remove', (_event, domain) => serviceClient.removeHostlistDomain(domain));
+  ipcMain.handle('hostlist:manual-save', (_event, content) => serviceClient.saveHostlistManualContent(content));
+  ipcMain.handle('hostlist:set-settings', (_event, autoUpdateEnabled, updateIntervalHours) =>
+    serviceClient.setHostlistSettings(autoUpdateEnabled, updateIntervalHours));
+  ipcMain.handle('hostlist:sync-now', () => serviceClient.syncHostlistNow());
 
   ipcMain.handle('dpi:get-status', () => serviceClient.getDpiStatus());
 
@@ -456,13 +578,31 @@ function registerIpcHandlers() {
   // çeviriyor -- yani onay kutusu GERÇEKTEN ana pencerede, bizim temamızla açılıyor, native
   // bir Windows dialog'u değil.
   ipcMain.handle('webview:confirm-ban-current-args', async () => {
+    // KULLANICI TALEBİ: onay metni Otomatik/Manuel moda VE (Manuel'deyken) hangi motorun
+    // yeniden aranacağına göre değişsin -- discordWebviewPreload.js'teki handleClick'in
+    // GERÇEKTE yapacağı şeyle (mod değiştirmeden AYNI motoru yeniden aramak, ya da
+    // Otomatik'te zincirin başından başlamak) birebir tutarlı olsun diye.
+    const mode = readLocalSettings().dpiMode;
+    let engineLabel = null;
+    try {
+      const status = await serviceClient.getDpiStatus();
+      const activeEngineId = status?.activeEngineId;
+      engineLabel = status?.engines?.find((e) => e.id === activeEngineId)?.displayName || activeEngineId || null;
+    } catch (err) {
+      logEvent('confirm-ban-current-args-status-error', { error: err.message });
+    }
+
+    const message = mode === 'manual'
+      ? `Şu an ${engineLabel ? `"${engineLabel}" motorunda` : 'seçili motorda'} kullanılan argüman seti yasaklanıp AYNI motor içinde sıfırdan bir tarama başlatılacak.`
+      : "Şu an kullanılan argüman seti yasaklanıp Otomatik modda Zapret'ten başlanarak sıfırdan bir tarama başlatılacak.";
+
     const choice = await showThemedConfirm(getMainWindow(), {
       type: 'question',
       buttons: ['Evet', 'Vazgeç'],
       defaultId: 0,
       cancelId: 1,
       title: 'Argüman seti yasaklansın mı?',
-      message: 'Şu an kullanılan argüman seti yasaklanıp Otomatik modda sıfırdan bir tarama başlatılacak.',
+      message,
       detail: 'Bu işlem birkaç dakika sürebilir.',
     });
     return choice === 0;
@@ -1133,4 +1273,4 @@ function registerIpcHandlers() {
   });
 }
 
-module.exports = { registerIpcHandlers, openSettingsWindow };
+module.exports = { registerIpcHandlers, openSettingsWindow, openHostlistWindow };

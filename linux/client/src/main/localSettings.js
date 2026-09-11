@@ -71,12 +71,12 @@ const DEFAULTS = {
     minimizeToTray: '',
     toggleCamera: '',
     toggleScreenShare: '',
-    // KULLANICI TALEBİ: İleri git/Geri git -- varsayılan olarak mouse'un ekstra
-    // tuşlarına atanmış (bkz. inputHook.js "Mouse4"/"Mouse5" formatı). DİKKAT: bu,
-    // standart OS/tarayıcı kuralının (Mouse4=geri, Mouse5=ileri) TERSİ -- kullanıcının
-    // kendi açık talebiyle Mouse4=ileri, Mouse5=geri olarak ayarlandı.
-    navigateForward: 'Mouse4',
-    navigateBack: 'Mouse5',
+    // KULLANICI TALEBİ (düzeltme): İleri git/Geri git -- varsayılan olarak mouse'un ekstra
+    // tuşlarına atanmış (bkz. inputHook.js "Mouse4"/"Mouse5" formatı). Standart OS/tarayıcı
+    // kuralıyla (Mouse4=geri, Mouse5=ileri) UYUMLU olacak şekilde ayarlandı -- önceki tersi
+    // atama (Mouse4=ileri, Mouse5=geri) kullanıcı talebiyle geri alındı.
+    navigateForward: 'Mouse5',
+    navigateBack: 'Mouse4',
     // KULLANICI TALEBİ: Bas Konuş / Susturmak İçin Bas -- varsayılan atanmamış (bkz.
     // shortcuts.js holdActionsMap, inputHook.js "Key:<DOMCode>" formatı).
     pushToTalk: '',

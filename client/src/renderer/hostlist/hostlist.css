@@ -1,0 +1,100 @@
+.sc-hostlist-content {
+  padding: 24px 32px 96px;
+  overflow-y: auto;
+  height: calc(100vh - 32px);
+  box-sizing: border-box;
+}
+
+.sc-hostlist-content h1 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.sc-hostlist-domains {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sc-hostlist-domain-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--sc-bg-secondary);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.sc-hostlist-domain-name {
+  flex: 1 1 auto;
+  color: var(--sc-text-normal);
+  font-size: 13px;
+  font-family: Consolas, monospace;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sc-hostlist-domain-remove {
+  background: transparent;
+  border: none;
+  color: var(--sc-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+
+.sc-hostlist-domain-remove:hover {
+  color: var(--sc-danger);
+  background: var(--sc-bg-tertiary);
+}
+
+.sc-hostlist-empty-hint {
+  margin-top: 12px;
+}
+
+.sc-hostlist-textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 10px;
+  background: var(--sc-bg-secondary);
+  color: var(--sc-text-normal);
+  border: 1px solid var(--sc-bg-hover);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.sc-hostlist-textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  resize: none;
+}
+
+.sc-hostlist-dialog-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 12px;
+  background: var(--sc-bg-tertiary);
+  color: var(--sc-text-normal);
+  border: 1px solid var(--sc-bg-hover);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: Consolas, monospace;
+}
+
+.sc-hostlist-dialog-error {
+  color: var(--sc-danger);
+  font-size: 12px;
+  margin-top: 8px;
+}

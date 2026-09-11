@@ -211,6 +211,11 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
     /// blockcheck2 kullanılırken 10dk, Otomatik'te 5dk (kullanıcı talebi).</summary>
     public bool IsManualActivation { get; set; }
 
+    // KULLANICI TALEBİ (Ayarlar > DPI Aşımı > Dışlamalar, Windows istemcisinde bulundu, buraya
+    // da aynen uygulanıyor): Zapret ile PAYLAŞILAN, kullanıcı tarafından düzenlenebilen
+    // hostlist-exclude dosyası (bkz. HostlistManager.cs).
+    private static string HostlistArgs => $"--hostlist-exclude={HostlistManager.FilePath}";
+
     public Zapret2Engine(SettingsStore settings, ILogger<Zapret2Engine> logger)
     {
         _settings = settings;
@@ -288,52 +293,69 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
         }
 
         // KULLANICI TALEBİ: blockcheck2'ye düşmeden önce sabit, elle seçilmiş aday listesi
-        // sırayla deneniyor (bkz. PreConfiguredCandidates üstündeki gerekçe notu). Zaten
+        // sırayla deneniyor (bkz. PreConfiguredCandidates üstündeki gerekçe notu) — artık
+        // yalnızca TEK bir DNS protokolüyle değil, DoH VE DNSCrypt ile sırayla (blockcheck2'nin
+        // DNS protokolü döngüsüyle tutarlı olsun diye). None/DNS'siz tier'i BİLEREK hariç —
+        // hazır önayarlar zaten sabit/statik bir liste, "DNS'siz" denemesi blockcheck2'nin
+        // keşif taramasına daha uygun. Her protokol geçişinde DnsProtocolTiers.ApplyTier ile
+        // AÇIKÇA o protokole geçiliyor (önceki adımdan kalma belirsiz bir DnsProviders
+        // durumuna güvenmek yerine) — deterministik/test edilebilir olsun diye. Zaten
         // yukarıda denenmiş (kayıtlı ayarla aynı) ya da kullanıcı tarafından yasaklanmış
         // adaylar atlanıyor; atlanan/başarısız olan HER aday triedAndFailed'a eklenip
         // blockcheck2'nin erken-durdurma mekanizmasının bunları bir daha bulup boşuna
         // denememesi sağlanıyor (bkz. bu HashSet'in üstündeki asıl gerekçe notu).
         if (PreConfiguredCandidates.Length > 0)
         {
-            _logger.LogInformation("Zapret2: blockcheck2'den önce {Count} hazır önayar deneniyor", PreConfiguredCandidates.Length);
-            _logs.Add($"Hazır önayarlar deneniyor ({PreConfiguredCandidates.Length} adet), başarısız olursa blockcheck2'ye geçilecek.");
-
-            try
+            var preConfiguredProtocols = new[] { DnsProtocol.Doh, DnsProtocol.DnsCrypt };
+            foreach (var preConfiguredProtocol in preConfiguredProtocols)
             {
-                for (var i = 0; i < PreConfiguredCandidates.Length; i++)
+                ct.ThrowIfCancellationRequested();
+                DnsProtocolTiers.ApplyTier(_settings, preConfiguredProtocol);
+                _logger.LogInformation(
+                    "Zapret2: blockcheck2'den önce {Count} hazır önayar deneniyor (DNS protokolü: {Protocol})",
+                    PreConfiguredCandidates.Length, preConfiguredProtocol);
+                _logs.Add($"Hazır önayarlar deneniyor (DNS protokolü: {preConfiguredProtocol}, {PreConfiguredCandidates.Length} adet)...");
+
+                try
                 {
-                    var candidate = PreConfiguredCandidates[i];
-                    ct.ThrowIfCancellationRequested();
-
-                    if (candidate == savedArgs) continue; // yukarıda zaten denendi
-                    if (rejected.Contains(candidate))
+                    for (var i = 0; i < PreConfiguredCandidates.Length; i++)
                     {
-                        _logger.LogInformation("Zapret2 hazır önayarı atlanıyor (daha önce reddedildi): {Args}", candidate);
-                        triedAndFailed.Add(candidate);
-                        continue;
-                    }
+                        var candidate = PreConfiguredCandidates[i];
+                        ct.ThrowIfCancellationRequested();
 
-                    var succeeded = false;
-                    for (var attempt = 1; attempt <= PreConfiguredCandidateRetryAttempts; attempt++)
-                    {
-                        _preConfiguredCandidateStatus = $"Hazır önayar deneniyor ({i + 1}/{PreConfiguredCandidates.Length}, deneme {attempt}/{PreConfiguredCandidateRetryAttempts})";
-                        if (await TryCandidateAsync(candidate, _preConfiguredCandidateStatus, ct, verifyVoice: true))
+                        if (candidate == savedArgs) continue; // yukarıda zaten denendi
+                        if (rejected.Contains(candidate))
                         {
-                            succeeded = true;
-                            break;
+                            _logger.LogInformation("Zapret2 hazır önayarı atlanıyor (daha önce reddedildi): {Args}", candidate);
+                            triedAndFailed.Add(candidate);
+                            continue;
                         }
+
+                        var succeeded = false;
+                        for (var attempt = 1; attempt <= PreConfiguredCandidateRetryAttempts; attempt++)
+                        {
+                            _preConfiguredCandidateStatus = $"Hazır önayar deneniyor ({preConfiguredProtocol}, {i + 1}/{PreConfiguredCandidates.Length}, deneme {attempt}/{PreConfiguredCandidateRetryAttempts})";
+                            if (await TryCandidateAsync(candidate, _preConfiguredCandidateStatus, ct, verifyVoice: true))
+                            {
+                                succeeded = true;
+                                break;
+                            }
+                        }
+                        if (succeeded) return;
+                        triedAndFailed.Add(candidate);
                     }
-                    if (succeeded) return;
-                    triedAndFailed.Add(candidate);
                 }
-            }
-            finally
-            {
-                _preConfiguredCandidateStatus = null;
+                finally
+                {
+                    _preConfiguredCandidateStatus = null;
+                }
+
+                _logger.LogInformation("Zapret2: DNS protokolü {Protocol} ile hiçbir hazır önayar çalışmadı", preConfiguredProtocol);
+                _logs.Add($"DNS protokolü {preConfiguredProtocol} ile hiçbir hazır önayar çalışmadı.");
             }
 
-            _logger.LogInformation("Zapret2: hiçbir hazır önayar çalışmadı, blockcheck2 taramasına geçiliyor");
-            _logs.Add("Hiçbir hazır önayar çalışmadı, blockcheck2 taramasına geçiliyor.");
+            _logger.LogInformation("Zapret2: hiçbir hazır önayar (DoH/DNSCrypt) çalışmadı, blockcheck2 taramasına geçiliyor");
+            _logs.Add("Hiçbir hazır önayar (DoH/DNSCrypt) çalışmadı, blockcheck2 taramasına geçiliyor.");
         }
 
         // Manuel > Gelişmiş'ten kullanıcı tek bir DNS protokolü sabitlediyse (bkz.
@@ -513,9 +535,9 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
         // Windows'taki AYNI kararlılık önlemi (WinDivert'in "tek işleyici" kısıtlaması NFQUEUE'da
         // "aynı kuyruk numarasına tek bağlanan" kısıtlamasına karşılık geliyor): blockcheck2.sh'nin
         // KENDİ iç test döngüsünden kalma bir nfqws2 hâlâ ayaktaysa, YENİ bir tarama başlamadan
-        // önce temizliyoruz.
-        KillStrayNfqws2Processes();
-        await Task.Delay(300, ct);
+        // önce temizliyoruz. Yalnızca GERÇEKTEN bir şey öldürüldüyse bekliyoruz -- bkz.
+        // KillStrayNfqws2Processes'in dönüş değeri üstündeki not.
+        if (KillStrayNfqws2Processes()) await Task.Delay(300, ct);
 
         var psi = new ProcessStartInfo
         {
@@ -1047,13 +1069,19 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
     /// TEK bir süreç bağlanabilir. blockcheck2.sh KENDİ iç test döngüsünde kısa ömürlü nfqws2
     /// süreçleri başlatıp durduruyor — bunlar _blockcheckProcess/_process alanlarımızca TAKİP
     /// EDİLMİYOR. Adı geçen HER nfqws2 sürecini sistem genelinde zorla sonlandırıp bir sonraki
-    /// spawn'ın GERÇEKTEN boş bir kuyrukla başlamasını garanti ediyoruz.</summary>
-    private void KillStrayNfqws2Processes()
+    /// spawn'ın GERÇEKTEN boş bir kuyrukla başlamasını garanti ediyoruz.
+    ///
+    /// KULLANICI TALEBİ (Windows karşılığıyla AYNI): gerçekten öldürülen bir şey olup olmadığını
+    /// bool olarak döndürüyor — çağıranlar bunu, ardından gelen 300ms'lik "kuyruk serbest
+    /// kalsın" beklemesini YALNIZCA gerçekten bir süreç öldürüldüyse yapmak için kullanıyor.
+    /// Asıl/yaygın durum (artık nfqws2 YOK) bu sayede beklemeden atlanıyor.</summary>
+    private bool KillStrayNfqws2Processes()
     {
         Process[] stray;
         try { stray = Process.GetProcessesByName("nfqws2"); }
-        catch { return; }
+        catch { return false; }
 
+        var killedAny = false;
         foreach (var strayProcess in stray)
         {
             using (strayProcess)
@@ -1062,10 +1090,12 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
                 {
                     strayProcess.Kill(entireProcessTree: true);
                     strayProcess.WaitForExit(2000);
+                    killedAny = true;
                 }
                 catch { /* zaten sonlanmış olabilir */ }
             }
         }
+        return killedAny;
     }
 
     // Zapret2'nin doğrudan (blockcheck2 dışında, kazanan stratejiyle) spawn ettiği nfqws2 için
@@ -1093,9 +1123,9 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
 
         // Bu adayı başlatmadan ÖNCE NFQUEUE kuyruğunu tutuyor olabilecek her türlü artık
         // nfqws2'yi (blockcheck2'nin kendi iç testinden ya da önceki bir adaydan kalma)
-        // temizliyoruz — bkz. üstteki KillStrayNfqws2Processes notu.
-        KillStrayNfqws2Processes();
-        await Task.Delay(300, ct);
+        // temizliyoruz — bkz. üstteki KillStrayNfqws2Processes notu. Yalnızca GERÇEKTEN bir
+        // şey öldürüldüyse bekliyoruz (asıl/yaygın durumda öldürülecek bir artık YOK).
+        if (KillStrayNfqws2Processes()) await Task.Delay(300, ct);
 
         await AddNfQueueRulesAsync();
 
@@ -1132,7 +1162,7 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
             _logger.LogWarning("zapret-lib.lua/zapret-antidpi.lua bulunamadı ({LibPath}), --lua-desync teknikleri çalışmayabilir", luaLibPath);
         }
 
-        foreach (var arg in SplitArgs(args)) psi.ArgumentList.Add(arg);
+        foreach (var arg in SplitArgs($"{args} {HostlistArgs}")) psi.ArgumentList.Add(arg);
 
         _logger.LogInformation("Zapret2 nfqws2 tam komut satırı: {Exe} {Args}", exePath, string.Join(' ', psi.ArgumentList));
         _logs.Add($"[tanı] tam komut satırı: {string.Join(' ', psi.ArgumentList)}");
