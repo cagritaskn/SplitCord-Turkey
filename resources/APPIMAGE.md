@@ -9,7 +9,7 @@ SplitCord-Turkey'in Linux sürümü öncelikli olarak Debian/Ubuntu tabanlı da�
 
 ## Kurulum ve ilk çalıştırma
 
-1. **[SplitCord-Turkey-Linux-1.0.2-AMD64.AppImage](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.2/SplitCord-Turkey-Linux-1.0.2-AMD64.AppImage)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
+1. **[SplitCord-Turkey-Linux-1.0.3-AMD64.AppImage](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.3/SplitCord-Turkey-Linux-1.0.3-AMD64.AppImage)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
 2. Dosyayı çalıştırılabilir yapın:
    ```bash
    chmod +x SplitCord-Turkey-*.AppImage

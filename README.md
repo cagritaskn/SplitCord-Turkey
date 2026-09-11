@@ -12,7 +12,7 @@
 
 Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'i kurup kullanmaya başlayabilirsiniz.
 
-1. **[SplitCord-Turkey-Setup-1.0.2.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.2/SplitCord-Turkey-Setup-1.0.2.exe)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
+1. **[SplitCord-Turkey-Setup-1.0.3.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.3/SplitCord-Turkey-Setup-1.0.3.exe)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
 2. İndirilen dosyayı çalıştırın. SmartScreen uyarısı görürseniz **(Windows kişisel bilgisayarınızı korudu başlıklı)** pencerede bulunan **Ek bilgi** kısmına tıklayıp daha sonra **Yine de çalıştır** butonuna tıklayın. Set-up, arka planda çalışacak DPI aşım hizmetini (SplitCordDpiService) kaydedebilmek için yönetici izni isteyebilir; kurulum tamamlandıktan sonra uygulama hiçbir zaman yükseltilmiş yetkiyle çalışmaz (Yönetici izni istemez).
 3. Kurulum bitince SplitCord-Turkey'i çalıştırın.
 4. İlk açılışta uygulama sizin için en uygun DPI aşım motorunu ve ayarını bulmak amacıyla Zapret, Zapret2, ByeDPI ve GoodbyeDPI'yi sırayla dener; bu tarama birkaç dakika sürebilir. Bu süre boyunca "Bağlantı hazırlanıyor…" ekranını görmeniz normaldir, taramanın bitmesini bekleyin.
@@ -27,10 +27,10 @@ Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'
 
 SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint'te test edildi) `.deb` paketi olarak sunulan bir Linux sürümü de bulunur. Motor seti Windows'tan biraz farklıdır: WinDivert yerine NFQUEUE/iptables kullanılır, GoodbyeDPI Linux'a özgü bir karşılığı olmadığı için bulunmaz — Otomatik modun motor sırası **Zapret → Zapret2 → ByeDPI**'dir.
 
-1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından [SplitCord-Turkey-Linux-1.0.2-AMD64.deb](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.2/SplitCord-Turkey-Linux-1.0.2-AMD64.deb) dosyasını indirin.
+1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından [SplitCord-Turkey-Linux-1.0.3-AMD64.deb](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.3/SplitCord-Turkey-Linux-1.0.3-AMD64.deb) dosyasını indirin.
 2. Paketi kurun:
    ```bash
-   sudo dpkg -i SplitCord-Turkey-Linux-1.0.2-AMD64.deb
+   sudo dpkg -i SplitCord-Turkey-Linux-1.0.3-AMD64.deb
    ```
    ya da 
    Linux dağıtımınız destekliyorsa .deb dosyasına çift tıklayıp çalıştırarak kurun.
@@ -52,7 +52,7 @@ SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint'te te
 ## Karşılaşılabilecek Sorunlar
 
 ### **Sistem Geneli Aşımlarda (Zapret, Zapret2 ve GoodbyeDPI) Belirli Siteler/Uygulamalara Erişimin Kaybedilmesi Durumunda**
-DPI Aşımı ayarlarından **Gelişmiş** seçeneğini aktifleştirin, ardından aşağı kaydırıp **Argüman Setini Yasakla** butonunu bulup tıklayın. Sorun devam ederse bu işlemi tekrar edin. Yine sonuç alamazsanız DPI aşım motorunu değşitirmeyi deneyin. (Örn. Zapret2 -> Zapret) Ayrıca SplitCord-Turkey'i sonlandırdığınızda hiçbir aşım motorunun çalışmayacağı, bu sebeple erişim kaybettiğiniz site/uygulamalara SplitCord-Turkey'den çıkış yaptıktan sonra erişebileceğinizi unutmayın. Eğer herhangi bir aşım motoru aktifken bir siteye/uygulamaya erişmekte sorun yaşıyorsanız, lütfen [Github Issues sayfasında bir rapor oluşturarak](https://github.com/cagritaskn/SplitCord-Turkey/issues) bildirin.
+DPI Aşımı ayarlarından **Gelişmiş** seçeneğini aktifleştirin, ardından aşağı kaydırıp **Argüman Setini Yasakla** butonunu bulup tıklayın. Sorun devam ederse bu işlemi tekrar edin. Yine sonuç alamazsanız DPI aşım motorunu değşitirmeyi deneyin. (Örn. Zapret2 -> Zapret) Ayrıca SplitCord-Turkey'i sonlandırdığınızda hiçbir aşım motorunun çalışmayacağı, bu sebeple erişim kaybettiğiniz site/uygulamalara SplitCord-Turkey'den çıkış yaptıktan sonra erişebileceğinizi unutmayın. Eğer herhangi bir aşım motoru aktifken bir siteye/uygulamaya erişmekte sorun yaşıyorsanız, lütfen [Github Issues sayfasında bir rapor oluşturarak](https://github.com/cagritaskn/SplitCord-Turkey/issues) bildirin. Ayrıca DPI Aşımı ayarlarındaki **Dışlamalar** penceresinden erişim sorunu yaşadığınız domaini manuel olarak ekleyerek o domain için DPI aşım tekniğinin hiç uygulanmamasını sağlayabilir, böylece o domain aşımdan etkilenmeden normal şekilde çalışmaya devam edebilir.
 
 ### **QUIC Hatası Almanız Durumunda**
 Genel ayarlarda bulunan **QUIC devre dışı** seçeneğini aktifleştirip yeniden arama başlatmayı deneyin.
@@ -79,6 +79,7 @@ Ayarlardaki Hakkında ve Güncelleme bölümünde bulunan **Tüm Ayarları Sıf�
 - **Discord'a görsel ve işlevsel olarak birebir yakın bir arayüz.** Kendi özel başlık çubuğu, bildirimleri, tepsi simgesi ve ekran paylaşımı seçicisiyle resmi masaüstü istemcisinin yerini alabilecek şekilde tasarlanmıştır.
 - **Dört DPI aşım motoru, tek uygulama:** Zapret (sistem geneli, WinDivert tabanlı — Otomatik modun giriş noktasıdır), Zapret2 (sistem geneli, WinDivert tabanlı — blockcheck2 ile otomatik strateji keşfi yapar), ByeDPI (yalnızca bu uygulamanın trafiğini kapsayan yerel proxy) ve GoodbyeDPI (sistem geneli, WinDivert tabanlı). Otomatik modda motorlar sırayla denenir, çalışan ilk ayar kaydedilip kullanılır.
 - **Otomatik ve Manuel mod.** Otomatik modda uygulama sizin için en uygun motoru ve stratejiyi bulur; Manuel modda hangi motorun, hangi parametrelerle çalışacağını kendiniz seçebilirsiniz.
+- **Dışlamalar (hostlist) yönetimi.** Zapret ve Zapret2 sistem geneli çalışırken, DPI aşım tekniğinin (fake paket/parçalama vb.) hiç uygulanmayacağı domainleri (ve alt alan adlarını) DPI Aşımı > Dışlamalar penceresinden yönetebilirsiniz — kendi domaininizi ekleyip kaldırabilir, listeyi manuel olarak da düzenleyebilirsiniz. Liste, SplitCord-Turkey'in resmi deposundaki güncel listeyle otomatik (belirlediğiniz aralıkta) ya da "Şimdi Güncelle" butonuyla elle senkronize edilir; sizin eklediğiniz domainler bu güncellemeyle asla silinmez.
 - **Şifreli DNS desteği (DoH/DNSCrypt, isteğe bağlı DoT/DoQ).** DNS seviyesinde yaşanan engellemelere karşı Zapret/Zapret2/ByeDPI, DoH → DNSCrypt → DNS'siz sırasıyla otomatik olarak dener (DoT/DoQ sabit 853 portunda çalıştığı ve birçok ISP tarafından protokole bakılmaksızın toptan engellendiği için otomatik sıradan çıkarıldı, Manuel moddan hâlâ elle sabitlenebilir); DoH sağlayıcıları arasında, diğerlerinin tamamı engellendiğinde devreye giren bir NextDNS yedeği de bulunur. Sağlayıcıları Ayarlar ekranından kendiniz de özelleştirebilirsiniz.
 - **Sesli kanal desteği.** ByeDPI'nin kapsayamadığı WebRTC/UDP trafiği için, ByeDPI aktifken arka planda otomatik olarak devreye giren bir Zapret UDP eşlik süreci bulunur.
 - **Global Klavye Kısayolları.** Mikrofonu sustur/aç, sağırlaştır, bağlantıyı kes, kamerayı aç/kapat, ekran paylaşımını aç/kapat, pencereyi öne al, tepsiye küçült/geri al, sohbette ileri/geri git ve Bas-Konuş/Susturmak İçin Bas — hepsi uygulama arka planda ya da odak dışındayken bile çalışır; Discord'un kendi (yalnızca sekme ön plandayken çalışan) Bas-Konuş özelliğinin yerini alır.
@@ -122,7 +123,7 @@ Otomatik modun motor sırası **Zapret → Zapret2 → ByeDPI**'dir — mantık 
 
 ## Ayarlar Ekranları
 
-- **DPI Aşımı:** Otomatik/Manuel mod seçimi, motor kartları, gelişmiş argüman düzenleme, DNS protokolü sırası ve sağlayıcıları, Zapret2 blockcheck2 tarama zamanaşımı, yeniden arama başlatma ve reddedilen ayar listeleri.
+- **DPI Aşımı:** Otomatik/Manuel mod seçimi, motor kartları, gelişmiş argüman düzenleme, DNS protokolü sırası ve sağlayıcıları, Zapret2 blockcheck2 tarama zamanaşımı, yeniden arama başlatma, reddedilen ayar listeleri ve (Zapret/Zapret2 aktifken görünen) Dışlamalar penceresi — DPI aşımından muaf tutulacak domainleri ekleme/kaldırma, manuel liste düzenleme ve otomatik/elle güncelleme.
 - **İzinler ve Kontroller:** Güvenlik duvarı izinleri, resmi Discord uygulamasıyla çakışma kontrolü, Kaspersky/ESET tespiti, çakışabilecek hizmetlerin ve harici DPI süreçlerinin listesi ile ses bağlantısı kontrolleri.
 - **Genel:** Otomatik başlatma, bildirim rozeti, performans modu, bağlantıları sistem tarayıcısında açma, yazım denetimi vurgusunu kapatma, QUIC'i devre dışı bırakma ve benzeri genel tercihler.
 - **Görünüm:** Discord temasından otomatik renk örnekleme veya sabit tema ön ayarları.
