@@ -6,7 +6,7 @@
     "email": "cagritaskn@gmail.com"
   },
   "homepage": "https://github.com/cagritaskn/SplitCord-Turkey",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "description": "SplitCord-Turkey",
   "main": "src/main/index.js",
   "scripts": {

@@ -284,3 +284,36 @@ btnAddDomain.addEventListener('click', async () => {
 });
 
 loadHostlist().catch((err) => console.error(err));
+
+// KULLANICI TALEBİ (2026-09-11): AppImage'a özel -- kurulu servis eskiyse (bkz. ipc.js
+// dpi:is-service-outdated) burada uyarı gösterip tek tıkla güncelleme sunuyoruz. .deb'de
+// isServiceOutdated() her zaman false döndüğü için bu banner hiçbir zaman görünmez.
+const hostlistOutdatedBanner = document.getElementById('hostlist-outdated-banner');
+const btnUpdateServiceHostlist = document.getElementById('btn-update-service-hostlist');
+
+window.splitcord.dpi
+  .isServiceOutdated()
+  .then((outdated) => {
+    hostlistOutdatedBanner.hidden = !outdated;
+  })
+  .catch((err) => window.splitcord.log?.('hostlist-check-service-outdated-error', { error: err.message }));
+
+btnUpdateServiceHostlist?.addEventListener('click', async () => {
+  const originalText = btnUpdateServiceHostlist.textContent;
+  btnUpdateServiceHostlist.disabled = true;
+  btnUpdateServiceHostlist.textContent = 'Güncelleniyor… (parola isteyen bir pencere açılabilir)';
+  try {
+    const result = await window.splitcord.dpi.installService();
+    if (result.ok) {
+      hostlistOutdatedBanner.hidden = true;
+      await loadHostlist();
+    } else if (!result.cancelled) {
+      await window.showAlertModal({ title: 'Güncelleme başarısız', message: result.error });
+    }
+  } catch (err) {
+    await window.showAlertModal({ title: 'Güncelleme başarısız', message: err.message });
+  } finally {
+    btnUpdateServiceHostlist.disabled = false;
+    btnUpdateServiceHostlist.textContent = originalText;
+  }
+});

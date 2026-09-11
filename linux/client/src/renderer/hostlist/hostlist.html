@@ -18,6 +18,18 @@
 
   <main class="sc-hostlist-content">
     <h1>Dışlamalar</h1>
+
+    <!-- KULLANICI TALEBİ (2026-09-11): AppImage'a özel -- kurulu systemd servisi mevcut
+         istemci sürümünden eskiyse (bkz. serviceInstaller.js isServiceOutdated) burada
+         gösterilir. Bu pencerenin GERÇEK TETİKLEYİCİSİ: "Şimdi Güncelle" 404 ile
+         başarısız oluyordu çünkü eski servis binary'sinde /hostlist/sync-now uç noktası
+         hiç yoktu -- kök neden AppImage'ın .deb'in aksine servisi otomatik güncellememesi. -->
+    <div id="hostlist-outdated-banner" class="sc-status-box" hidden style="margin-bottom: 16px;">
+      DPI servisi güncel değil -- bu pencerenin bazı özellikleri (Şimdi Güncelle, ilk kurulumda
+      hazır gelen liste) çalışmayabilir.
+      <button id="btn-update-service-hostlist" class="sc-btn sc-btn--primary" style="display: block; margin-top: 8px;">Servisi Güncelle</button>
+    </div>
+
     <p class="sc-hint">
       Zapret ve Zapret2 sistem geneli çalışırken, aşağıda listelenen domainlere (ve alt alan
       adlarına) DPI aşım tekniği (fake paket/parçalama vb.) uygulanmaz — bu, aşım yüzünden

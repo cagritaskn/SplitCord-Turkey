@@ -16,7 +16,7 @@ const { showThemedConfirm } = require('./themedDialog');
 const voiceState = require('./voiceState');
 const notificationBadge = require('./notificationBadge');
 const { applyShortcutsFromSettings } = require('./shortcuts');
-const { installDpiService, uninstallDpiService, isInstallerBundled } = require('./serviceInstaller');
+const { installDpiService, uninstallDpiService, isInstallerBundled, isServiceOutdated } = require('./serviceInstaller');
 const { uninstallApp: uninstallAppPackage } = require('./appUninstaller');
 const { isAppImage, getPackagingKind } = require('./packagingInfo');
 const { loadAppIcon } = require('./icon');
@@ -563,6 +563,10 @@ function registerIpcHandlers() {
   // "DPI Servisini Kur" butonu (bkz. titlebar.js) VE ilk açılış otomatik kurulumu (bkz.
   // index.js) için ortak -- ikisi de AYNI pkexec tabanlı install.sh çağrısını kullanıyor.
   ipcMain.handle('dpi:is-installer-bundled', () => isInstallerBundled());
+  // KULLANICI TALEBİ (2026-09-11): AppImage'a özel -- kurulu systemd servisi mevcut istemci
+  // sürümünden ESKİYSE (bkz. serviceInstaller.js isServiceOutdated) true döner. .deb'de her
+  // zaman false (dpkg zaten her yükseltmede servisi otomatik güncelliyor).
+  ipcMain.handle('dpi:is-service-outdated', () => isServiceOutdated());
   ipcMain.handle('dpi:install-service', async () => {
     logEvent('dpi-install-service-requested', {});
     try {

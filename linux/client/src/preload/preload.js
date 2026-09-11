@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld('splitcord', {
     isInstallerBundled: () => ipcRenderer.invoke('dpi:is-installer-bundled'),
     installService: () => ipcRenderer.invoke('dpi:install-service'),
     uninstallService: () => ipcRenderer.invoke('dpi:uninstall-service'),
+    isServiceOutdated: () => ipcRenderer.invoke('dpi:is-service-outdated'),
     // PORT_PLAN_2.md AP-5/Faz 3 — İzinler ve Kontroller panelindeki AppImage bağımlılık bölümü.
     dependencyCheck: () => ipcRenderer.invoke('dpi:dependency-check'),
     // getFirewallStatus/grantFirewallPermission/getAppFirewallStatus/grantAppFirewallPermission/

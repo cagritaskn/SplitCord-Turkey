@@ -1,10 +1,15 @@
 'use strict';
 
+const { app } = require('electron');
 const { spawn, execFileSync } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const { isAppImage } = require('./packagingInfo');
+
+// install.sh'in HER ZAMAN sabit kurduğu yol (bkz. ../../packaging/install.sh INSTALL_DIR) --
+// AppImage'da kurulu servisin sürümünü tespit edebilmek için burada da sabit olarak biliniyor.
+const SERVICE_INSTALL_DIR = '/opt/splitcord';
 
 // electron-builder'ın package.json'daki extraResources yapılandırması (bkz. "service-installer"
 // hedefi) hem yayınlanmış (dotnet publish) servis binary'lerini HEM `linux/packaging/`'daki
@@ -63,6 +68,24 @@ function installDpiService() {
         tempDirToCleanup = fs.mkdtempSync(path.join(os.tmpdir(), 'splitcord-install-'));
         execFileSync('cp', ['-a', `${installerDir}/.`, tempDirToCleanup]);
         effectiveDir = tempDirToCleanup;
+        // KULLANICI TALEBİ (2026-09-11, CANLI TESTTE BULUNDU): AppImage'ın systemd servisi,
+        // .deb'in aksine (dpkg her yükseltmede postinst'i otomatik tekrar çalıştırıyor) hiçbir
+        // zaman OTOMATİK güncellenmiyordu -- kullanıcı yeni bir AppImage sürümü indirip açtığında
+        // eski servis binary'si (yeni eklenen HTTP uç noktalarından habersiz) çalışmaya devam
+        // ediyordu, bu da örneğin yeni "/hostlist/sync-now" uç noktasına 404 ile sonuçlanıyordu
+        // (ve hostlist'in ilk kurulumda gömülü listeden tohumlanması da hiç ÇALIŞMAMIŞ oluyordu,
+        // çünkü o kod da eski binary'de yoktu). install.sh zaten PUBLISH_DIR'deki HER dosyayı
+        // (install.sh/uninstall.sh dahil, bkz. yukarıdaki büyük not) INSTALL_DIR'e rsync'liyor --
+        // burada bu kopyaya bir SERVICE_VERSION metin dosyası ekleyip mevcut istemci sürümünü
+        // yazıyoruz, install.sh bunu ekstra bir değişikliğe gerek kalmadan otomatik olarak
+        // /opt/splitcord/SERVICE_VERSION'a kopyalıyor -- isServiceOutdated() bir sonraki
+        // açılışta bunu OKUYUP kurulu servisin GÜNCEL istemciyle mi geldiğini tespit ediyor.
+        try {
+          fs.writeFileSync(path.join(tempDirToCleanup, 'SERVICE_VERSION'), app.getVersion());
+        } catch {
+          // zararsız -- yalnızca bir sonraki sürüm-uyuşmazlığı tespiti çalışmaz, kurulumun
+          // kendisini engellememeli
+        }
       } catch (err) {
         reject(new Error(`Kurulum dosyaları geçici bir dizine kopyalanamadı: ${err.message}`));
         return;
@@ -180,4 +203,31 @@ function uninstallDpiService() {
   });
 }
 
-module.exports = { installDpiService, uninstallDpiService, isInstallerBundled, getInstallerDir };
+// KULLANICI TALEBİ (2026-09-11): AppImage'a özel servis-sürüm-uyuşmazlığı tespiti (bkz.
+// installDpiService'teki SERVICE_VERSION yazma notu). .deb'de bu kavrama hiç gerek yok --
+// dpkg her yükseltmede postinst'i (install.sh) otomatik tekrar çalıştırdığı için servis
+// ORADA asla eskiyemiyor.
+function isServiceInstalledOnDisk() {
+  try {
+    return fs.existsSync(path.join(SERVICE_INSTALL_DIR, 'SplitCordServiceLinux'));
+  } catch {
+    return false;
+  }
+}
+
+function isServiceOutdated() {
+  if (!isAppImage()) return false;
+  if (!isServiceInstalledOnDisk()) return false; // hiç kurulu değil -- bu AYRI bir durum, "DPI Servisini Kur" akışı zaten ele alıyor
+  let installedVersion = null;
+  try {
+    installedVersion = fs.readFileSync(path.join(SERVICE_INSTALL_DIR, 'SERVICE_VERSION'), 'utf8').trim();
+  } catch {
+    // SERVICE_VERSION dosyası yok -- ya bu sürüm-takip mekanizmasından ÖNCE kurulmuş eski bir
+    // servis (kesinlikle güncel DEĞİL), ya da okunamayan bir dosya sistemi durumu -- her iki
+    // durumda da "güncel değil" saymak güvenli taraf (installedVersion null kalıyor, aşağıdaki
+    // karşılaştırma zaten true dönecek).
+  }
+  return installedVersion !== app.getVersion();
+}
+
+module.exports = { installDpiService, uninstallDpiService, isInstallerBundled, getInstallerDir, isServiceOutdated };
