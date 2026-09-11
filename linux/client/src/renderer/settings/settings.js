@@ -2265,6 +2265,11 @@ btnRemoveDpiService?.addEventListener('click', async () => {
       });
     } else if (result.ok) {
       window.splitcord.log('remove-dpi-service-succeeded', {});
+      // KULLANICI TALEBİ: servis kaldırıldıktan sonra sayfa yenilenmeli -- aksi halde
+      // "DPI Servisini Kur"/bağımlılık paneli gibi servis durumuna bağlı UI parçaları
+      // eski (kurulu) duruma göre görünmeye devam ediyordu.
+      window.location.reload();
+      return;
     }
   } catch (err) {
     window.splitcord.log('remove-dpi-service-error', { error: err.message });
