@@ -41,7 +41,15 @@ mkdir -p "$LIB_DIR"
 # sistemde bulunacağı varsayılan, GÖMÜLMEYEN temel kütüphaneleri -- bunları gömmek hem gereksiz
 # (her zaman orada olacaklar) hem de RİSKLİ (hedefin glibc'siyle çakışıp ABI uyumsuzluğu
 # yaratabilir, AppImage'ların glibc'yi KENDİLERİ asla bundle ETMEMESİNİN sebebi tam da bu).
-BASELINE_PATTERN='^(linux-vdso|ld-linux|libc\.so|libm\.so|libpthread\.so|libdl\.so|librt\.so|libresolv\.so|libnsl\.so)'
+BASELINE_PATTERN='^(linux-vdso|ld-linux|libc\.so|libm\.so|libpthread\.so|libdl\.so|librt\.so|libresolv\.so|libnsl\.so|libgcc_s\.so)'
+
+# nfqws/nfqws2 `make systemd` ile derlendiği için libsystemd.so.0'a da bağlı (sd_notify). SplitCord
+# servisi zaten systemd gerektiriyor (bkz. PORTING_PLAN.md D-12), yani libsystemd ve onun kendi
+# bağımlılık zinciri (libcap, libgcrypt, libgpg-error, liblz4, libzstd, liblzma) hedefte HER ZAMAN
+# var. Bunları gömmek hem gereksiz (~MB'larca) hem de riskli: derleme makinesinin libsystemd'si
+# hedefinkiyle uyumsuz olabilir. ldd kapanımı yüzünden zincirin tamamı listeye girdiği için hepsi
+# burada açıkça dışlanıyor.
+SYSTEMD_FAMILY_PATTERN='^(libsystemd|libcap|libgcrypt|libgpg-error|liblz4|liblzma|libzstd)\.so'
 
 echo "[bundle-libs] $BIN_PATH bağımlılıkları taranıyor..."
 COPIED_ANY=0
@@ -56,6 +64,9 @@ while read -r line; do
   fi
   if echo "$lib_name" | grep -qE "$BASELINE_PATTERN"; then
     continue # glibc çekirdek kütüphanesi -- bilerek GÖMÜLMÜYOR (yukarıdaki not)
+  fi
+  if echo "$lib_name" | grep -qE "$SYSTEMD_FAMILY_PATTERN"; then
+    continue # systemd ailesi -- hedefte her zaman var, bilerek GÖMÜLMÜYOR (yukarıdaki not)
   fi
 
   echo "  [bundle-libs] gömülüyor: $lib_name ($lib_real_path)"
