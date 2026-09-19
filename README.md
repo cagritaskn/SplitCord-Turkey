@@ -12,7 +12,7 @@
 
 Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'i kurup kullanmaya başlayabilirsiniz.
 
-1. **[SplitCord-Turkey-Setup-1.0.3.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.3/SplitCord-Turkey-Setup-1.0.3.exe)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
+1. **[SplitCord-Turkey-Setup-1.0.4.exe](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.4/SplitCord-Turkey-Setup-1.0.4.exe)** dosyasını indirin. Diğer sürümler için [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasını takip edebilirsiniz.
 2. İndirilen dosyayı çalıştırın. SmartScreen uyarısı görürseniz **(Windows kişisel bilgisayarınızı korudu başlıklı)** pencerede bulunan **Ek bilgi** kısmına tıklayıp daha sonra **Yine de çalıştır** butonuna tıklayın. Set-up, arka planda çalışacak DPI aşım hizmetini (SplitCordDpiService) kaydedebilmek için yönetici izni isteyebilir; kurulum tamamlandıktan sonra uygulama hiçbir zaman yükseltilmiş yetkiyle çalışmaz (Yönetici izni istemez).
 3. Kurulum bitince SplitCord-Turkey'i çalıştırın.
 4. İlk açılışta uygulama sizin için en uygun DPI aşım motorunu ve ayarını bulmak amacıyla Zapret, Zapret2, ByeDPI ve GoodbyeDPI'yi sırayla dener; bu tarama birkaç dakika sürebilir. Bu süre boyunca "Bağlantı hazırlanıyor…" ekranını görmeniz normaldir, taramanın bitmesini bekleyin.
@@ -27,10 +27,10 @@ Windows için hazırlanmış kurulum paketini çalıştırarak SplitCord-Turkey'
 
 SplitCord-Turkey'in Debian/Ubuntu tabanlı dağıtımlar için (Linux Mint'te test edildi) `.deb` paketi olarak sunulan bir Linux sürümü de bulunur. Motor seti Windows'tan biraz farklıdır: WinDivert yerine NFQUEUE/iptables kullanılır, GoodbyeDPI Linux'a özgü bir karşılığı olmadığı için bulunmaz — Otomatik modun motor sırası **Zapret → Zapret2 → ByeDPI**'dir.
 
-1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından [SplitCord-Turkey-Linux-1.0.3-AMD64.deb](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.3/SplitCord-Turkey-Linux-1.0.3-AMD64.deb) dosyasını indirin.
+1. [Releases](https://github.com/cagritaskn/SplitCord-Turkey/releases) sayfasından [SplitCord-Turkey-Linux-1.0.4-AMD64.deb](https://github.com/cagritaskn/SplitCord-Turkey/releases/download/1.0.4/SplitCord-Turkey-Linux-1.0.4-AMD64.deb) dosyasını indirin.
 2. Paketi kurun:
    ```bash
-   sudo dpkg -i SplitCord-Turkey-Linux-1.0.3-AMD64.deb
+   sudo dpkg -i SplitCord-Turkey-Linux-1.0.4-AMD64.deb
    ```
    ya da 
    Linux dağıtımınız destekliyorsa .deb dosyasına çift tıklayıp çalıştırarak kurun.
