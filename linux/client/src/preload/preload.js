@@ -116,6 +116,8 @@ contextBridge.exposeInMainWorld('splitcord', {
     setDisableFalseVoiceWarning: (enabled) => ipcRenderer.invoke('app:set-disable-false-voice-warning', enabled),
     getDisableSpellcheckHighlight: () => ipcRenderer.invoke('app:get-disable-spellcheck-highlight'),
     setDisableSpellcheckHighlight: (enabled) => ipcRenderer.invoke('app:set-disable-spellcheck-highlight', enabled),
+    getGameActivityEnabled: () => ipcRenderer.invoke('app:get-game-activity-enabled'),
+    setGameActivityEnabled: (enabled) => ipcRenderer.invoke('app:set-game-activity-enabled', enabled),
     resetAllSettings: () => ipcRenderer.invoke('app:reset-all-settings'),
     uninstallApp: () => ipcRenderer.invoke('app:uninstall-app'),
     // PORT_PLAN_2.md Faz 4 — renderer'ın deb/AppImage'a göre dallanabilmesi + AppImage'ın

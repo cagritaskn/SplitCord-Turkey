@@ -76,6 +76,16 @@
 
         <div class="sc-divider"></div>
 
+        <label class="sc-toggle-row">
+          <input type="checkbox" id="toggle-game-activity" />
+          <span>
+            <strong>Oynanan oyunu etkinliklerde göster</strong>
+            <div class="sc-engine-desc">Steam vb. bir oyun açtığınızda Discord'da "X oynuyor" olarak görünür. Discord'daki "Etkinlik Durumu" gizlilik ayarınız yine geçerlidir.</div>
+          </span>
+        </label>
+
+        <div class="sc-divider"></div>
+
         <label class="sc-toggle-row" id="row-disable-false-voice-warning">
           <input type="checkbox" id="toggle-disable-false-voice-warning" />
           <span>
@@ -497,7 +507,9 @@
               <span id="permission-discord-app-icon" class="sc-permission-icon">…</span>
               <span id="permission-discord-app-label">Resmi Discord uygulaması yüklü değil</span>
             </div>
-            <button id="btn-uninstall-discord" class="sc-btn sc-btn--primary" hidden>Discord Uygulamasını Kaldır</button>
+            <div class="sc-permission-actions">
+              <button id="btn-uninstall-discord" class="sc-btn sc-btn--primary" hidden>Discord Uygulamasını Kaldır</button>
+            </div>
           </div>
         </div>
         <div id="controls-list" class="sc-permissions-list">

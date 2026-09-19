@@ -142,8 +142,13 @@ const setHostlistSettings = (autoUpdateEnabled, updateIntervalHours) =>
 // gerçek ağ isteği yaptığı yol (15sn'lik kendi HttpClient zaman aşımı var), varsayılan 5sn'lik
 // istemci zaman aşımı bunun için kısa kalırdı.
 const syncHostlistNow = () => request('POST', '/hostlist/sync-now', null, 20000);
+// "Oynanan oyunu Discord'da göster" özelliği (bkz. gameActivity.js) için çalışan işlemlerin
+// tam yolları -- servis LocalSystem olarak çalıştığından kullanıcı oturumundakileri de görüyor.
+const getRunningProcesses = (argsForNames = []) =>
+  request('GET', argsForNames.length ? `/processes?argsFor=${encodeURIComponent(argsForNames.join(','))}` : '/processes');
 
 module.exports = {
+  getRunningProcesses,
   getDpiStatus,
   activateEngine,
   setEngineArgs,

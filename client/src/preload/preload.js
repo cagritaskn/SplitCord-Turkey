@@ -113,6 +113,8 @@ contextBridge.exposeInMainWorld('splitcord', {
     setDisableFalseVoiceWarning: (enabled) => ipcRenderer.invoke('app:set-disable-false-voice-warning', enabled),
     getDisableSpellcheckHighlight: () => ipcRenderer.invoke('app:get-disable-spellcheck-highlight'),
     setDisableSpellcheckHighlight: (enabled) => ipcRenderer.invoke('app:set-disable-spellcheck-highlight', enabled),
+    getGameActivityEnabled: () => ipcRenderer.invoke('app:get-game-activity-enabled'),
+    setGameActivityEnabled: (enabled) => ipcRenderer.invoke('app:set-game-activity-enabled', enabled),
     resetAllSettings: () => ipcRenderer.invoke('app:reset-all-settings'),
     uninstallApp: () => ipcRenderer.invoke('app:uninstall-app'),
     registerBadgedTrayIcon: (dataUrl) => ipcRenderer.invoke('tray:register-badged-icon', dataUrl),

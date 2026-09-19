@@ -11,6 +11,7 @@ const { logEvent } = require('./log');
 const { readLocalSettings, writeLocalSettings, resetLocalSettings } = require('./localSettings');
 const updateChecker = require('./updateChecker');
 const dynamicColor = require('./dynamicColor');
+const gameActivity = require('./gameActivity');
 const { isDefaultProtocolHandler, isOfficialDiscordInstalled, uninstallOfficialDiscord } = require('./protocolHandler');
 const { showThemedConfirm } = require('./themedDialog');
 const voiceState = require('./voiceState');
@@ -1138,6 +1139,16 @@ function registerIpcHandlers() {
     writeLocalSettings({ disableSpellcheckHighlight: enabled });
     logEvent('set-disable-spellcheck-highlight', { enabled });
     applySpellcheckSetting(enabled);
+    return enabled;
+  });
+
+  // KULLANICI TALEBİ: Ayarlar > Genel > "Oynanan oyunu Discord'da göster" (bkz. gameActivity.js)
+  // -- yeniden başlatma gerekmiyor, tarama döngüsü anında başlatılıp durduruluyor.
+  ipcMain.handle('app:get-game-activity-enabled', () => readLocalSettings().gameActivityEnabled !== false);
+  ipcMain.handle('app:set-game-activity-enabled', (_event, enabled) => {
+    writeLocalSettings({ gameActivityEnabled: enabled });
+    logEvent('set-game-activity-enabled', { enabled });
+    gameActivity.applyEnabledSetting();
     return enabled;
   });
 

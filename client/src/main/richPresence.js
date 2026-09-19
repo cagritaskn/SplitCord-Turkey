@@ -22,6 +22,12 @@ async function startRichPresence() {
   if (started) return;
   started = true;
 
+  // arRPC'nin kendi process taraması `wmic`'e dayanıyor (Windows 11 25H2'de kaldırıldı) ve
+  // eski bir oyun listesi kullanıyor. Oyun algılamayı gameActivity.js yapıyor (güncel liste,
+  // ayarlardaki anahtara bağlı); ikisi birden açık kalırsa aynı oyun çift bildirilebilir.
+  // Burada yalnızca oyunların kendi Rich Presence (IPC/WebSocket) sunucusu kalıyor.
+  process.env.ARRPC_NO_PROCESS_SCANNING = '1';
+
   try {
     const { default: RPCServer } = await import('arrpc/src/server.js');
     const Bridge = await import('arrpc/src/bridge.js');

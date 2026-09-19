@@ -266,18 +266,45 @@ code {
   margin: 0;
 }
 
+/* Ayarlar penceresi ve alt pencereleri (Dışlamalar vb.) için ortak modern buton stili.
+   Renk sınıfı olmayan buton ikincil görünümde (palet renkleri + ince çerçeve); --primary ve
+   --danger renkli. Hover/devre dışı/klavye odağı durumları hepsinde tutarlı. */
 .sc-btn {
   margin-top: 12px;
+  min-height: 36px;
+  padding: 0 18px;
+  box-sizing: border-box;
   border: none;
-  border-radius: 4px;
-  padding: 8px 16px;
-  font-size: 14px;
+  border-radius: 8px;
+  background: var(--sc-bg-tertiary);
+  color: var(--sc-text-normal);
+  box-shadow: inset 0 0 0 1px var(--sc-bg-hover);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
   cursor: pointer;
+  transition: background-color 0.12s ease, opacity 0.12s ease;
+}
+
+.sc-btn:not(.sc-btn--primary):not(.sc-btn--danger):hover:not(:disabled) {
+  background: var(--sc-bg-hover);
+}
+
+.sc-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.sc-btn:focus-visible {
+  outline: 2px solid var(--sc-brand);
+  outline-offset: 2px;
 }
 
 .sc-btn--primary {
   background: var(--sc-brand);
   color: #fff;
+  box-shadow: none;
 }
 
 .sc-btn--secondary {
@@ -334,8 +361,16 @@ code {
   color: var(--sc-text-muted);
   font-size: 14px;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-family: inherit;
+  line-height: 1;
+  transition: background-color 0.12s ease, color 0.12s ease;
   flex: 0 0 auto;
 }
 
@@ -350,7 +385,7 @@ code {
   align-items: center;
 }
 
-.sc-btn--primary:hover {
+.sc-btn--primary:hover:not(:disabled) {
   background: var(--sc-brand-hover);
 }
 
@@ -387,7 +422,8 @@ code {
    kutusu yerine appearance:none + ::after ile çizilen bir track+thumb. Renkler
    theme.css'in --sc-* değişkenlerini kullandığı için aktif temaya (Otomatik/sabit
    temalar) otomatik uyum sağlıyor. */
-.sc-toggle-row input[type='checkbox'] {
+.sc-toggle-row input[type='checkbox'],
+.sc-switch-control input[type='checkbox'] {
   appearance: none;
   -webkit-appearance: none;
   margin-top: 2px;
@@ -402,7 +438,8 @@ code {
   transition: background-color 200ms ease;
 }
 
-.sc-toggle-row input[type='checkbox']::after {
+.sc-toggle-row input[type='checkbox']::after,
+.sc-switch-control input[type='checkbox']::after {
   content: '';
   position: absolute;
   top: 2px;
@@ -415,16 +452,65 @@ code {
   transition: left 200ms ease;
 }
 
-.sc-toggle-row input[type='checkbox']:checked {
+.sc-toggle-row input[type='checkbox']:checked,
+.sc-switch-control input[type='checkbox']:checked {
   background: var(--sc-success);
 }
 
-.sc-toggle-row input[type='checkbox']:checked::after {
+.sc-toggle-row input[type='checkbox']:checked::after,
+.sc-switch-control input[type='checkbox']:checked::after {
   left: 18px;
 }
 
-.sc-toggle-row input[type='checkbox']:focus-visible {
+.sc-toggle-row input[type='checkbox']:focus-visible,
+.sc-switch-control input[type='checkbox']:focus-visible {
   box-shadow: 0 0 0 2px var(--sc-bg-primary), 0 0 0 4px var(--sc-brand);
+}
+
+/* Satır içi anahtar + yazı (ör. İzinler ve Kontroller > "Görmezden Gel"). Yazı, anahtar
+   açık/kapalı olunca değişiyor (settings.js createIgnoreSwitch). Düğmelerle aynı yükseklik
+   ve yuvarlaklıkta ki satırdaki butonlarla hizalı dursun. */
+.sc-switch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 14px 0 12px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: var(--sc-bg-tertiary);
+  box-shadow: inset 0 0 0 1px var(--sc-bg-hover);
+  color: var(--sc-text-normal);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sc-switch-control[hidden] {
+  display: none;
+}
+
+.sc-switch-control input[type='checkbox'] {
+  margin: 0;
+}
+
+.sc-switch-control input[type='checkbox']:not(:checked) {
+  background: color-mix(in srgb, var(--sc-text-muted) 45%, var(--sc-bg-tertiary));
+}
+
+.sc-switch-control:has(input:disabled) {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sc-switch-label::after {
+  content: attr(data-sizer);
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
 }
 
 .sc-toggle-row--indent {
@@ -478,9 +564,10 @@ code {
 .sc-btn--danger {
   background: var(--sc-danger);
   color: #fff;
+  box-shadow: none;
 }
 
-.sc-btn--danger:hover {
+.sc-btn--danger:hover:not(:disabled) {
   background: #b8292d;
 }
 
@@ -488,7 +575,7 @@ code {
   position: relative;
   display: inline-flex;
   background: var(--sc-bg-tertiary);
-  border-radius: 8px;
+  border-radius: 11px;
   padding: 3px;
   margin: 12px 0 16px;
 }
@@ -497,11 +584,17 @@ code {
   border: none;
   background: transparent;
   color: var(--sc-text-muted);
+  font-family: inherit;
   font-size: 13px;
   font-weight: 600;
-  padding: 6px 18px;
-  border-radius: 6px;
+  padding: 7px 20px;
+  border-radius: 8px;
   cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.sc-mode-btn:not(.active):hover {
+  color: var(--sc-text-normal);
 }
 
 .sc-mode-btn.active {
@@ -649,10 +742,14 @@ code {
   border: none;
   background: var(--sc-bg-tertiary);
   color: var(--sc-text-normal);
-  border-radius: 4px;
-  padding: 4px 10px;
+  box-shadow: inset 0 0 0 1px var(--sc-bg-hover);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-family: inherit;
   font-size: 11px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background-color 0.12s ease;
 }
 
 .sc-rejected-item button:hover {
@@ -670,6 +767,12 @@ code {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Metin + butonlar sığmıyorsa butonlar metnin altına, sağa yaslı iniyor (uzun etiketli
+     anahtar/butonlarla metin sütunu dar kalıp 3-4 satıra bölünmesin). */
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  min-height: 60px;
+  box-sizing: border-box;
   background: var(--sc-bg-secondary);
   border-radius: 8px;
   padding: 12px 16px;
@@ -679,7 +782,32 @@ code {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1 1 280px;
+  min-width: 0;
   font-size: 14px;
+  line-height: 1.4;
+}
+
+/* Satırdaki butonlar (İzin Ver, Daha Fazla Bilgi, Görmezden Gel, Hizmeti Kaldır...) tek bir
+   yerde hizalı: sağa yaslı, aynı yükseklik/yuvarlaklık, aralarında sabit boşluk. Genel
+   .sc-btn'deki margin-top: 12px satır içinde butonları yukarı kaydırıyordu. */
+.sc-permission-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.sc-permission-row .sc-btn,
+.sc-permission-row .sc-switch-control {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.sc-permission-row .sc-btn {
+  min-width: 132px;
+  white-space: nowrap;
 }
 
 .sc-permission-icon {
@@ -737,11 +865,17 @@ code {
   background: var(--sc-bg-tertiary);
   color: var(--sc-text-normal);
   border: 1px solid var(--sc-bg-hover);
-  border-radius: 4px;
-  padding: 6px 12px;
+  border-radius: 8px;
+  padding: 8px 14px;
   font-size: 13px;
   font-family: Consolas, monospace;
   cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.sc-shortcut-input:focus-visible {
+  outline: 2px solid var(--sc-brand);
+  outline-offset: 2px;
 }
 
 .sc-shortcut-input:hover {
@@ -759,8 +893,16 @@ code {
   color: var(--sc-text-muted);
   font-size: 14px;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-family: inherit;
+  line-height: 1;
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
 
 .sc-shortcut-clear:hover {

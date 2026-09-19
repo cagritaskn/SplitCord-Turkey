@@ -1,6 +1,7 @@
 'use strict';
 
 const { session } = require('electron');
+const { readLocalSettings } = require('./localSettings');
 
 const DISCORD_PARTITION = 'persist:discord';
 const ALLOWED_ORIGIN_SUFFIXES = ['discord.com', 'discordapp.com', 'discord.media', 'discord.gg'];
@@ -113,4 +114,75 @@ function applySpellcheckSetting(disableHighlight) {
   discordSession.setSpellCheckerEnabled(!disableHighlight);
 }
 
-module.exports = { registerPermissions, configureBrowserIdentity, isAllowedOrigin, isAllowedPopoutOrigin, applySpellcheckSetting, DISCORD_PARTITION };
+// KULLANICI TALEBİ (kullanıcı raporu, canlı testte doğrulandı): Vencord etkinken Eklentiler
+// (Plugins) sekmesi sorunsuz çalışıyor ama Temalar (Themes) ve Online Themes sekmesinden
+// yüklenen HİÇBİR tema uygulanmıyordu. Kök neden: Vencord'un "web" hedefi (bkz.
+// client/resources/vencord/browser.js) tema CSS'ini doğrudan inline <style> içeriği olarak
+// DEĞİL, her temayı bir Blob'a sarıp URL.createObjectURL() ile blob: URL'sine çevirip
+// "@import url(\"blob:...\")" şeklinde enjekte ediyor (eklenti CSS'i ise doğrudan inline
+// metin -- bu yüzden yalnızca temalar etkileniyordu). Discord'un KENDİ, hiç dokunmadığımız
+// Content-Security-Policy başlığındaki style-src yönergesi blob: kaynağına izin vermediği
+// için tarayıcı bu @import'u REDDEDİYORDU (konsolda "violates... style-src" hatası) -- tema
+// listede görünüp anahtarı açılabiliyordu ama görsel olarak HİÇBİR ZAMAN uygulanmıyordu.
+// Vesktop gibi diğer Electron tabanlı Vencord sarmalayıcılarının kullandığı standart çözüm:
+// Discord partition'ının yanıt başlıklarını yakalayıp style-src'ye blob:'u EKLEMEK (mevcut
+// yönergeyi değiştirmeden, yalnızca genişleterek). Yalnızca Vencord etkinken uygulanıyor --
+// canlı ayar her yanıtta okunuyor, bu yüzden kullanıcı Vencord'u kapatırsa (sayfa yeniden
+// yüklendiğinde) gevşetme de devre dışı kalır.
+//
+// İKİNCİ BUG (kullanıcı raporu, canlı testte doğrulandı): style-src düzeltmesinden sonra bile
+// Online Themes sekmesine bir tema linki (ör. https://refact0r.github.io/.../theme.css)
+// girilince tema hâlâ uygulanmıyordu. Kaynak kodu okuyarak (client/resources/vencord/browser.js,
+// Yc() fonksiyonu) doğrulandı: Online Themes linkleri fetch() ile İNDİRİLMİYOR -- ham link
+// doğrudan "@import url(\"<link>\");" olarak bir <style> etiketine yazılıyor (yalnızca Local
+// Themes -- yani dosyadan yüklenenler -- blob:'a çevriliyor). Tarayıcının @import'u YÜKLEME
+// işlemi de style-src (style-src-elem'e düşülüyorsa ona) tarafından denetleniyor, connect-src'ye
+// değil -- bu yüzden ilk denemede (yanlışlıkla connect-src'ye https: eklenerek) sorun
+// ÇÖZÜLMEMİŞTİ; canlı testte "@import" hâlâ "violates... style-src" hatasıyla reddediliyordu.
+// Asıl düzeltme: style-src(-elem)'e blob:'un yanına https: de EKLEMEK (rastgele bir HTTPS
+// kaynağından stylesheet yüklenebilsin diye). connect-src'ye https: eklenmesi zararsız olduğu
+// için (ve Vencord eklentilerinin kendi fetch() çağrıları için işe yarayabileceğinden) o da
+// korunuyor.
+//
+// ÜÇÜNCÜ BUG (aynı canlı test turunda ortaya çıktı): style-src düzeltmesiyle CSS'in kendisi
+// yüklenmeye başlayınca, bu sefer temanın İÇİNDE referans verdiği özel bir font dosyası
+// (ör. https://refact0r.github.io/.../asciid.woff) font-src tarafından reddedildi -- aynı
+// sınıftan bir sorun, temaların arka plan resmi gibi img-src'ye giren kaynakları da aynı
+// şekilde etkileyebilir. Bu yüzden font-src ve img-src'ye de https: EKLENİYOR.
+//
+// Ek risk yaratmıyor: Vencord zaten sayfa içinde tam JS çalıştırma yetkisine sahip
+// (DOM/localStorage erişimi vb.), kullanıcı üçüncü taraf eklenti/tema yüklemeyi zaten kabul
+// etmiş oluyor.
+const RELAXED_CSP_DIRECTIVES_REGEX = /(style-src(?:-elem)?|connect-src|font-src|img-src)([^;]*)/gi;
+
+function relaxCspForVencordThemes() {
+  const discordSession = session.fromPartition(DISCORD_PARTITION);
+  discordSession.webRequest.onHeadersReceived((details, callback) => {
+    const headers = details.responseHeaders;
+    if (!headers || !readLocalSettings().vencordEnabled) {
+      callback({});
+      return;
+    }
+    const cspKey = Object.keys(headers).find((h) => h.toLowerCase() === 'content-security-policy');
+    if (cspKey) {
+      headers[cspKey] = headers[cspKey].map((value) =>
+        value.replace(RELAXED_CSP_DIRECTIVES_REGEX, (_match, directive, rest) => {
+          const isStyleDirective = directive.toLowerCase().startsWith('style-src');
+          const addition = isStyleDirective ? 'blob: https:' : 'https:';
+          return `${directive}${rest} ${addition}`;
+        }),
+      );
+    }
+    callback({ responseHeaders: headers });
+  });
+}
+
+module.exports = {
+  registerPermissions,
+  configureBrowserIdentity,
+  isAllowedOrigin,
+  isAllowedPopoutOrigin,
+  applySpellcheckSetting,
+  relaxCspForVencordThemes,
+  DISCORD_PARTITION,
+};

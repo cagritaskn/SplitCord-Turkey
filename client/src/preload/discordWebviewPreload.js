@@ -42,6 +42,12 @@ try {
 try {
   contextBridge.exposeInMainWorld('__splitcordInternal', {
     getLastQuality: () => ipcRenderer.invoke('screen-share-picker:get-last-quality'),
+    // "Oynanan oyunu Discord'da göster" köprüsünün teşhis kayıtları (bkz. main/gameActivity.js).
+    gameActivityLog: (tag, data) => {
+      try {
+        ipcRenderer.send('game-activity:page-log', String(tag), data);
+      } catch {}
+    },
   });
 } catch (err) {
   // contextIsolation zaten kapalıysa (beklenmez ama) exposeInMainWorld gereksiz/hata
@@ -75,19 +81,169 @@ const MAIN_WORLD_SCRIPT = `
   // nesnesine "audio.restrictOwnAudio: true"yu KENDİMİZ zorla ekliyoruz -- Discord bunu
   // hiç istemese bile devreye giriyor. Ses hiç istenmemişse (audio: false/undefined)
   // DOKUNULMUYOR -- olmayan bir sesi icat etmiyoruz.
+  // "Yayında" rozetindeki "<sayı>p <sayı> FPS" metnini gerçek uygulanan kaliteye zorlamak
+  // için kullanılıyor -- ayrıntılı gerekçe aşağıdaki performGetDisplayMedia içinde.
+  //
+  // GERÇEK BUG (kullanıcı raporu, DevTools'tan alınan gerçek DOM ile doğrulandı): bottom-
+  // left "Go Live" panelindeki rozet TEK bir elementte "1080p 30 FPS" olarak duruyor, ama
+  // yayın ÖNİZLEME KUTUSUNUN sağ üstündeki AYRI bir rozet ("streamQualityIndicator") bunu
+  // İKİ AYRI kardeş <span>'e BÖLÜYOR: <span class="qualityResolution__...">1080p</span> ve
+  // <span>30 FPS</span>. Tam metni ("1080p 30 FPS") tek bir elementte arayan eski regex bu
+  // yüzden ikisinden HİÇBİRİNİ bulamıyordu (ne "1080p" ne "30 FPS" tek başına tam desene
+  // uyuyor). Çözünürlük ve FPS'i AYRI AYRI da eşleştiren iki ek desen eklendi.
+  const QUALITY_BADGE_TEXT_REGEX = /^\\d{3,4}p\\s+\\d{1,3}\\s*FPS$/i;
+  const QUALITY_BADGE_RES_ONLY_REGEX = /^\\d{3,4}p$/i;
+  const QUALITY_BADGE_FPS_ONLY_REGEX = /^\\d{1,3}\\s*FPS$/i;
+  let qualityBadgeObserver = null;
+  let qualityBadgeRescanTimer = null;
+  function stopQualityBadgeWatcher() {
+    if (qualityBadgeObserver) {
+      qualityBadgeObserver.disconnect();
+      qualityBadgeObserver = null;
+    }
+    if (qualityBadgeRescanTimer) {
+      clearInterval(qualityBadgeRescanTimer);
+      qualityBadgeRescanTimer = null;
+    }
+  }
+  function startQualityBadgeWatcher(resLabel, fpsLabel) {
+    stopQualityBadgeWatcher();
+    const fullLabel = resLabel + ' ' + fpsLabel;
+    function forceIfMatch(el) {
+      if (!el || el.nodeType !== Node.ELEMENT_NODE || el.children.length > 0) return;
+      const text = (el.textContent || '').trim();
+      if (QUALITY_BADGE_TEXT_REGEX.test(text)) {
+        if (text !== fullLabel) el.textContent = fullLabel;
+      } else if (QUALITY_BADGE_RES_ONLY_REGEX.test(text)) {
+        if (text !== resLabel) el.textContent = resLabel;
+      } else if (QUALITY_BADGE_FPS_ONLY_REGEX.test(text)) {
+        if (text !== fpsLabel) el.textContent = fpsLabel;
+      }
+    }
+    function scan(root) {
+      if (!root || !root.querySelectorAll) return;
+      forceIfMatch(root);
+      root.querySelectorAll('div, span').forEach(forceIfMatch);
+    }
+    scan(document.body);
+    qualityBadgeObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'characterData') {
+          forceIfMatch(mutation.target.parentElement);
+        } else if (mutation.type === 'childList') {
+          mutation.addedNodes.forEach((node) => {
+            // React bazen (bkz. canlı testte doğrulanan gerçek DOM davranışı) mevcut metin
+            // düğümünün .data'sını GÜNCELLEMEK yerine ESKİSİNİ SİLİP YENİ bir metin düğümü
+            // EKLİYOR -- bu bir characterData DEĞİL, childList mutasyonu olarak görünüyor ve
+            // eklenen düğüm bir ELEMENT değil düz bir METİN düğümü olduğu için scan()'in
+            // querySelectorAll'u bunu asla bulamıyordu. Metin düğümleri için doğrudan üst
+            // elementi kontrol ediyoruz.
+            if (node.nodeType === Node.TEXT_NODE) forceIfMatch(node.parentElement);
+            else scan(node);
+          });
+        }
+      }
+    });
+    qualityBadgeObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+    // GERÇEK BUG (kullanıcı raporu): oturumdaki İLK paylaşımda rozet hiç düzeltilmiyordu,
+    // ama paylaşımı durdurup tekrar başlatınca ya da "Yayını Değiştir"de doğru
+    // çalışıyordu. Kesin mekanizma canlı ortamda netleştirilemedi (muhtemelen Discord'un
+    // "Yayında"/"Go Live" panel bileşeni İLK KEZ paylaşımda GEÇ mount ediliyor ve hem tek
+    // seferlik ilk tarama hem de MutationObserver bu geç mount anını bir şekilde
+    // kaçırıyor). dynamicColor.js'teki AYNI kanıtlanmış desen (MutationObserver hızlı yol +
+    // periyodik yeniden tarama güvenlik ağı, bkz. oradaki SETTLE_RESAMPLE_DELAYS_MS) burada
+    // da uygulanıyor: paylaşımın ilk ~20 saniyesinde saniyede bir yeniden taranıp panelin
+    // "yerleşmesi" bekleniyor -- observer zaten çoğu durumda anında yakalıyor, bu yalnızca
+    // kaçırılan ilk mount anı için bir güvenlik ağı.
+    let rescanElapsedMs = 0;
+    qualityBadgeRescanTimer = setInterval(() => {
+      rescanElapsedMs += 1000;
+      scan(document.body);
+      if (rescanElapsedMs >= 20000 && qualityBadgeRescanTimer) {
+        clearInterval(qualityBadgeRescanTimer);
+        qualityBadgeRescanTimer = null;
+      }
+    }, 1000);
+  }
+
   const originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia ? navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices) : null;
+  // GERÇEK BUG (kullanıcı raporu, canlı testte doğrulandı): bizim seçici penceremiz AÇIKKEN
+  // (henüz bir kaynak seçilmeden/iptal edilmeden) Discord'un KENDİ "Ekranını Paylaş" (ya da
+  // yayın sırasında "Yayını Değiştir") butonuna art arda tıklanınca, her tıklama sayfa
+  // içinde YENİ bir getDisplayMedia() çağrısı başlatıyordu. Chromium bu çağrıları SIRAYLA
+  // işlediği için (bkz. main/screenSharePicker.js pickerPending notu) sonraki istekler
+  // görünmez şekilde kuyruğa giriyor ve ana süreçteki pickerPending bayrağı zaten sıfırlanmış
+  // oluyordu (ilki tamamen bitmeden ikincisi bize hiç ulaşmıyor) -- bu yüzden kullanıcı
+  // seçiciyi kapatınca sıradaki istek yüzünden pencere TEKRAR açılıyordu. Ana süreç
+  // tarafındaki savunma bu deseni (sıralı, eşzamanlı OLMAYAN istekler) yapısal olarak
+  // engelleyemiyor (bkz. oradaki "GERÇEK BUG" notu) -- gerçek çözüm burada, KAYNAĞINDA:
+  // bir istek zaten işleniyorken (önceki çağrı henüz sonuçlanmadıysa) sayfa seviyesinde
+  // YENİ bir getDisplayMedia() çağrısının Chromium'a hiç ULAŞMASINI engelliyoruz.
+  let getDisplayMediaInFlight = false;
+  // GERÇEK BUG (kullanıcı raporu, canlı testte doğrulandı): "Yayını Değiştir" ile
+  // çözünürlük DÜŞÜRÜLEBİLİYORDU ama sonradan TEKRAR YÜKSELTİLEMİYORDU (FPS'te bu sorun
+  // yoktu, her iki yönde de çalışıyordu) -- paylaşımı tamamen KAPATIP yeniden AÇMAK ise
+  // her zaman doğru çalışıyordu. Kök neden: Chromium'un ekran yakalama arka ucu, YENİ bir
+  // getDisplayMedia() isteği ESKİ track hâlâ CANLIYKEN ("Yayını Değiştir" -- Discord eski
+  // track'i durdurmadan yeni bir istek başlatıyor) gelince, alttaki native yakalayıcıyı
+  // YENİDEN KULLANIYOR gibi görünüyor -- bu da yakalama arabelleğinin İLK negotiate edilen
+  // boyutuyla sınırlı kalmasına yol açıyor (aşağı örnekleme her zaman mümkün, yukarı
+  // örnekleme yalnızca GERÇEKTEN YENİ bir native yakalama oturumuyla mümkün). Çözüm: HER
+  // getDisplayMedia() çağrısından ÖNCE, hâlâ canlı olan bir önceki track'i biz KENDİMİZ
+  // durdurup Chromium'u her seferinde -- tıpkı kullanıcının manuel kapat+aç yapması gibi --
+  // temiz bir yakalama oturumuna zorluyoruz.
+  let activeVideoTrack = null;
   if (originalGetDisplayMedia) {
     navigator.mediaDevices.getDisplayMedia = async function patchedGetDisplayMedia(constraints) {
+      if (getDisplayMediaInFlight) {
+        throw new DOMException('Ekran paylaşımı isteği zaten işleniyor.', 'InvalidStateError');
+      }
+      getDisplayMediaInFlight = true;
+      try {
+        return await performGetDisplayMedia(constraints);
+      } finally {
+        getDisplayMediaInFlight = false;
+      }
+    };
+    var performGetDisplayMedia = async function performGetDisplayMedia(constraints) {
+      // Yukarıdaki "Yayını Değiştir" notu: yeni isteği yapmadan ÖNCE, hâlâ canlıysa
+      // önceki track'i durduruyoruz ki Chromium her seferinde GERÇEKTEN yeni bir native
+      // yakalama oturumu kursun (çözünürlüğün her iki yönde de doğru uygulanması için).
+      if (activeVideoTrack && activeVideoTrack.readyState === 'live') {
+        activeVideoTrack.stop();
+      }
+      activeVideoTrack = null;
+
       const patchedConstraints = constraints ? { ...constraints } : {};
       if (patchedConstraints.audio) {
         patchedConstraints.audio = typeof patchedConstraints.audio === 'object'
           ? { ...patchedConstraints.audio, restrictOwnAudio: true }
           : { restrictOwnAudio: true };
       }
+
       const stream = await originalGetDisplayMedia(patchedConstraints);
       try {
-        const quality = window.__splitcordInternal ? await window.__splitcordInternal.getLastQuality() : null;
+        // GERÇEK BUG (kullanıcı raporu): rozete (ve gerçek kaliteye) her paylaşımda bir
+        // ÖNCEKİ paylaşımın ayarları uygulanıyordu, İLK paylaşımda da hiçbir şey
+        // uygulanmıyordu. Kök neden: quality (ana süreçteki lastQuality) yalnızca
+        // KULLANICI BİZİM SEÇİCİMİZDE BİR SEÇİM YAPINCA güncelleniyor -- ve bu seçim,
+        // originalGetDisplayMedia() çağrısının KENDİSİ tarafından tetiklenen (main/
+        // screenSharePicker.js'teki setDisplayMediaRequestHandler) akışın İÇİNDE
+        // gerçekleşiyor. Yani quality'yi originalGetDisplayMedia'dan ÖNCE okumak (önceki
+        // bir denemede yapıldığı gibi, "ilk isteğe kaliteyi ekleyelim" fikriyle) HER ZAMAN
+        // bir önceki paylaşımın (ya da ilk paylaşımda null) değerini okumak anlamına
+        // geliyordu -- kullanıcının O ANKİ seçimi henüz gerçekleşmemiş oluyordu. quality
+        // artık, kullanıcının seçimi KESİNLEŞTİKTEN (stream elde edildikten) SONRA
+        // okunuyor.
+        const quality = window.__splitcordInternal ? await window.__splitcordInternal.getLastQuality().catch(() => null) : null;
         const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) {
+          activeVideoTrack = videoTrack;
+          videoTrack.addEventListener('ended', () => {
+            if (activeVideoTrack === videoTrack) activeVideoTrack = null;
+          }, { once: true });
+        }
         if (videoTrack && quality) {
           const trackConstraints = {};
           if (quality.width && quality.height) {
@@ -99,7 +255,63 @@ const MAIN_WORLD_SCRIPT = `
           }
           if (Object.keys(trackConstraints).length > 0) {
             await videoTrack.applyConstraints(trackConstraints);
+            // GERÇEK BUG (kullanıcı raporu): bir paylaşımı kapatıp FARKLI bir çözünürlükle
+            // yenisini açınca, YENİ paylaşımın FPS'i doğru uygulanırken ÇÖZÜNÜRLÜK bir
+            // önceki paylaşımınki olarak kalıyordu -- quality artık taze (FPS'in doğru
+            // güncellenmesi bunu kanıtlıyor), yani sorun quality'de değil, Chromium'un ekran
+            // yakalama arka ucunun applyConstraints()'in İLK çağrısında yeni çözünürlüğü
+            // bazen kabul etmemesinde (muhtemelen önceki paylaşımdan kalma bir yakalama
+            // boru hattı/tampon boyutunun hemen yeniden boyutlandırılamaması). Rozet
+            // sorununda işe yarayan AYNI "biraz bekleyip tekrar dene" deseniyle,
+            // applyConstraints() ~1 saniye sonra AYNI hedef değerlerle tekrar deneniyor.
+            setTimeout(() => {
+              if (videoTrack.readyState === 'ended') return;
+              videoTrack.applyConstraints(trackConstraints).catch(() => {});
+            }, 1000);
           }
+        }
+        // KULLANICI TALEBİ (kullanıcı raporu, DevTools'tan alınan gerçek DOM ile
+        // doğrulandı -- "1080p 30 FPS" metni, hash'i her Discord derlemesinde değişen bir
+        // class'a ("perksDemoText__xxxxx" gibi) sahip): Discord'un "Yayında" rozeti/"Go
+        // Live" göstergesi, yukarıdaki applyConstraints ile GERÇEKTEN uyguladığımız
+        // kaliteyi hiç yansıtmıyor -- stream ilk elde edildiğinde bir anlık görüntü alıp
+        // DONMUŞ görünüyor. Hash'li class adına güvenmek yerine metnin KENDİ DESENİNE
+        // ("<sayı>p <sayı> FPS") bakıp buluyoruz -- bu desen Discord derlemeden derlemeye
+        // değişse bile muhtemelen aynı kalacak kadar temel bir format.
+        //
+        // İKİNCİ BUG (kullanıcı raporu): rozete her paylaşımda bir ÖNCEKİ paylaşımın
+        // ayarları yazılıyordu -- applyConstraints() henüz yeni tanamlanmış çözünürlüğü/
+        // FPS'i Chromium'un yakalama boru hattına TAM OTURTMADAN videoTrack.getSettings()
+        // okunduğunda, bu bazen bir önceki (paylaşım öncesi ya da bir önceki paylaşımdan
+        // kalma) DEĞERLERİ döndürüyordu -- applyConstraints'in Promise'i çözülse bile
+        // getSettings()'in ANINDA güncel olacağı garanti değil. Çözüm: kullanıcının
+        // picker'da SEÇTİĞİ genişlik/yükseklik/FPS'i (biz zaten applyConstraints'e AYNI
+        // değerleri veriyoruz) her zaman getSettings()'e TERCİHEN kullanmak (bilinen/
+        // istenen bir değer varsa beklemeye hiç gerek yok) -- yalnızca "Kaynak" kalitesi
+        // seçiliyken (gerçek çözünürlük ÖNCEDEN bilinmiyor) getSettings()'e düşülüyor.
+        // Kullanıcı talebi üzerine EK olarak: 1 saniye sonra getSettings() TEKRAR okunup
+        // (bu sefer boru hattının yerleşmesi için yeterli zaman geçmiş oluyor) rozet
+        // gerekirse DÜZELTİLİYOR -- startQualityBadgeWatcher zaten kendi içinde önceki
+        // izlemeyi durdurup temiz bir şekilde yeniden başlatıyor.
+        if (videoTrack) {
+          const buildLabelParts = (settings) => {
+            const height = (quality && quality.height) || settings.height;
+            const frameRate = (quality && quality.frameRate) || settings.frameRate;
+            return height && frameRate ? { resLabel: height + 'p', fpsLabel: Math.round(frameRate) + ' FPS' } : null;
+          };
+          const immediateParts = buildLabelParts(videoTrack.getSettings?.() || {});
+          if (immediateParts) {
+            startQualityBadgeWatcher(immediateParts.resLabel, immediateParts.fpsLabel);
+            videoTrack.addEventListener('ended', stopQualityBadgeWatcher, { once: true });
+          }
+          setTimeout(() => {
+            if (videoTrack.readyState === 'ended') return;
+            const settledParts = buildLabelParts(videoTrack.getSettings?.() || {});
+            if (settledParts) {
+              startQualityBadgeWatcher(settledParts.resLabel, settledParts.fpsLabel);
+              videoTrack.addEventListener('ended', stopQualityBadgeWatcher, { once: true });
+            }
+          }, 1000);
         }
       } catch (err) {
         console.error('[SplitCord] Ekran paylaşımı kalite ayarı uygulanamadı:', err);
@@ -504,6 +716,161 @@ const MAIN_WORLD_SCRIPT = `
         overlay.classList.add('__splitcord-alert-visible');
         btn.focus();
       });
+    };
+  })();
+
+  // --- "Oynanan oyunu Discord'da göster" köprüsü (bkz. main/gameActivity.js) ---
+  // Discord Web oyun algılamayı yapmıyor; ana süreç oyunu algılayıp buraya iletiyor, biz de
+  // Discord'un KENDİ iç Flux dispatcher'ına LOCAL_ACTIVITY_UPDATE gönderiyoruz -- Vesktop/
+  // ArmCord'un kullandığı arRPC köprüsünün (Vencord'un WebRichPresence eklentisiyle AYNI)
+  // yöntemi; Vencord'a bağımlı değil, açıksa yalnızca onun hazır referansını öncelikli alıyor.
+  // Dispatcher yalnızca GİRİŞ SONRASI uygulama paketinde yükleniyor (giriş sayfasında
+  // modüllerin ~%1'i yüklü), bu yüzden bulunana kadar mesajlar bekletilip periyodik deneniyor.
+  // Not: bu blok bir template literal içinde -- ters bölü/backtick/dolar-süslü YOK.
+  (function setupGameActivityBridge() {
+    var dispatcher = null;
+    var pending = {};
+    var retryTimer = null;
+    var attempts = 0;
+    var MAX_ATTEMPTS = 90;
+
+    function log(tag, data) {
+      try {
+        if (window.__splitcordInternal && window.__splitcordInternal.gameActivityLog) {
+          window.__splitcordInternal.gameActivityLog(tag, data);
+        }
+      } catch (e) {}
+    }
+
+    function looksLikeDispatcher(v) {
+      try {
+        return !!v && (typeof v === 'object' || typeof v === 'function') &&
+          typeof v.dispatch === 'function' &&
+          typeof v.subscribe === 'function' &&
+          typeof v.unsubscribe === 'function';
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function findDispatcher() {
+      try {
+        var vencordDispatcher = window.Vencord && window.Vencord.Webpack && window.Vencord.Webpack.Common &&
+          window.Vencord.Webpack.Common.FluxDispatcher;
+        if (looksLikeDispatcher(vencordDispatcher)) return { dispatcher: vencordDispatcher, via: 'vencord' };
+      } catch (e) {}
+
+      var chunk = window.webpackChunkdiscord_app;
+      if (!chunk || typeof chunk.push !== 'function') return { error: 'no-webpack-chunk' };
+      // GERÇEK BUG (canlı testte bulundu): Discord'da BİRDEN FAZLA webpack çalışma zamanı var
+      // (Vencord da "sentry"/"libdiscore"/"fast-connect"/"Main Webpack" diye ayırıyor) ve bu
+      // push hilesi callback'i HER çalışma zamanı için ayrı çağırıyor. Eskiden yalnızca SON
+      // gelenin üzerine yazıyorduk -- o da 102 modüllü küçük bir çalışma zamanıydı; asıl ana
+      // çalışma zamanı (~6600 modül) hiç taranmıyor, Dispatcher "bulunamıyordu". Hepsini toplayıp
+      // hepsinde arıyoruz (arRPC'nin köprüsü de aynısını yapıyor).
+      var reqs = [];
+      try {
+        chunk.push([[Symbol()], {}, function (r) { if (r && reqs.indexOf(r) === -1) reqs.push(r); }]);
+        chunk.pop();
+      } catch (e) {
+        return { error: 'webpack-push-failed' };
+      }
+      if (reqs.length === 0) return { error: 'no-webpack-runtime' };
+
+      // İKİNCİ GERÇEK BUG (kullanıcının GİRİŞ YAPILI hesabında canlı testte kanıtlandı):
+      // "dispatch + subscribe + unsubscribe" ölçütü sayfada 67 FARKLI nesneye uyuyor -- Discord'un
+      // yardımcı/yerel Flux dispatcher'ları da var. Sırayla ilk bulunanı almak (eskiden yaptığımız)
+      // ANA dispatcher'ı vermiyordu: o nesneye LOCAL_ACTIVITY_UPDATE göndermek hata vermiyor ama
+      // PresenceStore'u hiç DEĞİŞTİRMİYOR (etkinlik Discord'da hiç görünmüyordu). Gerçek ana
+      // dispatcher'ı store'lar biliyor: her Flux store'un kendi "_dispatcher" alanı var ve
+      // ~450 store'un HEPSİ aynı nesneyi gösteriyor. Store'ların gösterdiği dispatcher'lara "oy"
+      // verdirip en çok oyu alanı seçiyoruz (yeterli oy toplanınca erken çıkıyoruz).
+      var votes = new Map();
+      var scanned = 0;
+      var bestDispatcher = null;
+      var bestVotes = 0;
+      var firstMatch = null;
+      for (var r = 0; r < reqs.length; r++) {
+        var cache = reqs[r].c;
+        if (!cache) continue;
+        for (var id in cache) {
+          var exp = cache[id] && cache[id].exports;
+          if (!exp) continue;
+          scanned++;
+          var candidates = [exp];
+          try { candidates.push(exp.default); } catch (e) {}
+          var keys = [];
+          try { keys = Object.keys(exp); } catch (e) {}
+          for (var i = 0; i < keys.length; i++) {
+            try { candidates.push(exp[keys[i]]); } catch (e) {}
+          }
+          for (var c = 0; c < candidates.length; c++) {
+            var value = candidates[c];
+            try {
+              if (!firstMatch && looksLikeDispatcher(value)) firstMatch = value;
+              if (value && value._dispatchToken !== undefined && looksLikeDispatcher(value._dispatcher)) {
+                var count = (votes.get(value._dispatcher) || 0) + 1;
+                votes.set(value._dispatcher, count);
+                if (count > bestVotes) { bestVotes = count; bestDispatcher = value._dispatcher; }
+                if (bestVotes >= 20) return { dispatcher: bestDispatcher, via: 'store-dispatcher:votes=' + bestVotes };
+              }
+            } catch (e) {}
+          }
+        }
+      }
+      if (bestDispatcher) return { dispatcher: bestDispatcher, via: 'store-dispatcher:votes=' + bestVotes };
+      // Hiç store bulunamadıysa (uygulama henüz yüklenmedi) ilk uyanı KULLANMIYORUZ -- yanlış
+      // nesne olma ihtimali yüksek; bulunana kadar bekleyip tekrar denenecek.
+      return { error: firstMatch ? 'no-flux-store-yet' : 'dispatcher-not-found', scanned: scanned, runtimes: reqs.length };
+    }
+
+    function flush() {
+      if (!dispatcher) {
+        var found = findDispatcher();
+        if (found.dispatcher) {
+          dispatcher = found.dispatcher;
+          log('dispatcher-found', { via: found.via, attempts: attempts });
+        } else if (attempts === 0 || attempts % 15 === 0) {
+          log('dispatcher-missing', { reason: found.error, scanned: found.scanned || 0, runtimes: found.runtimes || 0, attempts: attempts });
+        }
+      }
+      if (!dispatcher) return false;
+
+      var ids = Object.keys(pending);
+      for (var i = 0; i < ids.length; i++) {
+        var msg = pending[ids[i]];
+        try {
+          dispatcher.dispatch({ type: 'LOCAL_ACTIVITY_UPDATE', activity: msg.activity, pid: msg.pid, socketId: msg.socketId });
+          delete pending[ids[i]];
+          log('dispatched', { socketId: msg.socketId, name: msg.activity ? msg.activity.name : null, cleared: !msg.activity });
+        } catch (err) {
+          log('dispatch-error', { message: String(err && err.message) });
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function scheduleRetry() {
+      if (retryTimer) return;
+      retryTimer = setInterval(function () {
+        attempts++;
+        if (Object.keys(pending).length === 0 || attempts > MAX_ATTEMPTS || flush()) {
+          clearInterval(retryTimer);
+          retryTimer = null;
+        }
+      }, 2000);
+    }
+
+    window.__splitcordRpc = {
+      set: function (msg) {
+        if (!msg || msg.socketId == null) return;
+        pending[msg.socketId] = msg;
+        if (!flush()) {
+          if (!retryTimer) attempts = 0;
+          scheduleRetry();
+        }
+      },
     };
   })();
 })();

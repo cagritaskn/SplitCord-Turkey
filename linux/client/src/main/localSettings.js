@@ -98,6 +98,12 @@ const DEFAULTS = {
   // ek kimlik vardı — Linux'ta yalnızca "official-discord" gerçekçi (bkz. PORTING_PLAN.md
   // D-9, protocolHandler.js).
   ignoredControlIssues: [],
+  // "Resmi Discord uygulaması yüklü" kontrolü ("official-discord") varsayılan olarak görmezden
+  // gelinsin -- yalnızca BİR KEZ uygulanıyor (index.js): hem yeni kurulumlarda hem de bu
+  // özellikten önce kurulmuş profillerde bir kereliğine ignoredControlIssues'a ekleniyor.
+  // Kullanıcı sonradan İzinler ve Kontroller'de anahtarı kapatırsa bir sonraki açılışta
+  // tekrar zorla görmezden gelinmemeli (aynı desen: autostartDefaultApplied).
+  officialDiscordIgnoreDefaultApplied: false,
   // Ayarlar > Genel — açıkken Discord'un web istemcisindeki "mikrofonundan ses
   // alamıyor" uyarısı (Hata: 3002) hiç gösterilmez (bkz. discordWebviewPreload.js
   // setupVoiceWarningNoticeHandler). Bu uyarı genelde yanlış alarm olsa da (kullanıcı
@@ -112,6 +118,11 @@ const DEFAULTS = {
   // permissions.js applySpellcheckSetting) -- yeniden başlatma GEREKMİYOR, QUIC'in aksine
   // runtime'da anında etkili.
   disableSpellcheckHighlight: true,
+  // KULLANICI TALEBİ: Ayarlar > Genel'deki "Oynanan oyunu Discord'da göster" -- Discord Web
+  // oyun algılamayı yapmadığı için (masaüstü istemciye özel) çalışan oyunları biz algılayıp
+  // Discord'a "X oynuyor" olarak bildiriyoruz (bkz. gameActivity.js). Masaüstü Discord'daki
+  // gibi VARSAYILAN AÇIK; Discord'un kendi "Etkinlik Durumu" gizlilik ayarı yine geçerli.
+  gameActivityEnabled: true,
   // Ayarlar > Genel'de (ya da webview'de ERR_QUIC_PROTOCOL_ERROR alındığında çıkan
   // "QUIC'i Devre Dışı Bırak" butonundan) kapatılabilir. Zapret2/Zapret'in NFQUEUE
   // kuralları yalnızca TCP'yi hedefliyor, QUIC (UDP:443) hiçbir DPI aşım

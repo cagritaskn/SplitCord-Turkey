@@ -6,6 +6,7 @@ const { loadAppIcon } = require('./icon');
 const { startDynamicColorSampling, setOnPaletteChanged } = require('./dynamicColor');
 const { startVoiceStatePolling } = require('./voiceState');
 const navigation = require('./navigation');
+const gameActivity = require('./gameActivity');
 const notificationBadge = require('./notificationBadge');
 const { readLocalSettings } = require('./localSettings');
 const { startBackgroundPriorityManagement } = require('./backgroundPriority');
@@ -81,11 +82,27 @@ function createMainWindow() {
   // WebContents'inde de açıkça kapatmamız gerekiyor.
   mainWindow.webContents.on('did-attach-webview', (_event, webContents) => {
     webContents.setBackgroundThrottling(false);
+    // GERÇEK BUG (kullanıcı raporu, canlı testte doğrulandı): titlebar.js'teki F12
+    // dinleyicisi ana pencerenin (host) window nesnesine bağlı -- odak Discord içeriğine
+    // (webview) geçtiğinde (ki normal kullanımda neredeyse HER ZAMAN öyle) tuş olayı hiç
+    // o dinleyiciye ULAŞMIYOR, çünkü webview ayrı bir guest süreç/WebContents. Burada,
+    // webview'in KENDİ WebContents'i üzerinde before-input-event dinleyerek aynı F12
+    // aç/kapat mantığını, odağın nerede olduğundan BAĞIMSIZ olarak da tetikliyoruz --
+    // titlebar.js'teki dinleyici (host'ta odak varken çalışan) yine de korunuyor, ikisi
+    // aynı tuşu iki kez yakalamaz çünkü input her zaman ya host'a ya webview'e gider.
+    webContents.on('before-input-event', (_inputEvent, input) => {
+      if (input.type !== 'keyDown' || input.key !== 'F12') return;
+      if (webContents.isDevToolsOpened()) webContents.closeDevTools();
+      else webContents.openDevTools();
+    });
     // Ayarlar > Görünüm'deki "Discord temasına göre otomatik renk" — titlebar/pencere
     // arkaplanını Discord sayfasının en üstündeki renge göre canlı olarak ayarlar.
     startDynamicColorSampling(webContents, mainWindow);
     // Tray ikonunu ses kanalı/arama durumuna göre değiştirmek için (bkz. tray.js).
     startVoiceStatePolling(webContents, mainWindow);
+    // "Oynanan oyunu Discord'da göster" -- oyun işlemlerini algılayıp Discord sayfasına
+    // bildirir (bkz. gameActivity.js).
+    gameActivity.start(webContents);
     // Global Tuş Atamaları > İleri git / Geri git (bkz. navigation.js, shortcuts.js).
     navigation.attachWebContents(webContents);
     // Tray ikonundaki okunmamış bildirim rozeti için (bkz. notificationBadge.js, tray.js).

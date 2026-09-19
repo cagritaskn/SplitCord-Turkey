@@ -1,6 +1,6 @@
 'use strict';
 
-const { session, desktopCapturer, BrowserWindow, ipcMain } = require('electron');
+const { session, desktopCapturer, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('node:path');
 const { DISCORD_PARTITION, isAllowedOrigin } = require('./permissions');
 const dynamicColor = require('./dynamicColor');
@@ -24,6 +24,20 @@ let lastQuality = null;
 // bayrak yine de ikinci bir savunma katmanı: bir seçici zaten açıkken gelen YENİ bir istek
 // anında reddedilir (ikinci bir pencere ASLA açılmaz).
 let pickerPending = false;
+
+// KULLANICI TALEBİ: GPU sürücü yazılımlarının oyun-içi overlay pencereleri ("AMD DVR
+// Overlay", "NVIDIA GeForce Overlay"/"NVIDIA GeForce Overlay DT"/"NVIDIA Overlay")
+// Windows'ta gerçek birer üst-düzey pencere olarak listelendiği için paylaşılabilir
+// "uygulamalar" arasında görünüyordu, oysa paylaşılacak bir içerikleri yok. Yalnızca
+// pencere kaynakları ve YALNIZCA adı tam olarak bu biçimdeki pencereler gizleniyor: ad
+// "amd/nvidia/radeon/geforce ile başlayıp overlay ile BİTMELİ" ve arada tire gibi
+// noktalama olmamalı -- böylece "NVIDIA overlay rehberi - Google Chrome" gibi gerçek bir
+// pencere yanlışlıkla gizlenmiyor. Ekran (screen:) kaynaklarına hiç dokunulmuyor.
+const OVERLAY_WINDOW_NAME_REGEX = /^(amd|nvidia|radeon|geforce)\b[\w\s]*\boverlay(\s+dt)?$/i;
+
+function isHiddenOverlayWindow(source) {
+  return source.id.startsWith('window:') && OVERLAY_WINDOW_NAME_REGEX.test((source.name || '').trim());
+}
 
 /**
  * Electron, tarayıcıların aksine getDisplayMedia() için kendiliğinden bir "hangi ekranı/
@@ -72,7 +86,7 @@ function registerScreenSharePicker() {
       }
       pickerPending = true;
 
-      const sources = await desktopCapturer.getSources({
+      const allSources = await desktopCapturer.getSources({
         types: ['screen', 'window'],
         // picker.html'deki .source-thumb ile aynı 16:9 oranı — kaynağın gerçek en/boy
         // oranı ne olursa olsun (dikey/kare/geniş pencereler dahil) kart görünümünde
@@ -81,6 +95,7 @@ function registerScreenSharePicker() {
         thumbnailSize: { width: 480, height: 270 },
         fetchWindowIcons: true,
       });
+      const sources = allSources.filter((s) => !isHiddenOverlayWindow(s));
 
       const picked = await pickSource(sources);
       if (!picked) {
@@ -115,6 +130,13 @@ function registerScreenSharePicker() {
   });
 
   ipcMain.handle('screen-share-picker:get-last-quality', () => lastQuality);
+}
+
+// Paletteki "rgb(r, g, b)" dizesini BrowserWindow.backgroundColor için #rrggbb'ye çevirir.
+function rgbStringToHex(rgb) {
+  const match = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(rgb || '');
+  if (!match) return null;
+  return `#${match.slice(1, 4).map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`;
 }
 
 /** @returns {Promise<{id: string, width?: number, height?: number, frameRate?: number, sendAudio?: boolean} | null>} */
@@ -152,12 +174,18 @@ function pickSource(sources) {
     ipcMain.on('screen-share-picker:choose', onChoose);
     ipcMain.on('screen-share-picker:cancel', onCancel);
 
+    // Yeni tasarımda iki sütunlu, büyük önizlemeli bir ızgara var -- küçük ekranlarda
+    // (ör. 1366x768) pencere görev çubuğuna taşmasın diye çalışma alanına sığdırılıyor.
+    const workArea = screen.getPrimaryDisplay().workAreaSize;
+    // Ana pencere/Ayarlar gibi son palete (Ayarlar > Görünüm) sadık arkaplan -- palet henüz
+    // yoksa theme.css'teki varsayılanla aynı koyu ton.
+    const palette = dynamicColor.getLastPalette();
     const picker = new BrowserWindow({
-      width: 760,
-      height: 500,
+      width: Math.min(980, workArea.width - 40),
+      height: Math.min(720, workArea.height - 40),
       frame: false,
       resizable: false,
-      backgroundColor: '#2b2d31',
+      backgroundColor: rgbStringToHex(palette?.primary) || '#313338',
       show: false,
       // GERÇEK BUG (canlı bulundu): icon verilmezse taskbar'da Electron'un varsayılan
       // simgesi görünüyordu -- ana pencere/tray'de kullanılan marka simgesiyle aynısı

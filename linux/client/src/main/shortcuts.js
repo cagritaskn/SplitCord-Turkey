@@ -54,8 +54,23 @@ function actionsMap() {
     toggleScreenShare: () => voiceState.toggleScreenShare(),
     // KULLANICI TALEBİ: İleri git/Geri git -- Discord'un kendi SPA router'ı üzerinden
     // (bkz. navigation.js) çalışıyor, tarayıcı geçmişi/webContents.goBack DEĞİL.
-    navigateForward: () => navigation.goForward(),
-    navigateBack: () => navigation.goBack(),
+    //
+    // KULLANICI TALEBİ (bu ikisine ÖZEL, dosyanın başındaki genel "arkaplanda da çalışır"
+    // davranışının kasıtlı bir istisnası): fare 4/5 tuşları çoğu tarayıcıda/uygulamada
+    // zaten "ileri/geri git" anlamına geldiği için, kullanıcı SplitCord-Turkey arkaplanda
+    // (odaksız) İKEN başka bir uygulamada (ör. dosya gezgini, tarayıcı) bu tuşlara basınca
+    // istemeden Discord'un sekmesi de gezinmiş oluyordu. Bu yüzden yalnızca bu iki eylem,
+    // ana pencere GERÇEKTEN odaktayken tetiklenir -- diğer tüm kısayollar (ses/kamera/
+    // ekran paylaşımı/öne getir/tepsiye küçült) bilinçli olarak arkaplanda da çalışmaya
+    // devam ediyor.
+    navigateForward: () => {
+      if (!getMainWindow()?.isFocused()) return;
+      navigation.goForward();
+    },
+    navigateBack: () => {
+      if (!getMainWindow()?.isFocused()) return;
+      navigation.goBack();
+    },
   };
 }
 

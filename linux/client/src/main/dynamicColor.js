@@ -110,22 +110,32 @@ const SAMPLE_SCRIPT = `
     if (c) return JSON.stringify(c);
   }
 
-  // Üstteki data-window-chrome bar'ı genelde ~32-40px yükseklikte — bu bölgeyi atlayıp
-  // gerçek içerik alanından örnekliyoruz.
-  const points = [
-    [Math.floor(window.innerWidth / 2), 60],
-    [Math.floor(window.innerWidth / 2), 120],
-    [Math.floor(window.innerWidth / 4), 200],
-    [Math.floor((window.innerWidth * 3) / 4), 200],
-  ];
+  // GERÇEK BUG (kullanıcı raporu, canlı testte doğrulandı): bazı Vencord temaları (ör.
+  // "system24") body/html/#app-mount ve tüm üst içerik kapsayıcılarını TAMAMEN ŞEFFAF
+  // yapıyor -- gerçek arka plan rengi bunların ARKASINDA, DOM ağacında bir ATA (ancestor)
+  // OLMAYAN, ayrı konumlanmış bir katmanda duruyor. document.elementFromPoint() + yukarı
+  // doğru parentElement gezmesi yalnızca O NOKTADAKİ EN ÜSTTEKİ elementin ATALARINI görür
+  // -- arkadaki (aynı noktayı kaplayan ama üstteki tarafından görsel olarak örtülen) kardeş/
+  // farklı dallardaki elementleri ASLA bulamaz, bu yüzden örnekleme sessizce null dönüyordu
+  // ve otomatik renk hiç güncellenmiyordu. document.elementsFromPoint() (çoğul) ise o
+  // noktayı kaplayan TÜM elementleri, önden arkaya z-sırasına göre döndürüyor -- bu, tam
+  // olarak aradığımız "arkadaki gizli renk katmanı"nı da kapsıyor. Üstteki data-window-chrome
+  // bar'ı genelde ~32-40px yükseklikte -- bu bölgeyi atlayıp, tek bir dikey şerit yerine
+  // ekranın genelini temsil eden bir IZGARA üzerinden örnekliyoruz (bazı temalar rengi yalnızca
+  // belirli bir bölgede/panelde değiştiriyor olabilir).
+  const xFractions = [0.2, 0.5, 0.8];
+  const yFractions = [0.15, 0.4, 0.65, 0.85];
+  const points = [];
+  for (const yf of yFractions) {
+    for (const xf of xFractions) {
+      points.push([Math.floor(window.innerWidth * xf), Math.max(45, Math.floor(window.innerHeight * yf))]);
+    }
+  }
   for (const [px, py] of points) {
-    let el = document.elementFromPoint(px, py);
-    let hops = 0;
-    while (el && hops < 16) {
+    const stack = document.elementsFromPoint(px, py);
+    for (const el of stack.slice(0, 25)) {
       const c = checkElement(el);
       if (c) return JSON.stringify(c);
-      el = el.parentElement;
-      hops++;
     }
   }
   return 'null';
@@ -377,6 +387,20 @@ let themeChangeDebounce = null;
 function startDynamicColorSampling(webContents, mainWindow) {
   setWebviewWebContents(webContents, mainWindow);
 
+  // GERÇEK BUG (ekran paylaşımı seçicisi yeniden tasarlanırken canlı testte bulundu): sabit
+  // bir tema (Açık/Kül/Koyu/Oniks) yalnızca Ayarlar'dan SEÇİLDİĞİ anda (ipc.js
+  // app:set-theme-mode) uygulanıyordu; uygulama yeniden başlatılınca hiçbir yer onu tekrar
+  // uygulamıyordu -- otomatik moddaki periyodik örnekleme (aşağıda) sabit modlarda hemen
+  // erken dönüyor. Sonuç: lastPalette boş kalıp ana pencere/Ayarlar/ekran paylaşım seçicisi
+  // varsayılan theme.css renklerine düşüyordu. Başlangıçta (lastPalette'i hemen doldurmak
+  // için) ve her Discord yüklenişinde (ana pencere renderer'ı artık dinlemede olduğu için
+  // palet ona da ulaşsın diye) seçili sabit tema yeniden uygulanıyor.
+  const reapplyStaticThemeIfSelected = () => {
+    const mode = readLocalSettings().themeMode;
+    if (mode && mode !== 'automatic') applyStaticTheme(mode);
+  };
+  reapplyStaticThemeIfSelected();
+
   // Performans Modu + odaksızken sampleAndApply() atlanıyor (yukarıdaki not) -- pencere
   // yeniden odaklanınca bir sonraki zamanlanmış turu (1 sn / 10 sn) beklemeden hemen
   // güncel rengi yakalıyoruz.
@@ -384,6 +408,7 @@ function startDynamicColorSampling(webContents, mainWindow) {
 
   webContents.on('did-finish-load', () => {
     clearSettleTimers();
+    reapplyStaticThemeIfSelected();
     // Discord'un açılış/logo ekranı henüz gerçek temayı yansıtmıyor; gerçek sayfa
     // client-side yüklendiğinde ikinci bir did-finish-load olayı olmadığı için
     // birkaç kez tekrar örnekleyip son (muhtemelen doğru) rengin kalmasını sağlıyoruz.

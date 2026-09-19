@@ -894,6 +894,7 @@ const centerTitleToggle = document.getElementById('toggle-center-title');
 const rowCenterTitle = document.getElementById('row-center-title');
 const disableFalseVoiceWarningToggle = document.getElementById('toggle-disable-false-voice-warning');
 const disableSpellcheckHighlightToggle = document.getElementById('toggle-disable-spellcheck-highlight');
+const gameActivityToggle = document.getElementById('toggle-game-activity');
 const vencordToggle = document.getElementById('toggle-vencord');
 const vencordStatusEl = document.getElementById('vencord-status');
 const vencordVersionEl = document.getElementById('vencord-version');
@@ -925,6 +926,7 @@ const initialGeneral = {
   centerTitle: null,
   disableFalseVoiceWarning: null,
   disableSpellcheckHighlight: null,
+  gameActivity: null,
 };
 let pendingGeneral = {};
 
@@ -1244,6 +1246,28 @@ async function initDisableSpellcheckHighlightToggle() {
   });
 }
 
+async function initGameActivityToggle() {
+  let value = gameActivityToggle.checked;
+  try {
+    value = await window.splitcord.app.getGameActivityEnabled();
+    gameActivityToggle.checked = value;
+  } catch (err) {
+    console.error(err);
+    window.splitcord.log('get-game-activity-enabled-error', { error: err.message });
+  }
+  initialGeneral.gameActivity = value;
+
+  gameActivityToggle.addEventListener('change', () => {
+    if (gameActivityToggle.checked === initialGeneral.gameActivity) {
+      delete pendingGeneral.gameActivity;
+    } else {
+      pendingGeneral.gameActivity = gameActivityToggle.checked;
+    }
+    window.splitcord.log('game-activity-toggle-changed', { checked: gameActivityToggle.checked });
+    updateUnsavedBar();
+  });
+}
+
 // KULLANICI TALEBİ: Vencord paneli DİĞER Genel toggle'lardan FARKLI çalışıyor -- ertelenmiş
 // kaydetme (unsaved-bar) YOK, switch'e her tıklandığında ANINDA onay isteniyor ve cevaba
 // göre HEMEN uygulanıyor ("Evet" -> kaydedilip webview yeniden yüklenir, "Hayır"/kapatma ->
@@ -1394,6 +1418,11 @@ btnSaveChanges.addEventListener('click', async () => {
       initialGeneral.disableSpellcheckHighlight = pendingGeneral.disableSpellcheckHighlight;
       delete pendingGeneral.disableSpellcheckHighlight;
     }
+    if ('gameActivity' in pendingGeneral) {
+      await window.splitcord.app.setGameActivityEnabled(pendingGeneral.gameActivity);
+      initialGeneral.gameActivity = pendingGeneral.gameActivity;
+      delete pendingGeneral.gameActivity;
+    }
     if ('gpuAcceleration' in pendingGeneral) {
       // ipc.js artık burada bir "yeniden başlatılsın mı?" onay diyaloğu gösteriyor.
       // Onaylanırsa uygulama gerçekten kapanıp yeniden açılacak (bu pencere de
@@ -1448,6 +1477,7 @@ btnDiscardChanges.addEventListener('click', () => {
   if ('centerTitle' in pendingGeneral) centerTitleToggle.checked = initialGeneral.centerTitle;
   if ('disableFalseVoiceWarning' in pendingGeneral) disableFalseVoiceWarningToggle.checked = initialGeneral.disableFalseVoiceWarning;
   if ('disableSpellcheckHighlight' in pendingGeneral) disableSpellcheckHighlightToggle.checked = initialGeneral.disableSpellcheckHighlight;
+  if ('gameActivity' in pendingGeneral) gameActivityToggle.checked = initialGeneral.gameActivity;
   pendingGeneral = {};
   updateStartInBackgroundVisibility();
   updateCenterTitleVisibility();
@@ -1876,50 +1906,63 @@ async function toggleIgnoreControlIssue(issueId) {
   }
 }
 
-// Dinamik olarak yeniden oluşturulan satırlar (Kontroller listesi) için — her çağrıda
-// yeni bir buton döner.
-function makeIgnoreButton(issueId) {
-  const isIgnored = ignoredControlIssues.has(issueId);
-  const btn = document.createElement('button');
-  btn.className = 'sc-btn';
-  btn.textContent = isIgnored ? 'Tekrar Göster' : 'Görmezden Gel';
-  btn.title = isIgnored
-    ? 'Bu sorun için titlebar\'daki "Eylem Gerekli" uyarısı gizlendi — tekrar göstermek için tıkla.'
-    : 'Bu sorun için titlebar\'daki "Eylem Gerekli" uyarısını gizle (başka görmezden gelinmemiş bir sorun yoksa buton kaybolur).';
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    await toggleIgnoreControlIssue(issueId);
-    await refreshSystemControls();
-  });
-  return btn;
-}
+// "Görmezden Gel" anahtarı (switch). Kapalıyken "Görmezden Gel", açıkken (sorun görmezden
+// geliniyor) "Görmezden Gelmeyi Kaldır" yazar; yazı anahtar konumuna göre anında değişir. Eskiden bir
+// düğmeydi. onChanged: kaydetme bittikten sonra çağrılır (ör. listeyi yenilemek için).
+const IGNORE_SWITCH_LABEL_OFF = 'Görmezden Gel';
+const IGNORE_SWITCH_LABEL_ON = 'Görmezden Gelmeyi Kaldır';
 
-// Statik satırlar (Güvenlik Duvarı İzni, Resmi Discord Uygulaması) için — buton bir kez
-// oluşturulup satıra ekleniyor, her yenilemede yalnızca etiketi güncelleniyor (aynı satırın
-// diğer elemanları gibi, bkz. refreshFirewallPermission/refreshProtocolHandlerStatus).
-function attachStaticIgnoreToggle(containerEl, issueId, onChanged) {
-  const btn = document.createElement('button');
-  btn.className = 'sc-btn';
-  containerEl.appendChild(btn);
+function createIgnoreSwitch(issueId, onChanged) {
+  const wrapper = document.createElement('label');
+  wrapper.className = 'sc-switch-control';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.setAttribute('role', 'switch');
+  const text = document.createElement('span');
+  text.className = 'sc-switch-label';
+  // Anahtarın genişliği açık/kapalı yazısına göre oynamasın: CSS (.sc-switch-label::after) bu
+  // özniteliği görünmez bir yer tutucu olarak basıp kutuyu uzun yazıya göre sabit tutuyor.
+  text.dataset.sizer = IGNORE_SWITCH_LABEL_ON;
+  wrapper.append(input, text);
 
-  function render() {
-    const isIgnored = ignoredControlIssues.has(issueId);
-    btn.textContent = isIgnored ? 'Tekrar Göster' : 'Görmezden Gel';
-    btn.title = isIgnored
-      ? 'Bu sorun için titlebar\'daki "Eylem Gerekli" uyarısı gizlendi — tekrar göstermek için tıkla.'
+  function apply(isIgnored) {
+    input.checked = isIgnored;
+    text.textContent = isIgnored ? IGNORE_SWITCH_LABEL_ON : IGNORE_SWITCH_LABEL_OFF;
+    wrapper.title = isIgnored
+      ? 'Bu sorun için titlebar\'daki "Eylem Gerekli" uyarısı gizlendi — tekrar göstermek için kapat.'
       : 'Bu sorun için titlebar\'daki "Eylem Gerekli" uyarısını gizle (başka görmezden gelinmemiş bir sorun yoksa buton kaybolur).';
+  }
+  function render() {
+    apply(ignoredControlIssues.has(issueId));
   }
   render();
 
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
+  input.addEventListener('change', async () => {
+    apply(input.checked);
+    input.disabled = true;
     await toggleIgnoreControlIssue(issueId);
     render();
-    btn.disabled = false;
-    if (onChanged) onChanged();
+    input.disabled = false;
+    if (onChanged) await onChanged();
   });
 
-  return { btn, render };
+  return { wrapper, render };
+}
+
+// Dinamik olarak yeniden oluşturulan satırlar (Kontroller listesi) için — her çağrıda
+// yeni bir anahtar döner; değişince liste yenilenir.
+function makeIgnoreButton(issueId) {
+  return createIgnoreSwitch(issueId, refreshSystemControls).wrapper;
+}
+
+// Statik satırlar (Güvenlik Duvarı İzni, Resmi Discord Uygulaması) için — anahtar bir kez
+// oluşturulup satıra ekleniyor, her yenilemede yalnızca yazısı/konumu güncelleniyor (aynı
+// satırın diğer elemanları gibi, bkz. refreshFirewallPermission/refreshProtocolHandlerStatus).
+// Dönen btn (anahtarın kapsayıcısı) hidden ile gizlenip gösterilebilir.
+function attachStaticIgnoreToggle(containerEl, issueId, onChanged) {
+  const control = createIgnoreSwitch(issueId, onChanged);
+  containerEl.appendChild(control.wrapper);
+  return { btn: control.wrapper, render: control.render };
 }
 
 loadIgnoredControlIssues();
@@ -2079,9 +2122,12 @@ function controlRow(labelHtml, actionButtons) {
   const row = document.createElement('div');
   row.className = 'sc-permission-row';
   row.innerHTML = `<div class="sc-permission-info">${labelHtml}</div>`;
-  const buttons = Array.isArray(actionButtons) ? actionButtons : [actionButtons];
-  for (const btn of buttons) {
-    if (btn) row.appendChild(btn);
+  const buttons = (Array.isArray(actionButtons) ? actionButtons : [actionButtons]).filter(Boolean);
+  if (buttons.length) {
+    const actions = document.createElement('div');
+    actions.className = 'sc-permission-actions';
+    for (const btn of buttons) actions.appendChild(btn);
+    row.appendChild(actions);
   }
   return row;
 }
@@ -2451,6 +2497,7 @@ Promise.all([
   initCenterTitleToggle(),
   initDisableFalseVoiceWarningToggle(),
   initDisableSpellcheckHighlightToggle(),
+  initGameActivityToggle(),
   initVencordToggle(),
 ]).then(() => updateUnsavedBar());
 initThemePicker();

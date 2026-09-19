@@ -11,4 +11,13 @@ contextBridge.exposeInMainWorld('splitcordPicker', {
   onDynamicColorSampled: (callback) => {
     ipcRenderer.on('app:dynamic-color-sampled', (_event, palette) => callback(palette));
   },
+  // Pencere ilk boyanmadan ÖNCE senkron paleti al (ipc.js theme:get-colors-sync, ana
+  // pencere/Ayarlar'ın kullandığı AYNI son palet) -- yoksa null.
+  getInitialPalette: () => {
+    try {
+      return ipcRenderer.sendSync('theme:get-colors-sync');
+    } catch {
+      return null;
+    }
+  },
 });

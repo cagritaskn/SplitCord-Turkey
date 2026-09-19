@@ -307,6 +307,18 @@ public static class LocalApiEndpoints
         app.MapGet("/system-controls/status", (ByeDpiEngine byeDpi, GoodbyeDpiEngine goodbyeDpi, ZapretEngine zapret, Zapret2Engine zapret2) =>
             Results.Ok(SystemControlsHelper.GetStatus(goodbyeDpi.GetOwnProcessId(), zapret.GetOwnProcessId(), byeDpi.GetOwnProcessId(), zapret.GetUdpCompanionProcessId(), zapret2.GetOwnProcessId())));
 
+        // Çalışan işlemlerin tam yolları -- "Oynanan oyunu Discord'da göster" özelliği için
+        // (bkz. RunningProcessesHelper).
+        // argsFor: komut satırı da istenen dosya adları (virgülle ayrılmış, ör. "javaw.exe,hl2.exe").
+        app.MapGet("/processes", (string? argsFor) =>
+        {
+            var names = (argsFor ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(n => n.ToLowerInvariant())
+                .ToHashSet();
+            return Results.Ok(RunningProcessesHelper.List(names));
+        });
+
         app.MapPost("/system-controls/kill-process", (KillProcessPayload payload) =>
         {
             SystemControlsHelper.KillProcess(payload.Pid);

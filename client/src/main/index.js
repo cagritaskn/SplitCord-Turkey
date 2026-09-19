@@ -4,7 +4,7 @@ const { app } = require('electron');
 const { createMainWindow, getMainWindow } = require('./window');
 const { applyShortcutsFromSettings, unregisterGlobalShortcuts } = require('./shortcuts');
 const { createTray } = require('./tray');
-const { registerPermissions, configureBrowserIdentity, applySpellcheckSetting } = require('./permissions');
+const { registerPermissions, configureBrowserIdentity, applySpellcheckSetting, relaxCspForVencordThemes } = require('./permissions');
 const { registerIpcHandlers } = require('./ipc');
 const { applyDpiProxy } = require('./dpiProxy');
 const { startConfiguredEngine, registerShutdownHook } = require('./dpiLifecycle');
@@ -152,9 +152,20 @@ if (!gotSingleInstanceLock) {
       writeLocalSettings({ autostartDefaultApplied: true });
     }
 
+    // "Resmi Discord uygulaması yüklü" kontrolü varsayılan olarak görmezden gelinsin, ama
+    // yalnızca BİR KEZ (bkz. localSettings.js officialDiscordIgnoreDefaultApplied).
+    if (!readLocalSettings().officialDiscordIgnoreDefaultApplied) {
+      const ignored = readLocalSettings().ignoredControlIssues ?? [];
+      writeLocalSettings({
+        ignoredControlIssues: Array.from(new Set([...ignored, 'official-discord'])),
+        officialDiscordIgnoreDefaultApplied: true,
+      });
+    }
+
     await configureSecureDns();
     registerPermissions();
     configureBrowserIdentity();
+    relaxCspForVencordThemes();
     applySpellcheckSetting(readLocalSettings().disableSpellcheckHighlight);
     registerScreenSharePicker();
     registerShutdownHook();

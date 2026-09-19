@@ -6,7 +6,8 @@
   "scripts": {
     "fetch-binaries": "node scripts/fetch-binaries.js",
     "build-byedpi": "node scripts/build-byedpi.js",
-    "build-vencord": "node scripts/build-vencord.js"
+    "build-vencord": "node scripts/build-vencord.js",
+    "update-detectable-games": "node scripts/update-detectable-games.js"
   },
   "devDependencies": {
     "adm-zip": "^0.5.16"
