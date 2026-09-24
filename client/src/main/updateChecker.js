@@ -130,9 +130,15 @@ function downloadFile(url, destPath) {
           return;
         }
         const file = fs.createWriteStream(destPath);
+        const fail = (err) => {
+          file.close(() => {
+            fs.rm(destPath, { force: true }, () => reject(err));
+          });
+        };
+        res.on('error', fail);
         res.pipe(file);
         file.on('finish', () => file.close(() => resolve()));
-        file.on('error', reject);
+        file.on('error', fail);
       })
       .catch(reject);
   });
