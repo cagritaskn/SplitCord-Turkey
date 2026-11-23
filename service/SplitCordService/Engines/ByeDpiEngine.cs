@@ -1358,11 +1358,24 @@ public sealed class ByeDpiEngine : IDpiEngine, IDnsTierAware
         var psi = new ProcessStartInfo
         {
             FileName = exePath,
+            // GÜVENLİK: Göreli dosya yolları (--hosts, --ipset, --fake-data ...), servisin
+            // çalışma dizini (System32) yerine ciadpi'nin kendi klasörüne göre
+            // çözümlenmelidir (bkz. EngineArgsValidator -- diğer motorlar zaten kendi
+            // klasörlerinde başlatılıyor).
+            WorkingDirectory = Path.GetDirectoryName(exePath),
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
+        // GÜVENLİK: ciadpi varsayılan olarak 0.0.0.0 üzerinde (TÜM ağ arayüzlerinde) dinler
+        // -- bu nedenle SYSTEM olarak çalışan kimlik doğrulamasız bir SOCKS5 proxy'si yerel
+        // ağa (bir güvenlik duvarı kuralı varsa halka açık Wi-Fi ağları dahil) açılıyordu;
+        // ağdaki herhangi biri bu proxy üzerinden 127.0.0.1:58271 adresindeki yerel API'ye
+        // de ulaşabiliyordu. Electron istemcisi ve bağlantı testleri zaten yalnızca
+        // socks5://127.0.0.1:{port} adresini kullanıyor.
+        psi.ArgumentList.Add("-i");
+        psi.ArgumentList.Add("127.0.0.1");
         psi.ArgumentList.Add("-p");
         psi.ArgumentList.Add(_port.ToString());
         // ciadpi varsayılan olarak tamamen sessizdir (params.debug=0, LOG() hiçbir şey

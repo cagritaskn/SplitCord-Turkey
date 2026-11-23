@@ -51,5 +51,7 @@ builder.Services.AddSingleton<DpiEngineManager>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DpiEngineManager>());
 
 var app = builder.Build();
+// GÜVENLİK: Tarayıcı kaynaklı (CSRF / DNS rebinding) istekleri uç noktalara ulaşmadan reddeder.
+app.UseLocalApiRequestGuard();
 app.MapDpiEndpoints();
 app.Run();

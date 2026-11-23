@@ -27,6 +27,25 @@ public sealed record SetHostlistSettingsPayload(bool? AutoUpdateEnabled, int? Up
 /// değiştirmesini sağlayan minimal REST API.</summary>
 public static class LocalApiEndpoints
 {
+    /// <summary>Bu, kurulu Electron istemcisinin yolu mu? Kurulum ortamında servis
+    /// &lt;kurulum&gt;\resources\service-installer\ konumundan çalıştığı için istemci exe dosyası
+    /// iki üst klasörde bulunur. Geliştirme ortamında (servis başka bir konumdan çalışırken)
+    /// eşleşmez.</summary>
+    private static bool IsInstalledClientExe(string? exePath)
+    {
+        if (string.IsNullOrWhiteSpace(exePath)) return false;
+        try
+        {
+            var expected = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "SplitCord-Turkey.exe"));
+            return string.Equals(Path.GetFullPath(exePath), expected, StringComparison.OrdinalIgnoreCase)
+                && File.Exists(expected);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static void MapDpiEndpoints(this WebApplication app)
     {
         app.MapGet("/status", (DpiEngineManager mgr) => Results.Ok(mgr.GetStatus()));
@@ -164,15 +183,12 @@ public static class LocalApiEndpoints
                     return Results.BadRequest(new { error = $"Bilinmeyen DNS protokolü: {item.Protocol}" });
                 }
 
-                string? validationError = protocol switch
-                {
-                    DnsProtocol.Doh when !address.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-                        => $"Geçersiz DoH adresi (https:// ile başlamalı): {address}",
-                    DnsProtocol.DnsCrypt when !address.StartsWith("sdns://", StringComparison.OrdinalIgnoreCase)
-                        => $"Geçersiz DNSCrypt adresi (sdns:// ile başlamalı): {address}",
-                    DnsProtocol.NextDns => "Bu protokol elle eklenemez.",
-                    _ => null,
-                };
+                // GÜVENLİK: Boşluklar, tırnak işaretleri, kontrol karakterleri ve protokole uymayan
+                // biçimler reddedilir (bkz. DnsAddressValidator -- DoH adresleri blockcheck2 içinde
+                // curl'e aktarılır).
+                string? validationError = protocol == DnsProtocol.NextDns
+                    ? "Bu protokol elle eklenemez."
+                    : DnsAddressValidator.GetError(protocol, address);
                 if (validationError is not null)
                 {
                     return Results.BadRequest(new { error = validationError });
@@ -341,14 +357,19 @@ public static class LocalApiEndpoints
 
         // SplitCord-Turkey.exe (Electron client) için aynı kontrol — client kendi exe
         // yolunu bildiği için (app.getPath('exe')) burada payload olarak gönderiyor.
+        // GÜVENLİK: Yalnızca kurulu SplitCord-Turkey.exe için geçerlidir -- aksi halde yerel
+        // API'ye erişebilen herhangi bir program, HERHANGİ bir exe için gelen bağlantı güvenlik
+        // duvarı izin kuralı ekletebilirdi (bkz. IsInstalledClientExe).
         app.MapGet("/firewall/app/status", async (string exePath) =>
         {
+            if (!IsInstalledClientExe(exePath)) return Results.BadRequest(new { error = "Geçersiz uygulama yolu." });
             var granted = await FirewallHelper.IsAppAllowedAsync(exePath);
             return Results.Ok(new { granted });
         });
 
         app.MapPost("/firewall/app/grant", async (GrantAppFirewallPayload payload) =>
         {
+            if (!IsInstalledClientExe(payload.ExePath)) return Results.BadRequest(new { error = "Geçersiz uygulama yolu." });
             await FirewallHelper.GrantAppAccessAsync(payload.ExePath);
             var granted = await FirewallHelper.IsAppAllowedAsync(payload.ExePath);
             return Results.Ok(new { granted });

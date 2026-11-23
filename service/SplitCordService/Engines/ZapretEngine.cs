@@ -326,6 +326,11 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
+        // GÜVENLİK: winws Cygwin ile derlenmiştir; Cygwin varsayılan olarak Windows komut satırını
+        // yeniden işler (tek tırnak alıntılaması, süslü parantez açılımı, glob/ters eğik çizgi
+        // kaçışları) ve bu durum doğrulanan argümanları değiştirebilir. noglob bunların tamamını
+        // devre dışı bırakır (bkz. EngineArgsValidator.CygwinEngines).
+        psi.Environment["CYGWIN"] = "noglob";
         foreach (var arg in SplitArgs($"{UdpCompanionArgs} {HostlistArgs}")) psi.ArgumentList.Add(arg);
 
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
@@ -399,6 +404,11 @@ public sealed class ZapretEngine : IDpiEngine, IDnsTierAware
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
+        // GÜVENLİK: winws Cygwin ile derlenmiştir; Cygwin varsayılan olarak Windows komut satırını
+        // yeniden işler (tek tırnak alıntılaması, süslü parantez açılımı, glob/ters eğik çizgi
+        // kaçışları) ve bu durum doğrulanan argümanları değiştirebilir. noglob bunların tamamını
+        // devre dışı bırakır (bkz. EngineArgsValidator.CygwinEngines).
+        psi.Environment["CYGWIN"] = "noglob";
         foreach (var arg in SplitArgs($"{args} {HostlistArgs}")) psi.ArgumentList.Add(arg);
 
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };

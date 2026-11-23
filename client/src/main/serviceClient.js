@@ -24,6 +24,11 @@ const DEFAULT_TIMEOUT_MS = 5000;
 // hata gösterir.
 const LONG_RUNNING_TIMEOUT_MS = 1200000;
 
+// Servisteki LocalApiRequestGuard bu başlığı zorunlu kılar: tarayıcıdaki bir web sayfası
+// özel başlık ekleyemediği için (servis CORS preflight isteklerini reddeder) yerel API'ye
+// erişemez.
+const CLIENT_HEADER = { 'X-SplitCord-Client': '1' };
+
 function request(method, urlPath, body, timeoutMs = DEFAULT_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const payload = body ? Buffer.from(JSON.stringify(body)) : null;
@@ -33,7 +38,9 @@ function request(method, urlPath, body, timeoutMs = DEFAULT_TIMEOUT_MS) {
         port: SERVICE_PORT,
         path: urlPath,
         method,
-        headers: payload ? { 'Content-Type': 'application/json', 'Content-Length': payload.length } : undefined,
+        headers: payload
+          ? { ...CLIENT_HEADER, 'Content-Type': 'application/json', 'Content-Length': payload.length }
+          : CLIENT_HEADER,
         timeout: timeoutMs,
       },
       (res) => {

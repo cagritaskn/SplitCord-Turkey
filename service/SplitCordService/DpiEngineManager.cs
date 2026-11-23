@@ -385,6 +385,10 @@ public sealed class DpiEngineManager : IHostedService
         var target = _engines.FirstOrDefault(e => e.Id == engineId)
             ?? throw new ArgumentException($"Bilinmeyen motor: {engineId}");
 
+        // GÜVENLİK: Motorlar SYSTEM olarak çalışır -- kod çalıştıran veya dosya yazan
+        // seçenekleri ve kurulum klasörü dışındaki yolları reddet (bkz. EngineArgsValidator).
+        EngineArgsValidator.Validate(engineId, args);
+
         await _switchLock.WaitAsync();
         try
         {
