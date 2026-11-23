@@ -1,5 +1,6 @@
 using System.Text.Json;
 using SplitCord.Service.Dns;
+using SplitCord.Service.Engines;
 
 namespace SplitCord.Service.Config;
 
@@ -280,6 +281,7 @@ public sealed class SettingsStore
                 {
                     MigrateLegacyDohProviders(loaded, json);
                     UpgradeDefaultDnsProviderOrder(loaded);
+                    SanitizeLoaded(loaded);
                     return loaded;
                 }
             }
@@ -289,6 +291,35 @@ public sealed class SettingsStore
             // Bozuk/okunamayan ayar dosyası -> varsayılanlara dön.
         }
         return new ServiceSettings();
+    }
+
+    /// <summary>GÜVENLİK: Ayar dosyası diskten okunduğu için (örneğin klasör servisten ÖNCE bir
+    /// kullanıcı tarafından oluşturulmuşsa veya eski bir sürümde API üzerinden doğrulanmadan
+    /// kaydedilmişse), içindeki motor argümanları ve DNS adresleri API girdileriyle AYNI
+    /// kurallara göre yeniden doğrulanır -- bu değerler SYSTEM olarak çalışan motorlara ve
+    /// blockcheck2'ye olduğu gibi aktarılır. Geçersiz bir motor argümanı o motorun
+    /// varsayılanına sıfırlanır ve "doğrulanmış" işareti kaldırılır (motor bir sonraki
+    /// başlatmada yeniden tarama yapar); geçersiz DNS adresleri ise listeden
+    /// çıkarılır.</summary>
+    private static void SanitizeLoaded(ServiceSettings loaded)
+    {
+        var defaults = new ServiceSettings();
+        foreach (var (engineId, args) in loaded.EngineArgs.ToList())
+        {
+            if (EngineArgsValidator.GetError(engineId, args ?? "") is null) continue;
+            loaded.EngineArgs[engineId] = defaults.EngineArgs.TryGetValue(engineId, out var def) ? def : "";
+            switch (engineId)
+            {
+                case "byedpi": loaded.ByeDpiVerified = false; break;
+                case "goodbyedpi": loaded.GoodbyeDpiVerified = false; break;
+                case "zapret": loaded.ZapretVerified = false; break;
+                case "zapret2": loaded.Zapret2Verified = false; loaded.Zapret2VoiceVerified = false; break;
+            }
+        }
+
+        loaded.DnsProviders = loaded.DnsProviders
+            .Where(p => p.Protocol == DnsProtocol.NextDns || DnsAddressValidator.GetError(p.Protocol, p.Address) is null)
+            .ToList();
     }
 
     /// <summary>Eski şema (List&lt;string&gt; "DohProviders", hepsi https:// URL'i) yeni tipli

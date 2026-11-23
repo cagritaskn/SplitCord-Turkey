@@ -548,8 +548,11 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
         // kullanır — blockcheck2 yine de baştan yeniden çalıştırılıyor, bkz. StartAsync'teki not).
         if (forceDoh)
         {
+            // GÜVENLİK: blockcheck2.sh listeyi boşluklardan ayırıp her parçayı curl'e argüman
+            // olarak verir -- yalnızca doğrulanmış adresler (boşluksuz, geçerli https URL'si)
+            // kabul edilir.
             var dohAddresses = _settings.Current.DnsProviders
-                .Where(p => p.Protocol == DnsProtocol.Doh)
+                .Where(p => p.Protocol == DnsProtocol.Doh && DnsAddressValidator.GetError(DnsProtocol.Doh, p.Address) is null)
                 .Select(p => p.Address);
             psi.Environment["SECURE_DNS"] = "1";
             psi.Environment["DOH_SERVERS"] = string.Join(" ", dohAddresses);
@@ -982,6 +985,11 @@ public sealed class Zapret2Engine : IDpiEngine, IDnsTierAware
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
+        // GÜVENLİK: winws2 Cygwin ile derlenmiştir; Cygwin varsayılan olarak Windows komut satırını
+        // yeniden işler (tek tırnak alıntılaması, süslü parantez açılımı, glob/ters eğik çizgi
+        // kaçışları) ve bu durum doğrulanan argümanları değiştirebilir. noglob bunların tamamını
+        // devre dışı bırakır (bkz. EngineArgsValidator.CygwinEngines).
+        psi.Environment["CYGWIN"] = "noglob";
 
         // GERÇEK KÖK NEDEN (canlı testte ExitCode tanısıyla kesin olarak doğrulandı:
         // -1073741515 = 0xC0000135 = Windows'un STATUS_DLL_NOT_FOUND'u): winws2.exe bir Cygwin
